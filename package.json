@@ -1,6 +1,6 @@
 {
   "name": "functional-agent-framework",
-  "version": "2.0.0",
+  "version": "0.0.1",
   "description": "A purely functional agent framework with immutable state and composable tools",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Agent, RunConfig } from '../core/types';
+import { MemoryProvider } from '../memory/types';
 
 export interface ServerConfig<Ctx> {
   port?: number;
@@ -7,6 +8,7 @@ export interface ServerConfig<Ctx> {
   cors?: boolean;
   runConfig: RunConfig<Ctx>;
   agentRegistry: Map<string, Agent<Ctx, any>>;
+  defaultMemoryProvider?: MemoryProvider;
 }
 
 // Request/Response schemas
@@ -20,7 +22,13 @@ export const chatRequestSchema = z.object({
   agentName: z.string(),
   context: z.any().optional(),
   maxTurns: z.number().optional(),
-  stream: z.boolean().default(false)
+  stream: z.boolean().default(false),
+  conversationId: z.string().optional(),
+  memory: z.object({
+    autoStore: z.boolean().default(true),
+    maxMessages: z.number().optional(),
+    compressionThreshold: z.number().optional()
+  }).optional()
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
@@ -53,6 +61,7 @@ export const chatResponseSchema = z.object({
   data: z.object({
     runId: z.string(),
     traceId: z.string(),
+    conversationId: z.string().optional(),
     messages: z.array(fullMessageSchema),
     outcome: z.object({
       status: z.enum(['completed', 'error', 'max_turns']),

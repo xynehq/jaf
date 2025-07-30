@@ -3,16 +3,18 @@ import {
   run, 
   RunConfig, 
   RunState, 
-  generateTraceId, 
-  generateRunId,
+  createTraceId, 
+  createRunId,
   ConsoleTraceCollector,
-  makeLiteLLMProvider
-} from '../../src/index';
+  makeLiteLLMProvider,
+  createInMemoryProvider
+} from 'functional-agent-framework';
 import { ragAgent } from './rag-agent';
 
 type RAGContext = {
   userId: string;
   permissions: string[];
+  conversationId?: string; // For memory persistence
 };
 
 async function runRAGDemo() {
@@ -63,19 +65,38 @@ async function runRAGDemo() {
   const chatModel = process.env.LITELLM_MODEL || 'gemini-2.5-flash-lite';
   console.log(`📡 Using LiteLLM model: ${chatModel}`);
 
+  // Set up in-memory storage for conversation history
+  const memoryProvider = await createInMemoryProvider();
+  console.log('💾 Using in-memory conversation storage');
+
   const config: RunConfig<RAGContext> = {
     agentRegistry,
     modelProvider,
     maxTurns: parseInt(process.env.RAG_MAX_TURNS || '5'), // Lower turn limit for RAG demo
     modelOverride: chatModel, // Use available model
     onEvent: traceCollector.collect.bind(traceCollector),
+    memory: {
+      provider: memoryProvider,
+      autoStore: true, // Automatically store conversation history
+      maxMessages: 50 // Keep last 50 messages for RAG context
+    }
   };
 
-  // Demo queries to test RAG functionality
+  // Demo queries to test RAG functionality and conversation memory
   const demoQueries = [
     "What is return URL?",
-    "How do I integrate hypercheckout on android?"
+    "How do I integrate hypercheckout on android? Remember what we discussed earlier."
   ];
+
+  // Add a consistent conversation identifier in the context for memory persistence
+  const conversationId = `rag-demo-${Date.now()}`;
+  console.log(`🧠 Using conversation ID: ${conversationId}`);
+  
+  // Update context to include conversation ID for memory persistence
+  const contextWithConversation = {
+    ...context,
+    conversationId
+  };
 
   for (let i = 0; i < demoQueries.length; i++) {
     const query = demoQueries[i];
@@ -83,13 +104,13 @@ async function runRAGDemo() {
     console.log('='.repeat(50));
 
     const initialState: RunState<RAGContext> = {
-      runId: generateRunId(),
-      traceId: generateTraceId(),
+      runId: createRunId(crypto.randomUUID()),
+      traceId: createTraceId(crypto.randomUUID()),
       messages: [
         { role: 'user', content: query }
       ],
       currentAgentName: 'RAGAgent',
-      context,
+      context: contextWithConversation, // Use context with conversation ID
       turnCount: 0,
     };
 
@@ -130,11 +151,13 @@ async function runRAGDemo() {
   console.log('- ✅ Performance metrics tracking');
   console.log('- ✅ Permission-based access control');
   console.log('- ✅ Comprehensive error handling');
+  console.log('- ✅ In-memory conversation persistence');
   console.log('\n🔗 Integration Points:');
   console.log('- FAF framework orchestration');
   console.log('- Vertex AI RAG corpus querying');
   console.log('- Real-time tracing and observability');
   console.log('- Type-safe tool definitions');
+  console.log('- Functional memory management');
 }
 
 

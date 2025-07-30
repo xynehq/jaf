@@ -11,6 +11,8 @@ This example demonstrates how to use the `runServer` function to create a local 
 - **Real-time Tracing**: Console-based observability
 - **CORS Support**: Cross-origin requests enabled
 - **Graceful Shutdown**: Proper cleanup on exit
+- **Memory Providers**: In-memory, Redis, and PostgreSQL conversation persistence
+- **Environment Configuration**: Configurable memory providers via environment variables
 
 ## 🛠️ Setup
 
@@ -37,6 +39,7 @@ Required environment variables:
 Optional environment variables:
 - `LITELLM_MODEL`: Model to use (default: `gpt-3.5-turbo`)
 - `PORT`: Server port (default: `3000`)
+- `FAF_MEMORY_TYPE`: Memory provider type (`memory`, `redis`, `postgres`)
 
 ### 3. Start LiteLLM Proxy (if needed)
 
@@ -48,6 +51,96 @@ pip install litellm
 
 # Start proxy (example with OpenAI)
 litellm --model gpt-3.5-turbo --port 4000
+```
+
+## 💾 Memory Providers
+
+The server supports three types of memory providers for conversation persistence:
+
+### In-Memory (Default)
+- **Best for**: Development, testing, single-instance deployments
+- **Persistence**: Lost on server restart
+- **Configuration**: No additional setup required
+
+```bash
+FAF_MEMORY_TYPE=memory
+FAF_MEMORY_MAX_CONVERSATIONS=1000
+FAF_MEMORY_MAX_MESSAGES=1000
+```
+
+### Redis
+- **Best for**: Production, distributed deployments, caching
+- **Persistence**: Persistent across server restarts
+- **Requirements**: Redis server running
+
+```bash
+# Install Redis client (already included as optional dependency)
+npm install redis
+
+# Environment configuration
+FAF_MEMORY_TYPE=redis
+FAF_REDIS_HOST=localhost
+FAF_REDIS_PORT=6379
+FAF_REDIS_PASSWORD=your-password
+FAF_REDIS_DB=0
+FAF_REDIS_PREFIX=faf:memory:
+FAF_REDIS_TTL=86400
+
+# Or use Redis URL
+FAF_REDIS_URL=redis://username:password@localhost:6379/0
+```
+
+Start Redis server:
+```bash
+# Using Docker
+docker run -d -p 6379:6379 redis:alpine
+
+# Or install locally (macOS)
+brew install redis
+brew services start redis
+
+# Or install locally (Ubuntu)
+sudo apt install redis-server
+sudo systemctl start redis-server
+```
+
+### PostgreSQL
+- **Best for**: Production, complex queries, full persistence
+- **Persistence**: Fully persistent with advanced querying
+- **Requirements**: PostgreSQL server running
+
+```bash
+# Install PostgreSQL client (already included as optional dependency)
+npm install pg @types/pg
+
+# Environment configuration
+FAF_MEMORY_TYPE=postgres
+FAF_POSTGRES_HOST=localhost
+FAF_POSTGRES_PORT=5432
+FAF_POSTGRES_DB=faf_memory
+FAF_POSTGRES_USER=postgres
+FAF_POSTGRES_PASSWORD=your-password
+FAF_POSTGRES_SSL=false
+FAF_POSTGRES_TABLE=conversations
+
+# Or use connection string
+FAF_POSTGRES_CONNECTION_STRING=postgresql://username:password@localhost:5432/faf_memory
+```
+
+Start PostgreSQL server:
+```bash
+# Using Docker
+docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=password -e POSTGRES_DB=faf_memory postgres:15
+
+# Or install locally (macOS)
+brew install postgresql
+brew services start postgresql
+createdb faf_memory
+
+# Or install locally (Ubuntu)
+sudo apt install postgresql postgresql-contrib
+sudo systemctl start postgresql
+sudo -u postgres createdb faf_memory
 ```
 
 ## 🚀 Running the Server
@@ -62,6 +155,9 @@ The server will start on `http://localhost:3000` with the following endpoints:
 - `GET /agents` - List available agents
 - `POST /chat` - General chat endpoint
 - `POST /agents/{agentName}/chat` - Agent-specific chat endpoint
+- `GET /memory/health` - Memory provider health check
+- `GET /conversations/:id` - Get conversation by ID
+- `DELETE /conversations/:id` - Delete conversation by ID
 
 ## 📡 API Usage Examples
 
@@ -128,6 +224,43 @@ curl -X POST http://localhost:3000/chat \
   }'
 ```
 
+### Conversation Persistence
+
+```bash
+# Start a conversation (get conversationId from response)
+curl -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "What is 15 * 7?"}],
+    "conversationId": "my-conversation-1",
+    "agentName": "MathTutor",
+    "context": {"userId": "demo", "permissions": ["user"]}
+  }'
+
+# Continue the conversation
+curl -X POST http://localhost:3000/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{"role": "user", "content": "What was my previous calculation?"}],
+    "conversationId": "my-conversation-1", 
+    "agentName": "MathTutor",
+    "context": {"userId": "demo", "permissions": ["user"]}
+  }'
+```
+
+### Memory Management
+
+```bash
+# Check memory provider health
+curl http://localhost:3000/memory/health
+
+# Get conversation history
+curl http://localhost:3000/conversations/my-conversation-1
+
+# Delete conversation
+curl -X DELETE http://localhost:3000/conversations/my-conversation-1
+```
+
 ## 🏗️ Code Structure
 
 ```
@@ -166,6 +299,7 @@ All endpoints return JSON responses in this format:
   "data": {
     "runId": string,
     "traceId": string,
+    "conversationId": string,  // For conversation persistence
     "messages": Array<{role: string, content: string}>,
     "outcome": {
       "status": "completed" | "error" | "max_turns",
@@ -208,13 +342,13 @@ const myAgent: Agent<MyContext, string> = {
 };
 
 // Add to the agents array when calling runServer
-await runServer([mathAgent, chatAgent, myAgent], runConfig, serverOptions);
+const server = await runServer([mathAgent, chatAgent, myAgent], runConfig, serverOptions);
 ```
 
 ### Custom Server Configuration
 
 ```typescript
-await runServer(
+const server = await runServer(
   agents,
   runConfig,
   {

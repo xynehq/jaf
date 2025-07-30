@@ -20,8 +20,25 @@ export async function run<Ctx, Out>(
       data: { runId: initialState.runId, traceId: initialState.traceId }
     });
 
-    const result = await runInternal<Ctx, Out>(initialState, config);
+    // Load conversation history from memory if configured
+    let stateWithMemory = initialState;
+    if (config.memory?.autoStore && config.conversationId) {
+      console.log(`[FAF:ENGINE] Loading conversation history for ${config.conversationId}`);
+      stateWithMemory = await loadConversationHistory(initialState, config);
+    } else {
+      console.log(`[FAF:ENGINE] Skipping memory load - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}`);
+    }
+
+    const result = await runInternal<Ctx, Out>(stateWithMemory, config);
     
+    // Store conversation history to memory if configured
+    if (config.memory?.autoStore && config.conversationId && result.finalState.messages.length > initialState.messages.length) {
+      console.log(`[FAF:ENGINE] Storing conversation history for ${config.conversationId}`);
+      await storeConversationHistory(result.finalState, config);
+    } else {
+      console.log(`[FAF:ENGINE] Skipping memory store - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}, messageChange: ${result.finalState.messages.length > initialState.messages.length}`);
+    }
+
     config.onEvent?.({
       type: 'run_end',
       data: { outcome: result.outcome }
@@ -447,4 +464,87 @@ function tryParseJSON(str: string): any {
   } catch {
     return str;
   }
+}
+
+/**
+ * Load conversation history from memory and merge with initial state
+ */
+async function loadConversationHistory<Ctx>(
+  initialState: RunState<Ctx>,
+  config: RunConfig<Ctx>
+): Promise<RunState<Ctx>> {
+  if (!config.memory?.provider || !config.conversationId) {
+    return initialState;
+  }
+
+  const result = await config.memory.provider.getConversation(config.conversationId);
+  if (!result.success) {
+    console.warn(`[FAF:MEMORY] Failed to load conversation history: ${result.error.message}`);
+    return initialState;
+  }
+
+  if (!result.data) {
+    console.log(`[FAF:MEMORY] No existing conversation found for ${config.conversationId}`);
+    return initialState;
+  }
+
+  // Apply memory limits if configured
+  const maxMessages = config.memory.maxMessages || result.data.messages.length;
+  const memoryMessages = result.data.messages.slice(-maxMessages);
+  
+  // Merge existing messages with new messages, avoiding duplicates
+  const combinedMessages = [...memoryMessages, ...initialState.messages];
+  
+  console.log(`[FAF:MEMORY] Loaded ${memoryMessages.length} messages from memory for conversation ${config.conversationId}`);
+  console.log(`[FAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
+  console.log(`[FAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
+  console.log(`[FAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
+  
+  return {
+    ...initialState,
+    messages: combinedMessages
+  };
+}
+
+/**
+ * Store conversation history to memory
+ */
+async function storeConversationHistory<Ctx>(
+  finalState: RunState<Ctx>,
+  config: RunConfig<Ctx>
+): Promise<void> {
+  if (!config.memory?.provider || !config.conversationId) {
+    return;
+  }
+
+  // Apply compression threshold if configured
+  let messagesToStore = finalState.messages;
+  if (config.memory.compressionThreshold && messagesToStore.length > config.memory.compressionThreshold) {
+    // Keep first few messages and recent messages
+    const keepFirst = Math.floor(config.memory.compressionThreshold * 0.2);
+    const keepRecent = config.memory.compressionThreshold - keepFirst;
+    
+    messagesToStore = [
+      ...messagesToStore.slice(0, keepFirst),
+      ...messagesToStore.slice(-keepRecent)
+    ];
+    
+    console.log(`[FAF:MEMORY] Compressed conversation from ${finalState.messages.length} to ${messagesToStore.length} messages`);
+  }
+
+  const metadata = {
+    userId: (finalState.context as any)?.userId,
+    traceId: finalState.traceId,
+    runId: finalState.runId,
+    agentName: finalState.currentAgentName,
+    turnCount: finalState.turnCount
+  };
+
+  const result = await config.memory.provider.storeMessages(config.conversationId, messagesToStore, metadata);
+  if (!result.success) {
+    console.warn(`[FAF:MEMORY] Failed to store conversation history: ${result.error.message}`);
+    return;
+  }
+  
+  console.log(`[FAF:MEMORY] Stored ${messagesToStore.length} messages for conversation ${config.conversationId}`);
 }

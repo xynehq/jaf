@@ -12,6 +12,13 @@ export * from './policies/handoff';
 
 export * from './server';
 
+// Memory providers
+export * from './memory/types';
+export * from './memory/factory';
+export * from './memory/providers/in-memory';
+export * from './memory/providers/redis';
+export * from './memory/providers/postgres';
+
 import { v4 as uuidv4 } from 'uuid';
 import { TraceId, RunId, createTraceId, createRunId } from './core/types';
 

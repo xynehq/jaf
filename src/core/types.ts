@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MemoryConfig } from '../memory/types';
 
 export type TraceId = string & { readonly _brand: 'TraceId' };
 export type RunId = string & { readonly _brand: 'RunId' };
@@ -115,4 +116,6 @@ export type RunConfig<Ctx> = {
   readonly initialInputGuardrails?: readonly Guardrail<string>[];
   readonly finalOutputGuardrails?: readonly Guardrail<any>[];
   readonly onEvent?: (event: TraceEvent) => void;
+  readonly memory?: MemoryConfig;
+  readonly conversationId?: string;
 };

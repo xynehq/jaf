@@ -8,7 +8,8 @@ import {
   ConsoleTraceCollector,
   ToolResponse,
   ToolErrorCodes,
-  withErrorHandling
+  withErrorHandling,
+  createMemoryProviderFromEnv
 } from 'functional-agent-framework';
 
 // Define context type
@@ -95,7 +96,7 @@ const greetingTool: Tool<{ name: string }, MyContext> = {
 // Define agents
 const mathAgent: Agent<MyContext, string> = {
   name: 'MathTutor',
-  instructions: () => 'You are a helpful math tutor. Use the calculator tool to perform calculations and explain math concepts clearly.',
+  instructions: () => 'You are a helpful math tutor with access to conversation history. Use the calculator tool to perform calculations and explain math concepts clearly. You can reference previous calculations and questions from our conversation.',
   tools: [calculatorTool],
 };
 
@@ -107,12 +108,12 @@ const chatAgent: Agent<MyContext, string> = {
 
 const assistantAgent: Agent<MyContext, string> = {
   name: 'Assistant',
-  instructions: () => 'You are a general-purpose assistant. You can help with math calculations and provide greetings.',
+  instructions: () => 'You are a general-purpose assistant with access to conversation history. You can help with math calculations and provide greetings. You can reference previous messages and calculations from our conversation.',
   tools: [calculatorTool, greetingTool],
 };
 
 async function startServer() {
-  console.log('🚀 Starting FAF Development Server...\n');
+  console.log('🚀 Starting FAF Development Server (Functional)...\n');
 
   // Check if LiteLLM configuration is provided
   const litellmUrl = process.env.LITELLM_URL || 'http://localhost:4000';
@@ -128,9 +129,63 @@ async function startServer() {
   // Set up tracing
   const traceCollector = new ConsoleTraceCollector();
 
+  // Set up memory provider based on environment configuration
+  console.log('🔧 Setting up memory provider...');
+  const memoryType = process.env.FAF_MEMORY_TYPE || 'memory';
+  console.log(`💾 Memory provider type: ${memoryType}`);
+
+  let externalClients: { redis?: any; postgres?: any } = {};
+
+  // Set up external clients based on memory type
+  if (memoryType === 'redis') {
+    console.log('🔗 Setting up Redis client...');
+    try {
+      const { createClient } = await import('redis');
+      const redisClient = createClient({
+        url: process.env.FAF_REDIS_URL || `redis://${process.env.FAF_REDIS_HOST || 'localhost'}:${process.env.FAF_REDIS_PORT || '6379'}`,
+        password: process.env.FAF_REDIS_PASSWORD,
+        database: parseInt(process.env.FAF_REDIS_DB || '0')
+      });
+      await redisClient.connect();
+      externalClients.redis = redisClient;
+      console.log('✅ Redis client connected');
+    } catch (error) {
+      console.error('❌ Failed to connect to Redis:', error);
+      console.log('📋 Make sure Redis is running and accessible');
+      console.log('🔧 Install Redis client: npm install redis');
+      process.exit(1);
+    }
+  } else if (memoryType === 'postgres') {
+    console.log('🔗 Setting up PostgreSQL client...');
+    try {
+      const { Client } = await import('pg');
+      const postgresClient = new Client({
+        connectionString: process.env.FAF_POSTGRES_CONNECTION_STRING,
+        host: process.env.FAF_POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.FAF_POSTGRES_PORT || '5432'),
+        database: process.env.FAF_POSTGRES_DB || 'faf_memory',
+        user: process.env.FAF_POSTGRES_USER || 'postgres',
+        password: process.env.FAF_POSTGRES_PASSWORD,
+        ssl: process.env.FAF_POSTGRES_SSL === 'true'
+      });
+      await postgresClient.connect();
+      externalClients.postgres = postgresClient;
+      console.log('✅ PostgreSQL client connected');
+    } catch (error) {
+      console.error('❌ Failed to connect to PostgreSQL:', error);
+      console.log('📋 Make sure PostgreSQL is running and accessible');
+      console.log('🔧 Install PostgreSQL client: npm install pg @types/pg');
+      process.exit(1);
+    }
+  }
+
+  // Create memory provider using environment configuration
+  const memoryProvider = await createMemoryProviderFromEnv(externalClients);
+  console.log(`✅ Memory provider (${memoryType}) initialized successfully`);
+
   try {
     console.log('🔧 Calling runServer...');
-    // Start the server with multiple agents
+    // Create and start the server with multiple agents using functional approach
     const server = await runServer(
       [mathAgent, chatAgent, assistantAgent], // Array of agents
       {
@@ -138,13 +193,21 @@ async function startServer() {
         maxTurns: 5,
         modelOverride: process.env.LITELLM_MODEL || 'gpt-3.5-turbo',
         onEvent: traceCollector.collect.bind(traceCollector),
+        memory: {
+          provider: memoryProvider,
+          autoStore: true, // Automatically store conversation history
+          maxMessages: 100 // Keep last 100 messages per conversation
+        }
       },
       {
         port: parseInt(process.env.PORT || '3000'),
         host: '127.0.0.1',
-        cors: false
+        cors: false,
+        defaultMemoryProvider: memoryProvider // Set memory provider on server config
       }
     );
+
+    // Server is already started by runServer
 
     console.log('\n✅ Server started successfully!');
     console.log('\n📚 Try these example requests:');
@@ -155,34 +218,66 @@ async function startServer() {
     console.log('2. List Agents:');
     console.log('   curl http://localhost:3000/agents');
     console.log('');
-    console.log('3. Chat with Math Tutor:');
+    console.log('3. Memory Health Check:');
+    console.log('   curl http://localhost:3000/memory/health');
+    console.log('');
+    console.log('4. Chat with Math Tutor (with conversation memory):');
     console.log('   curl -X POST http://localhost:3000/chat \\');
     console.log('     -H "Content-Type: application/json" \\');
-    console.log('     -d \'{"messages":[{"role":"user","content":"What is 15 * 7?"}],"agentName":"MathTutor","context":{"userId":"demo","permissions":["user"]}}\'');
+    console.log('     -d \'{"messages":[{"role":"user","content":"What is 15 * 7?"}],"conversationId":"demo-conversation-1","agentName":"MathTutor","context":{"userId":"demo","permissions":["user"]}}\'');
     console.log('');
-    console.log('4. Chat with ChatBot:');
+    console.log('5. Continue conversation (shows memory persistence):');
+    console.log('   curl -X POST http://localhost:3000/chat \\');
+    console.log('     -H "Content-Type: application/json" \\');
+    console.log('     -d \'{"messages":[{"role":"user","content":"What was my previous calculation?"}],"conversationId":"demo-conversation-1","agentName":"MathTutor","context":{"userId":"demo","permissions":["user"]}}\'');
+    console.log('');
+    console.log('6. Chat with ChatBot:');
     console.log('   curl -X POST http://localhost:3000/agents/ChatBot/chat \\');
     console.log('     -H "Content-Type: application/json" \\');
-    console.log('     -d \'{"messages":[{"role":"user","content":"Hi, my name is Alice"}],"context":{"userId":"demo","permissions":["user"]}}\'');
+    console.log('     -d \'{"messages":[{"role":"user","content":"Hi, my name is Alice"}],"conversationId":"demo-conversation-2","context":{"userId":"demo","permissions":["user"]}}\'');
     console.log('');
-    console.log('5. Chat with Assistant:');
+    console.log('7. Chat with Assistant (multi-tool with memory):');
     console.log('   curl -X POST http://localhost:3000/chat \\');
     console.log('     -H "Content-Type: application/json" \\');
-    console.log('     -d \'{"messages":[{"role":"user","content":"Calculate 25 + 17 and then greet me as Bob"}],"agentName":"Assistant","context":{"userId":"demo","permissions":["user"]}}\'');
+    console.log('     -d \'{"messages":[{"role":"user","content":"Calculate 25 + 17 and then greet me as Bob"}],"conversationId":"demo-conversation-3","agentName":"Assistant","context":{"userId":"demo","permissions":["user"]}}\'');
+    console.log('');
+    console.log('💡 Tips:');
+    console.log('   - Include conversationId in requests to maintain conversation history');
+    console.log('   - If no conversationId provided, server will generate one and return it');
+    console.log('   - Use the returned conversationId for follow-up requests');
+    console.log('');
+    console.log('🔧 Memory Provider Configuration:');
+    console.log(`   Current provider: ${memoryType}`);
+    console.log('   Available providers:');
+    console.log('   - memory (default): FAF_MEMORY_TYPE=memory');
+    console.log('   - Redis: FAF_MEMORY_TYPE=redis');
+    console.log('     • FAF_REDIS_HOST, FAF_REDIS_PORT, FAF_REDIS_PASSWORD, FAF_REDIS_DB');
+    console.log('   - PostgreSQL: FAF_MEMORY_TYPE=postgres');
+    console.log('     • FAF_POSTGRES_HOST, FAF_POSTGRES_PORT, FAF_POSTGRES_DB');
+    console.log('     • FAF_POSTGRES_USER, FAF_POSTGRES_PASSWORD, FAF_POSTGRES_SSL');
     console.log('');
 
     // Handle graceful shutdown
-    process.on('SIGINT', async () => {
-      console.log('\n🛑 Received SIGINT, shutting down gracefully...');
+    const gracefulShutdown = async (signal: string) => {
+      console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
       await server.stop();
+      
+      // Close external clients
+      if (externalClients.redis) {
+        console.log('🔌 Closing Redis connection...');
+        await externalClients.redis.quit();
+      }
+      if (externalClients.postgres) {
+        console.log('🔌 Closing PostgreSQL connection...');
+        await externalClients.postgres.end();
+      }
+      
+      console.log('✅ Shutdown complete');
       process.exit(0);
-    });
+    };
 
-    process.on('SIGTERM', async () => {
-      console.log('\n🛑 Received SIGTERM, shutting down gracefully...');
-      await server.stop();
-      process.exit(0);
-    });
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
   } catch (error) {
     console.error('❌ Failed to start server:', error);

@@ -1,8 +1,8 @@
 {
   "name": "faf-rag-demo",
   "version": "1.0.0",
-  "description": "FAF Vertex AI RAG Tool Demo",
-  "main": "index.js",
+  "description": "FAF Vertex AI RAG Tool Demo with in-memory conversation storage",
+  "main": "index.ts",
   "scripts": {
     "dev": "tsx index.ts",
     "build": "tsc",
@@ -10,12 +10,12 @@
   },
   "dependencies": {
     "@google/genai": "^1.11.0",
-    "zod": "^3.22.0",
-    "dotenv": "^16.0.0",
-    "tsx": "^4.0.0",
-    "typescript": "^5.0.0"
+    "dotenv": "^17.2.1",
+    "functional-agent-framework": "file:../../"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
   }
 }

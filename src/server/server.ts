@@ -13,32 +13,31 @@ import { run } from '../core/engine';
 import { RunState, Message, createRunId, createTraceId } from '../core/types';
 import { v4 as uuidv4 } from 'uuid';
 
-export class FAFServer<Ctx> {
-  private app: FastifyInstance;
-  private config: ServerConfig<Ctx>;
-  private startTime: number;
-
-  constructor(config: ServerConfig<Ctx>) {
-    this.config = config;
-    this.startTime = Date.now();
-    this.app = Fastify({ 
-      logger: true,
-      ajv: {
-        customOptions: {
-          removeAdditional: false,
-          useDefaults: true,
-          coerceTypes: true
-        }
+/**
+ * Create and configure a FAF server instance
+ * Functional implementation following FAF principles
+ */
+export function createFAFServer<Ctx>(config: ServerConfig<Ctx>): {
+  app: FastifyInstance;
+  start: () => Promise<void>;
+  stop: () => Promise<void>;
+} {
+  const startTime = Date.now();
+  
+  const app = Fastify({ 
+    logger: true,
+    ajv: {
+      customOptions: {
+        removeAdditional: false,
+        useDefaults: true,
+        coerceTypes: true
       }
-    });
+    }
+  });
 
-    this.setupMiddleware();
-    this.setupRoutes();
-  }
-
-  private async setupMiddleware() {
-    if (this.config.cors !== false) {
-      await this.app.register(cors, {
+  const setupMiddleware = async (): Promise<void> => {
+    if (config.cors !== false) {
+      await app.register(cors, {
         origin: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization']
@@ -46,7 +45,7 @@ export class FAFServer<Ctx> {
     }
 
     // Add request/response validation
-    this.app.addHook('preHandler', async (request, reply) => {
+    app.addHook('preHandler', async (request, reply) => {
       // Add CORS headers for preflight requests
       if (request.method === 'OPTIONS') {
         void reply.header('Access-Control-Allow-Origin', '*');
@@ -55,25 +54,25 @@ export class FAFServer<Ctx> {
         return reply.code(200).send();
       }
     });
-  }
+  };
 
-  private setupRoutes() {
+  const setupRoutes = (): void => {
     // Health check endpoint
-    this.app.get('/health', async (request: FastifyRequest, reply: FastifyReply): Promise<HealthResponse> => {
+    app.get('/health', async (request: FastifyRequest, reply: FastifyReply): Promise<HealthResponse> => {
       const response: HealthResponse = {
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '2.0.0',
-        uptime: Date.now() - this.startTime
+        uptime: Date.now() - startTime
       };
       
       return reply.code(200).send(response);
     });
 
     // List available agents
-    this.app.get('/agents', async (request: FastifyRequest, reply: FastifyReply): Promise<AgentListResponse> => {
+    app.get('/agents', async (request: FastifyRequest, reply: FastifyReply): Promise<AgentListResponse> => {
       try {
-        const agents = Array.from(this.config.agentRegistry.entries()).map(([name, agent]) => ({
+        const agents = Array.from(config.agentRegistry.entries()).map(([name, agent]) => ({
           name,
           description: typeof agent.instructions === 'function' 
             ? 'Agent description' // Safe fallback since we don't have context
@@ -98,7 +97,7 @@ export class FAFServer<Ctx> {
     });
 
     // Chat completion endpoint
-    this.app.post('/chat', {
+    app.post('/chat', {
       schema: {
         body: {
           type: 'object',
@@ -117,23 +116,32 @@ export class FAFServer<Ctx> {
             agentName: { type: 'string' },
             context: {},
             maxTurns: { type: 'number' },
-            stream: { type: 'boolean', default: false }
+            stream: { type: 'boolean', default: false },
+            conversationId: { type: 'string' },
+            memory: {
+              type: 'object',
+              properties: {
+                autoStore: { type: 'boolean', default: true },
+                maxMessages: { type: 'number' },
+                compressionThreshold: { type: 'number' }
+              }
+            }
           },
           required: ['messages', 'agentName']
         }
       }
     }, async (request: FastifyRequest<{ Body: ChatRequest }>, reply: FastifyReply): Promise<ChatResponse> => {
-      const startTime = Date.now();
+      const requestStartTime = Date.now();
       
       try {
         // Validate request body
         const validatedRequest = chatRequestSchema.parse(request.body);
         
         // Check if agent exists
-        if (!this.config.agentRegistry.has(validatedRequest.agentName)) {
+        if (!config.agentRegistry.has(validatedRequest.agentName)) {
           const response: ChatResponse = {
             success: false,
-            error: `Agent '${validatedRequest.agentName}' not found. Available agents: ${Array.from(this.config.agentRegistry.keys()).join(', ')}`
+            error: `Agent '${validatedRequest.agentName}' not found. Available agents: ${Array.from(config.agentRegistry.keys()).join(', ')}`
           };
           return reply.code(404).send(response);
         }
@@ -148,6 +156,9 @@ export class FAFServer<Ctx> {
         const runId = createRunId(uuidv4());
         const traceId = createTraceId(uuidv4());
         
+        // Generate conversationId if not provided
+        const conversationId = validatedRequest.conversationId || `conv-${uuidv4()}`;
+        
         const initialState: RunState<Ctx> = {
           runId,
           traceId,
@@ -157,10 +168,17 @@ export class FAFServer<Ctx> {
           turnCount: 0
         };
 
-        // Create run config with optional overrides
+        // Create run config with memory configuration
         const runConfig = {
-          ...this.config.runConfig,
-          maxTurns: validatedRequest.maxTurns || this.config.runConfig.maxTurns || 10
+          ...config.runConfig,
+          maxTurns: validatedRequest.maxTurns || config.runConfig.maxTurns || 10,
+          conversationId,
+          memory: config.defaultMemoryProvider ? {
+            provider: config.defaultMemoryProvider,
+            autoStore: validatedRequest.memory?.autoStore ?? true,
+            maxMessages: validatedRequest.memory?.maxMessages,
+            compressionThreshold: validatedRequest.memory?.compressionThreshold
+          } : undefined
         };
 
         // Handle streaming vs non-streaming
@@ -176,7 +194,7 @@ export class FAFServer<Ctx> {
 
         // Run the agent
         const result = await run(initialState, runConfig);
-        const executionTime = Date.now() - startTime;
+        const executionTime = Date.now() - requestStartTime;
 
         // Convert FAF messages back to HTTP messages, including tool interactions
         const httpMessages: any[] = result.finalState.messages.map(msg => {
@@ -215,6 +233,7 @@ export class FAFServer<Ctx> {
           data: {
             runId: result.finalState.runId,
             traceId: result.finalState.traceId,
+            conversationId: conversationId,
             messages: httpMessages,
             outcome: {
               status: result.outcome.status,
@@ -229,7 +248,7 @@ export class FAFServer<Ctx> {
         return reply.code(200).send(response);
 
       } catch (error) {
-        const executionTime = Date.now() - startTime;
+        const executionTime = Date.now() - requestStartTime;
         
         const response: ChatResponse = {
           success: false,
@@ -247,7 +266,7 @@ export class FAFServer<Ctx> {
     });
 
     // Agent-specific chat endpoint (convenience)
-    this.app.post('/agents/:agentName/chat', {
+    app.post('/agents/:agentName/chat', {
       schema: {
         params: {
           type: 'object',
@@ -272,7 +291,16 @@ export class FAFServer<Ctx> {
             },
             context: {},
             maxTurns: { type: 'number' },
-            stream: { type: 'boolean', default: false }
+            stream: { type: 'boolean', default: false },
+            conversationId: { type: 'string' },
+            memory: {
+              type: 'object',
+              properties: {
+                autoStore: { type: 'boolean', default: true },
+                maxMessages: { type: 'number' },
+                compressionThreshold: { type: 'number' }
+              }
+            }
           },
           required: ['messages']
         }
@@ -297,42 +325,135 @@ export class FAFServer<Ctx> {
       } as FastifyRequest<{ Body: ChatRequest }>;
 
       // Call the main chat handler
-      return this.app.inject({
+      return app.inject({
         method: 'POST',
         url: '/chat',
         payload: chatRequest
       }).then((response: any) => JSON.parse(response.body));
     });
-  }
 
-  async start(): Promise<void> {
+    // Memory management endpoints
+    app.get('/conversations/:conversationId', async (
+      request: FastifyRequest<{ Params: { conversationId: string } }>, 
+      reply: FastifyReply
+    ) => {
+      if (!config.defaultMemoryProvider) {
+        return reply.code(503).send({
+          success: false,
+          error: 'Memory provider not configured'
+        });
+      }
+
+      const result = await config.defaultMemoryProvider.getConversation(request.params.conversationId);
+      if (!result.success) {
+        return reply.code(500).send({
+          success: false,
+          error: result.error.message
+        });
+      }
+
+      return reply.code(200).send({
+        success: true,
+        data: result.data
+      });
+    });
+
+    app.delete('/conversations/:conversationId', async (
+      request: FastifyRequest<{ Params: { conversationId: string } }>, 
+      reply: FastifyReply
+    ) => {
+      if (!config.defaultMemoryProvider) {
+        return reply.code(503).send({
+          success: false,
+          error: 'Memory provider not configured'
+        });
+      }
+
+      const result = await config.defaultMemoryProvider.deleteConversation(request.params.conversationId);
+      if (!result.success) {
+        return reply.code(500).send({
+          success: false,
+          error: result.error.message
+        });
+      }
+
+      return reply.code(200).send({
+        success: true,
+        data: { deleted: result.data }
+      });
+    });
+
+    app.get('/memory/health', async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!config.defaultMemoryProvider) {
+        return reply.code(503).send({
+          success: false,
+          error: 'Memory provider not configured'
+        });
+      }
+
+      const result = await config.defaultMemoryProvider.healthCheck();
+      if (!result.success) {
+        return reply.code(500).send({
+          success: false,
+          error: 'Health check failed',
+          details: result.error
+        });
+      }
+
+      return reply.code(200).send({
+        success: true,
+        data: result.data
+      });
+    });
+  };
+
+  const start = async (): Promise<void> => {
     try {
-      const host = this.config.host || 'localhost';
-      const port = this.config.port || 3000;
+      await setupMiddleware();
+      setupRoutes();
+      
+      const host = config.host || 'localhost';
+      const port = config.port || 3000;
       
       console.log(`🔧 Starting Fastify server on ${host}:${port}...`);
-      await this.app.listen({ 
+      await app.listen({ 
         port, 
         host 
       });
       console.log(`🔧 Fastify server started successfully`);
       
       console.log(`🚀 FAF Server running on http://${host}:${port}`);
-      console.log(`📋 Available agents: ${Array.from(this.config.agentRegistry.keys()).join(', ')}`);
+      console.log(`📋 Available agents: ${Array.from(config.agentRegistry.keys()).join(', ')}`);
       console.log(`🏥 Health check: http://${host}:${port}/health`);
       console.log(`🤖 Agents list: http://${host}:${port}/agents`);
       console.log(`💬 Chat endpoint: http://${host}:${port}/chat`);
+      
+      if (config.defaultMemoryProvider) {
+        console.log(`🧠 Memory provider: Configured`);
+        console.log(`📊 Memory health: http://${host}:${port}/memory/health`);
+        console.log(`💾 Conversation management: http://${host}:${port}/conversations/:id`);
+      } else {
+        console.log(`🧠 Memory provider: Not configured (conversations will not persist)`);
+      }
     } catch (error) {
-      this.app.log.error(error);
+      app.log.error(error);
       process.exit(1);
     }
-  }
+  };
 
-  async stop(): Promise<void> {
-    await this.app.close();
-  }
+  const stop = async (): Promise<void> => {
+    await app.close();
+    
+    // Close memory provider if configured
+    if (config.defaultMemoryProvider) {
+      await config.defaultMemoryProvider.close();
+    }
+  };
 
-  get server(): FastifyInstance {
-    return this.app;
-  }
+  return {
+    app,
+    start,
+    stop
+  };
 }
+

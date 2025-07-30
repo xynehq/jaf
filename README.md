@@ -1,4 +1,4 @@
-# Functional Agent Framework (FAF) v2.0
+# Functional Agent Framework (FAF)
 
 A purely functional agent framework built on immutable state, type safety, and composable policies. FAF enables building production-ready AI agent systems with built-in security, observability, and error handling.
 
@@ -217,7 +217,7 @@ const fafTools = mcpTools.map(tool =>
 FAF includes a built-in development server for testing agents locally via HTTP endpoints:
 
 ```typescript
-import { runServer, makeLiteLLMProvider } from 'functional-agent-framework';
+import { runServer, makeLiteLLMProvider, createInMemoryProvider } from 'functional-agent-framework';
 
 const myAgent = {
   name: 'MyAgent',
@@ -226,12 +226,13 @@ const myAgent = {
 };
 
 const modelProvider = makeLiteLLMProvider('http://localhost:4000');
+const memoryProvider = createInMemoryProvider();
 
 // Start server on port 3000
-await runServer(
+const server = await runServer(
   [myAgent], 
   { modelProvider },
-  { port: 3000 }
+  { port: 3000, defaultMemoryProvider: memoryProvider }
 );
 ```
 
