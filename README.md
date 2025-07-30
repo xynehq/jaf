@@ -1,5 +1,7 @@
 # Functional Agent Framework (FAF)
 
+![Functional Agent Framework](/docs/cover.png?raw=true "Functional Agent Framework")
+
 A purely functional agent framework built on immutable state, type safety, and composable policies. FAF enables building production-ready AI agent systems with built-in security, observability, and error handling.
 
 ## 🎯 Core Philosophy
@@ -23,11 +25,50 @@ npm test     # Run tests
 ```
 src/
 ├── core/           # Core framework types and engine
-├── providers/      # External integrations (LLM, MCP)
+│   ├── engine.ts   # Main execution engine
+│   ├── errors.ts   # Error handling and types
+│   ├── tool-results.ts # Tool execution results
+│   ├── tracing.ts  # Event tracing system
+│   └── types.ts    # Core type definitions
+├── memory/         # Memory providers for conversation persistence
+│   ├── factory.ts  # Memory provider factory
+│   ├── types.ts    # Memory system types
+│   └── providers/
+│       ├── in-memory.ts  # In-memory provider
+│       ├── postgres.ts   # PostgreSQL provider
+│       └── redis.ts      # Redis provider
+├── providers/      # External integrations
+│   ├── mcp.ts      # Model Context Protocol integration
+│   └── model.ts    # LLM provider integrations
 ├── policies/       # Validation and security policies
-└── __tests__/     # Test suite
+│   ├── handoff.ts  # Agent handoff policies
+│   └── validation.ts # Input/output validation
+├── server/         # HTTP server implementation
+│   ├── index.ts    # Server entry point
+│   ├── server.ts   # Express server setup
+│   └── types.ts    # Server-specific types
+├── __tests__/      # Test suite
+│   ├── engine.test.ts     # Engine tests
+│   └── validation.test.ts # Validation tests
+└── index.ts        # Main framework exports
 examples/
-└── rag-demo/      # Vertex AI RAG integration demo
+├── rag-demo/       # Vertex AI RAG integration demo
+│   ├── index.ts    # Demo entry point
+│   ├── rag-agent.ts # RAG agent implementation
+│   └── rag-tool.ts  # RAG tool implementation
+└── server-demo/    # Development server demo
+    └── index.ts    # Server demo entry point
+docs/               # Documentation
+├── getting-started.md
+├── core-concepts.md
+├── api-reference.md
+├── tools.md
+├── memory-system.md
+├── model-providers.md
+├── server-api.md
+├── examples.md
+├── deployment.md
+└── troubleshooting.md
 ```
 
 ## 🏗️ Key Components
@@ -242,6 +283,21 @@ Server provides RESTful endpoints:
 - `POST /chat` - General chat endpoint
 - `POST /agents/{name}/chat` - Agent-specific endpoint
 
+## 📚 Documentation
+
+Comprehensive documentation is available in the [`/docs`](./docs) folder:
+
+- **[Getting Started](./docs/getting-started.md)** - Installation, basic concepts, and first agent
+- **[Core Concepts](./docs/core-concepts.md)** - FAF's functional architecture and principles  
+- **[API Reference](./docs/api-reference.md)** - Complete TypeScript API documentation
+- **[Tools](./docs/tools.md)** - Building robust tools with validation and error handling
+- **[Memory System](./docs/memory-system.md)** - Conversation persistence (in-memory, Redis, PostgreSQL)
+- **[Model Providers](./docs/model-providers.md)** - LLM integration and configuration
+- **[Server & API](./docs/server-api.md)** - HTTP server setup and REST API
+- **[Examples](./docs/examples.md)** - Tutorials and integration patterns
+- **[Deployment](./docs/deployment.md)** - Production deployment guide
+- **[Troubleshooting](./docs/troubleshooting.md)** - Common issues and debugging
+
 ## 🎮 Example Applications
 
 Explore the example applications to see the framework in action:
@@ -307,10 +363,6 @@ npm run typecheck # Type checking
 - Clear boundaries between pure and impure code
 - Easier mocking and testing
 
-## 📜 License
-
-MIT
-
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -321,4 +373,4 @@ MIT
 
 ---
 
-**FAF v2.0** - Building the future of functional AI agent systems 🚀
+**FAF** - Building the future of functional AI agent systems 🚀
