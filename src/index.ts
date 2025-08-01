@@ -22,6 +22,9 @@ export * from './memory/providers/postgres';
 // A2A Protocol Support
 export * from './a2a';
 
+// ADK Layer - Functional Agent Development Kit
+// export * from './adk';  // Temporarily disabled due to export conflicts
+
 import { v4 as uuidv4 } from 'uuid';
 import { TraceId, RunId, createTraceId, createRunId } from './core/types';
 

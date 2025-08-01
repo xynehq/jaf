@@ -226,6 +226,14 @@ export type A2AServerConfig = {
   readonly port: number;
   readonly host?: string;
   readonly capabilities?: Partial<AgentCard['capabilities']>;
+  readonly taskProvider?: {
+    readonly type: 'memory' | 'redis' | 'postgres';
+    readonly config?: any; // Provider-specific configuration
+    readonly externalClients?: {
+      readonly redis?: any;
+      readonly postgres?: any;
+    };
+  };
 };
 
 // Client Types

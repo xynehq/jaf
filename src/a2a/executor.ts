@@ -22,6 +22,7 @@ import {
   createA2ATextMessage,
   createA2ADataMessage
 } from './agent.js';
+import { A2ATaskProvider } from './memory/types.js';
 
 // Pure function types for execution
 export type A2AExecutionContext = {
@@ -29,6 +30,14 @@ export type A2AExecutionContext = {
   readonly currentTask?: A2ATask;
   readonly sessionId: string;
   readonly metadata?: Readonly<Record<string, any>>;
+};
+
+export type A2AExecutionContextWithProvider = {
+  readonly message: A2AMessage;
+  readonly currentTask?: A2ATask;
+  readonly sessionId: string;
+  readonly metadata?: Readonly<Record<string, any>>;
+  readonly taskProvider: A2ATaskProvider;
 };
 
 export type A2AExecutionEvent = {
@@ -413,6 +422,236 @@ export const executeA2AAgentWithStreaming = async function* (
       status: { 
         state: 'failed',
         message: createA2ATextMessage(errorMessage, currentTask.contextId, currentTask.id),
+        timestamp: new Date().toISOString()
+      },
+      final: true
+    };
+  }
+};
+
+/**
+ * Execute A2A agent with persistent task storage
+ * Pure function that integrates with A2A task providers
+ */
+export const executeA2AAgentWithProvider = async (
+  context: A2AExecutionContextWithProvider,
+  agent: A2AAgent,
+  modelProvider: any
+): Promise<A2AExecutionResult> => {
+  const query = extractTextFromA2AMessage(context.message);
+  let events: A2AExecutionEvent[] = [];
+  
+  try {
+    // Get or create task
+    let currentTask: A2ATask;
+    
+    if (context.currentTask) {
+      currentTask = context.currentTask;
+    } else {
+      // Create new task
+      currentTask = createA2ATask(context.message, context.sessionId);
+      
+      // Store task in provider
+      const storeResult = await context.taskProvider.storeTask(currentTask, context.metadata);
+      if (!storeResult.success) {
+        throw new Error(`Failed to store task: ${storeResult.error.message}`);
+      }
+      
+      events = [...events, createTaskEvent(currentTask)];
+    }
+    
+    // Update task status to working
+    const workingTask = updateA2ATaskStatus(currentTask, 'working');
+    const updateResult = await context.taskProvider.updateTask(workingTask);
+    if (!updateResult.success) {
+      console.warn(`Failed to update task status: ${updateResult.error.message}`);
+    }
+    
+    // Process through agent
+    const agentState = createInitialAgentState(context.sessionId);
+    const processingResult = await processAgentStream(agent, query, agentState, modelProvider, workingTask);
+    
+    // Store final task state
+    const finalStoreResult = await context.taskProvider.updateTask(processingResult.task);
+    if (!finalStoreResult.success) {
+      console.warn(`Failed to store final task: ${finalStoreResult.error.message}`);
+    }
+    
+    // Check if the task failed during processing
+    if (processingResult.task.status.state === 'failed') {
+      const errorMessage = processingResult.task.status.message ? 
+        extractTextFromA2AMessage(processingResult.task.status.message) : 
+        'Agent execution failed';
+      
+      return {
+        events: [...events, ...processingResult.events],
+        finalTask: processingResult.task,
+        error: errorMessage
+      };
+    }
+    
+    return {
+      events: [...events, ...processingResult.events],
+      finalTask: processingResult.task
+    };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    // Try to create and store failed task
+    const failedTask = context.currentTask ? 
+      updateA2ATaskStatus(context.currentTask, 'failed', createA2ATextMessage(errorMessage, context.sessionId)) :
+      createA2ATask(context.message, context.sessionId);
+    
+    if (failedTask.status.state !== 'failed') {
+      const updatedFailedTask = updateA2ATaskStatus(failedTask, 'failed', createA2ATextMessage(errorMessage, context.sessionId));
+      await context.taskProvider.updateTask(updatedFailedTask).catch(() => {
+        // Ignore storage errors for failed tasks
+      });
+    }
+    
+    return {
+      events,
+      finalTask: failedTask,
+      error: errorMessage
+    };
+  }
+};
+
+/**
+ * Execute A2A agent with streaming and persistent task storage
+ * Pure async generator function that integrates with A2A task providers
+ */
+export const executeA2AAgentWithProviderStreaming = async function* (
+  context: A2AExecutionContextWithProvider,
+  agent: A2AAgent,
+  modelProvider: any
+): AsyncGenerator<A2AStreamEvent, void, unknown> {
+  const query = extractTextFromA2AMessage(context.message);
+  
+  try {
+    // Get or create task
+    let currentTask: A2ATask;
+    
+    if (context.currentTask) {
+      currentTask = context.currentTask;
+    } else {
+      // Create new task
+      currentTask = createA2ATask(context.message, context.sessionId);
+      
+      // Store task in provider
+      const storeResult = await context.taskProvider.storeTask(currentTask, context.metadata);
+      if (!storeResult.success) {
+        throw new Error(`Failed to store task: ${storeResult.error.message}`);
+      }
+      
+      // Emit task creation event
+      yield {
+        kind: 'status-update',
+        taskId: currentTask.id,
+        contextId: currentTask.contextId,
+        status: { state: 'submitted', timestamp: new Date().toISOString() },
+        final: false
+      };
+    }
+    
+    // Update task status to working
+    const workingTask = updateA2ATaskStatus(currentTask, 'working');
+    await context.taskProvider.updateTask(workingTask).catch(() => {
+      // Continue even if status update fails
+    });
+    
+    yield {
+      kind: 'status-update',
+      taskId: currentTask.id,
+      contextId: currentTask.contextId,
+      status: { state: 'working', timestamp: new Date().toISOString() },
+      final: false
+    };
+    
+    // Process through agent with streaming
+    const agentState = createInitialAgentState(context.sessionId);
+    const agentGenerator = processAgentQuery(agent, query, agentState, modelProvider);
+    
+    let updatedTask = workingTask;
+    
+    for await (const event of agentGenerator) {
+      if (!event.isTaskComplete) {
+        // Yield intermediate progress
+        yield {
+          kind: 'status-update',
+          taskId: currentTask.id,
+          contextId: currentTask.contextId,
+          status: {
+            state: 'working',
+            message: createA2ATextMessage(event.updates || 'Processing...', currentTask.contextId, currentTask.id),
+            timestamp: event.timestamp
+          },
+          final: false
+        };
+      } else {
+        // Handle final result
+        const resultEvents = handleAgentResult(event.content, updatedTask);
+        updatedTask = resultEvents.task;
+        
+        // Store updated task
+        await context.taskProvider.updateTask(updatedTask).catch(() => {
+          // Continue even if storage fails
+        });
+        
+        // Emit completion events
+        if (updatedTask.status.state === 'completed') {
+          yield {
+            kind: 'status-update',
+            taskId: updatedTask.id,
+            contextId: updatedTask.contextId,
+            status: updatedTask.status,
+            final: true
+          };
+          
+          // Emit any artifacts
+          if (updatedTask.artifacts && updatedTask.artifacts.length > 0) {
+            for (const artifact of updatedTask.artifacts) {
+              yield {
+                kind: 'artifact-update',
+                taskId: updatedTask.id,
+                contextId: updatedTask.contextId,
+                artifact,
+                lastChunk: true
+              };
+            }
+          }
+        } else if (updatedTask.status.state === 'failed') {
+          yield {
+            kind: 'status-update',
+            taskId: updatedTask.id,
+            contextId: updatedTask.contextId,
+            status: updatedTask.status,
+            final: true
+          };
+        }
+        break;
+      }
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const taskId = context.currentTask?.id || 'unknown';
+    const contextId = context.sessionId;
+    
+    // Try to update task as failed
+    if (context.currentTask) {
+      const failedTask = updateA2ATaskStatus(context.currentTask, 'failed', createA2ATextMessage(errorMessage, contextId, taskId));
+      await context.taskProvider.updateTask(failedTask).catch(() => {
+        // Ignore storage errors
+      });
+    }
+    
+    yield {
+      kind: 'status-update',
+      taskId,
+      contextId,
+      status: { 
+        state: 'failed',
+        message: createA2ATextMessage(errorMessage, contextId, taskId),
         timestamp: new Date().toISOString()
       },
       final: true

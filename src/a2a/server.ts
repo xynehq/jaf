@@ -15,9 +15,10 @@ import type {
 } from './types.js';
 import { generateAgentCard } from './agent-card.js';
 import { createProtocolHandlerConfig } from './protocol.js';
+import { createA2ATaskProvider, createSimpleA2ATaskProvider } from './memory/factory.js';
 
 // Pure function to create A2A server configuration
-export const createA2AServerConfig = (config: A2AServerConfig) => {
+export const createA2AServerConfig = async (config: A2AServerConfig) => {
   const host = config.host || 'localhost';
   const capabilities = config.capabilities || {
     streaming: true,
@@ -36,30 +37,57 @@ export const createA2AServerConfig = (config: A2AServerConfig) => {
     ...agentCard,
     capabilities
   };
+
+  // Create task provider if configured
+  let taskProvider;
+  if (config.taskProvider) {
+    try {
+      taskProvider = await createA2ATaskProvider(
+        { 
+          type: config.taskProvider.type,
+          ...config.taskProvider.config
+        },
+        config.taskProvider.externalClients
+      );
+    } catch (error) {
+      console.warn(`Failed to create A2A task provider: ${(error as Error).message}. Falling back to in-memory provider.`);
+      taskProvider = await createSimpleA2ATaskProvider('memory');
+    }
+  } else {
+    // Default to in-memory task provider
+    taskProvider = await createSimpleA2ATaskProvider('memory');
+  }
   
   return {
     ...config,
     host,
     capabilities,
     agentCard: updatedAgentCard,
+    taskProvider,
     protocolHandler: createProtocolHandlerConfig(
       config.agents,
       null, // modelProvider will be injected
-      null   // agentCard will be injected
+      null, // agentCard will be injected
+      taskProvider
     )
   };
 };
 
 // Pure function to create A2A server instance
-export const createA2AServer = (config: A2AServerConfig) => {
-  const serverConfig = createA2AServerConfig(config);
+export const createA2AServer = async (config: A2AServerConfig) => {
+  const serverConfig = await createA2AServerConfig(config);
   const app = createFastifyApp();
   
   return {
     app,
     config: serverConfig,
     start: () => startA2AServerInternal(app, serverConfig),
-    stop: () => stopA2AServer(app),
+    stop: async () => {
+      if (serverConfig.taskProvider) {
+        await serverConfig.taskProvider.close();
+      }
+      return stopA2AServer(app);
+    },
     addAgent: (name: string, agent: A2AAgent) => addAgentToServer(serverConfig, name, agent),
     removeAgent: (name: string) => removeAgentFromServer(serverConfig, name),
     getAgentCard: () => serverConfig.agentCard,
@@ -95,7 +123,7 @@ const createFastifyApp = (): FastifyInstance => {
 };
 
 // Pure function to setup A2A routes
-const setupA2ARoutes = (app: FastifyInstance, config: ReturnType<typeof createA2AServerConfig>) => {
+const setupA2ARoutes = (app: FastifyInstance, config: Awaited<ReturnType<typeof createA2AServerConfig>>) => {
   // Agent Card endpoint (A2A discovery)
   app.get('/.well-known/agent-card', {
     schema: {
@@ -296,7 +324,7 @@ const setupMiddleware = async (app: FastifyInstance) => {
 // Pure function to start A2A server (internal)
 const startA2AServerInternal = async (
   app: FastifyInstance, 
-  config: ReturnType<typeof createA2AServerConfig>
+  config: Awaited<ReturnType<typeof createA2AServerConfig>>
 ) => {
   try {
     await setupMiddleware(app);
@@ -333,7 +361,7 @@ const stopA2AServer = async (app: FastifyInstance) => {
 
 // Pure function to handle A2A requests
 const handleA2ARequest = async (
-  config: ReturnType<typeof createA2AServerConfig>,
+  config: Awaited<ReturnType<typeof createA2AServerConfig>>,
   request: JSONRPCRequest
 ): Promise<JSONRPCResponse | AsyncIterable<JSONRPCResponse>> => {
   // Use the first available agent by default
@@ -354,7 +382,7 @@ const handleA2ARequest = async (
 
 // Pure function to handle agent-specific A2A requests
 const handleA2ARequestForAgent = async (
-  config: ReturnType<typeof createA2AServerConfig>,
+  config: Awaited<ReturnType<typeof createA2AServerConfig>>,
   request: JSONRPCRequest,
   agentName: string
 ): Promise<JSONRPCResponse | AsyncIterable<JSONRPCResponse>> => {
@@ -368,10 +396,10 @@ const isAsyncIterable = (value: any): value is AsyncIterable<any> => {
 
 // Pure function to add agent to server
 const addAgentToServer = (
-  config: ReturnType<typeof createA2AServerConfig>,
+  config: Awaited<ReturnType<typeof createA2AServerConfig>>,
   name: string,
   agent: A2AAgent
-): ReturnType<typeof createA2AServerConfig> => {
+): Awaited<ReturnType<typeof createA2AServerConfig>> => {
   const newAgents = new Map(config.agents);
   newAgents.set(name, agent);
   
@@ -391,9 +419,9 @@ const addAgentToServer = (
 
 // Pure function to remove agent from server
 const removeAgentFromServer = (
-  config: ReturnType<typeof createA2AServerConfig>,
+  config: Awaited<ReturnType<typeof createA2AServerConfig>>,
   name: string
-): ReturnType<typeof createA2AServerConfig> => {
+): Awaited<ReturnType<typeof createA2AServerConfig>> => {
   const newAgents = new Map(config.agents);
   newAgents.delete(name);
   
@@ -413,7 +441,7 @@ const removeAgentFromServer = (
 
 // Pure function for one-line server creation and startup
 export const startA2AServer = async (config: A2AServerConfig) => {
-  const server = createA2AServer(config);
+  const server = await createA2AServer(config);
   await server.start();
   return server;
 };

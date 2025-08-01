@@ -19,6 +19,7 @@ import type {
 import { A2AErrorCodes } from './types.js';
 import { executeA2AAgent, executeA2AAgentWithStreaming } from './executor.js';
 import { sendMessageRequestSchema } from './types.js';
+import { A2ATaskProvider } from './memory/types.js';
 
 // Pure function to validate JSON-RPC request
 export const validateJSONRPCRequest = (request: any): request is JSONRPCRequest => {
@@ -160,11 +161,19 @@ export const handleMessageStream = async function* (
 // Pure function to handle tasks/get method
 export const handleTasksGet = async (
   request: GetTaskRequest,
-  taskStorage: ReadonlyMap<string, A2ATask>
+  taskProvider: A2ATaskProvider
 ): Promise<JSONRPCResponse> => {
   try {
-    const task = taskStorage.get(request.params.id);
+    const taskResult = await taskProvider.getTask(request.params.id);
     
+    if (!taskResult.success) {
+      return createJSONRPCErrorResponse(
+        request.id,
+        createA2AError(A2AErrorCodes.INTERNAL_ERROR, `Failed to get task: ${taskResult.error.message}`)
+      );
+    }
+
+    const task = taskResult.data;
     if (!task) {
       return createJSONRPCErrorResponse(
         request.id,
@@ -191,11 +200,19 @@ export const handleTasksGet = async (
 // Pure function to handle tasks/cancel method
 export const handleTasksCancel = async (
   request: { id: string | number; params: { id: string } },
-  taskStorage: ReadonlyMap<string, A2ATask>
+  taskProvider: A2ATaskProvider
 ): Promise<JSONRPCResponse> => {
   try {
-    const task = taskStorage.get(request.params.id);
+    const taskResult = await taskProvider.getTask(request.params.id);
     
+    if (!taskResult.success) {
+      return createJSONRPCErrorResponse(
+        request.id,
+        createA2AError(A2AErrorCodes.INTERNAL_ERROR, `Failed to get task: ${taskResult.error.message}`)
+      );
+    }
+
+    const task = taskResult.data;
     if (!task) {
       return createJSONRPCErrorResponse(
         request.id,
@@ -211,14 +228,24 @@ export const handleTasksCancel = async (
       );
     }
     
-    // Create canceled task
-    const canceledTask: A2ATask = {
-      ...task,
-      status: {
-        state: 'canceled',
-        timestamp: new Date().toISOString()
-      }
-    };
+    // Update task status to canceled
+    const updateResult = await taskProvider.updateTaskStatus(
+      request.params.id,
+      'canceled',
+      undefined,
+      new Date().toISOString()
+    );
+
+    if (!updateResult.success) {
+      return createJSONRPCErrorResponse(
+        request.id,
+        createA2AError(A2AErrorCodes.INTERNAL_ERROR, `Failed to cancel task: ${updateResult.error.message}`)
+      );
+    }
+
+    // Get the updated task to return
+    const updatedTaskResult = await taskProvider.getTask(request.params.id);
+    const canceledTask = updatedTaskResult.success ? updatedTaskResult.data : task;
     
     return createJSONRPCSuccessResponse(request.id, canceledTask);
   } catch (error) {
@@ -251,7 +278,7 @@ export const routeA2ARequest = (
   request: any,
   agent: A2AAgent,
   modelProvider: any,
-  taskStorage: ReadonlyMap<string, A2ATask>,
+  taskProvider: A2ATaskProvider,
   agentCard: any
 ): Promise<JSONRPCResponse> | AsyncGenerator<JSONRPCResponse, void, unknown> => {
   if (!validateJSONRPCRequest(request)) {
@@ -292,10 +319,10 @@ export const routeA2ARequest = (
     }
     
     case 'tasks/get':
-      return handleTasksGet(validRequest as GetTaskRequest, taskStorage);
+      return handleTasksGet(validRequest as GetTaskRequest, taskProvider);
     
     case 'tasks/cancel':
-      return handleTasksCancel(validRequest as any, taskStorage);
+      return handleTasksCancel(validRequest as any, taskProvider);
     
     case 'agent/getAuthenticatedExtendedCard':
       return handleGetAuthenticatedExtendedCard(validRequest as any, agentCard);
@@ -312,12 +339,13 @@ export const routeA2ARequest = (
 export const createProtocolHandlerConfig = (
   agents: ReadonlyMap<string, A2AAgent>,
   modelProvider: any,
-  agentCard: any
+  agentCard: any,
+  taskProvider?: A2ATaskProvider
 ) => ({
   agents,
   modelProvider,
   agentCard,
-  taskStorage: new Map<string, A2ATask>(), // In real implementation, this would be persistent
+  taskProvider,
   
   // Pure function to handle any A2A request
   handleRequest: (request: JSONRPCRequest, agentName?: string) => {
@@ -330,11 +358,18 @@ export const createProtocolHandlerConfig = (
       ));
     }
     
+    if (!taskProvider) {
+      return Promise.resolve(createJSONRPCErrorResponse(
+        request.id || null,
+        createA2AError(A2AErrorCodes.INTERNAL_ERROR, 'No task provider configured')
+      ));
+    }
+    
     return routeA2ARequest(
       request,
       agent,
       modelProvider,
-      new Map(), // taskStorage would be injected here
+      taskProvider,
       agentCard
     );
   }

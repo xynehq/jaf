@@ -130,6 +130,15 @@ import {
   discoverAgents,
   connectToA2AAgent
 } from './client.js';
+
+// Memory Functions
+import {
+  createA2ATaskProvider,
+  createSimpleA2ATaskProvider,
+  createCompositeA2ATaskProvider,
+  createA2ATaskProviderFromEnv,
+  validateA2ATaskProviderConfig
+} from './memory/factory.js';
 export {
   createA2AClient,
   createMessageRequest,
@@ -152,6 +161,9 @@ export { A2AErrorCodes } from './types.js';
 
 // Validation Schemas
 export { a2aMessageSchema, sendMessageRequestSchema } from './types.js';
+
+// Memory and Task Provider Support
+export * from './memory/index.js';
 
 // Example Agents (optional, for development and testing)
 export { createWeatherAgent, getWeatherAgentProcessingMessage, weatherAgentExamples } from './examples/weather-agent.js';
@@ -188,6 +200,15 @@ export const A2A = {
     generate: generateAgentCard,
     validate: validateAgentCard,
     minimal: createMinimalAgentCard
+  },
+
+  // Task memory utilities
+  memory: {
+    createTaskProvider: createA2ATaskProvider,
+    createSimpleTaskProvider: createSimpleA2ATaskProvider,
+    createCompositeTaskProvider: createCompositeA2ATaskProvider,
+    createTaskProviderFromEnv: createA2ATaskProviderFromEnv,
+    validateTaskProviderConfig: validateA2ATaskProviderConfig
   }
 } as const;
 
