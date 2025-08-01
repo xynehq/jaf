@@ -1,0 +1,159 @@
+# FAF Documentation Configuration
+
+# Project information
+site_name: FAF - Functional Agent Framework
+site_description: A pure functional framework for building AI agents without classes
+site_author: FAF Contributors
+site_url: https://xynehq.github.io/faf/
+repo_url: https://github.com/xynehq/faf
+repo_name: xynehq/faf
+edit_uri: edit/main/docs/
+
+# Copyright
+copyright: Copyright &copy; 2024 FAF Contributors
+
+# Configuration
+theme:
+  name: material
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: black
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: black
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  font:
+    text: Roboto
+    code: Roboto Mono
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
+    - content.code.copy
+    - content.tooltips
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+    - toc.integrate
+  icon:
+    repo: fontawesome/brands/github
+  favicon: favicon.png
+  logo: logo.png
+
+# Plugins
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+
+# Customization
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/xynehq/faf
+  analytics:
+    provider: google
+    property: !ENV GOOGLE_ANALYTICS_KEY
+  version:
+    provider: mike
+
+# Extensions
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      normalize_issue_symbols: true
+      repo_url_shorthand: true
+      user: xynehq
+      repo: faf
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets:
+      auto_append:
+        - includes/mkdocs.md
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+      combine_header_slug: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Page tree
+nav:
+  - Home: README.md
+  - Getting Started:
+    - Introduction: getting-started.md
+    - Core Concepts: core-concepts.md
+    - Examples: examples.md
+  - Agent Development:
+    - ADK Layer: adk-layer.md
+    - Tools: tools.md
+    - Memory System: memory-system.md
+    - Model Providers: model-providers.md
+  - A2A Protocol:
+    - Overview: a2a-protocol.md
+    - Integration Guide: a2a-integration.md
+  - API Reference:
+    - API Overview: api-reference.md
+    - Server API: server-api.md
+  - Advanced Topics:
+    - Visualization: visualization.md
+    - Deployment: deployment.md
+    - Troubleshooting: troubleshooting.md
+  - Development:
+    - Contributing: CONTRIBUTING.md
+    - ADK Analysis: adk-analysis.md
+    - ADK Layer Plan: faf-adk-layer-plan.md
+
+# Documentation directory
+docs_dir: docs

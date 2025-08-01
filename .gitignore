@@ -96,3 +96,6 @@ jspm_packages/
 .tern-port
 
 CLAUDE.md
+# MkDocs
+site/
+_site/

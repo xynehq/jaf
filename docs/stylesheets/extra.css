@@ -1,0 +1,25 @@
+/* Custom padding for logo */
+.md-header__button.md-logo {
+  padding: 10px;
+  margin: 0;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 2.4rem;
+  width: auto;
+  padding: 0;
+  margin: 0;
+}
+
+/* Ensure logo has consistent padding */
+.md-logo {
+  padding: 10px !important;
+}
+
+/* Logo image styling */
+.md-logo img {
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block;
+}

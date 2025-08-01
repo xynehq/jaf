@@ -1,10 +1,13 @@
 # Functional Agent Framework (FAF)
 
 [![CI](https://github.com/xynehq/faf/workflows/CI/badge.svg)](https://github.com/xynehq/faf/actions)
+[![Documentation](https://img.shields.io/badge/docs-mkdocs-blue)](https://xynehq.github.io/faf/)
 
 ![Functional Agent Framework](/docs/cover.png?raw=true "Functional Agent Framework")
 
 A purely functional agent framework built on immutable state, type safety, and composable policies. FAF enables building production-ready AI agent systems with built-in security, observability, and error handling.
+
+📚 **[Read the Documentation](https://xynehq.github.io/faf/)**
 
 ## 🎯 Core Philosophy
 
@@ -292,13 +295,41 @@ Comprehensive documentation is available in the [`/docs`](./docs) folder:
 - **[Getting Started](./docs/getting-started.md)** - Installation, basic concepts, and first agent
 - **[Core Concepts](./docs/core-concepts.md)** - FAF's functional architecture and principles  
 - **[API Reference](./docs/api-reference.md)** - Complete TypeScript API documentation
+- **[ADK Layer](./docs/adk-layer.md)** - Agent Development Kit for simplified agent creation
+- **[A2A Protocol](./docs/a2a-protocol.md)** - Agent-to-Agent communication and task management
 - **[Tools](./docs/tools.md)** - Building robust tools with validation and error handling
 - **[Memory System](./docs/memory-system.md)** - Conversation persistence (in-memory, Redis, PostgreSQL)
 - **[Model Providers](./docs/model-providers.md)** - LLM integration and configuration
 - **[Server & API](./docs/server-api.md)** - HTTP server setup and REST API
+- **[Visualization](./docs/visualization.md)** - Generate Graphviz diagrams of agents and tools
 - **[Examples](./docs/examples.md)** - Tutorials and integration patterns
 - **[Deployment](./docs/deployment.md)** - Production deployment guide
 - **[Troubleshooting](./docs/troubleshooting.md)** - Common issues and debugging
+
+### 📖 Documentation Website
+
+Browse the full documentation online at **[https://xynehq.github.io/faf/](https://xynehq.github.io/faf/)**
+
+The documentation site features:
+- 🔍 Full-text search
+- 🌓 Dark/light mode toggle  
+- 📱 Mobile-friendly responsive design
+- 🔗 Deep linking to sections
+- 📋 Code block copy buttons
+
+#### Running Documentation Locally
+
+```bash
+# Install documentation dependencies
+pip install -r requirements.txt
+
+# Run local documentation server
+mkdocs serve
+# Visit http://127.0.0.1:8000
+
+# Or use the convenience script
+./docs/serve.sh
+```
 
 ## 🎮 Example Applications
 
