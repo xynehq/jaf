@@ -312,6 +312,65 @@ All endpoints return JSON responses in this format:
 }
 ```
 
+## 🎨 Visualization
+
+The server demo includes agent and tool visualization capabilities to help understand the architecture.
+
+### Generate Architecture Graph
+
+The project includes scripts to generate visual representations of the agent architecture:
+
+```bash
+# Generate graph definition
+npx tsx generate-graph.ts
+
+# This creates:
+# - graph.dot (Graphviz definition file)
+# - README-visualization.md (instructions)
+```
+
+### Install Graphviz for PNG Generation
+
+To generate PNG/SVG/PDF from the graph definition:
+
+```bash
+# macOS
+brew install graphviz
+
+# Ubuntu/Debian
+sudo apt-get install graphviz
+
+# Windows
+# Download from: https://graphviz.org/download/
+```
+
+### Generate Visual Formats
+
+```bash
+# Generate PNG image
+dot -Tpng graph.dot -o graph.png
+
+# Generate SVG (scalable)
+dot -Tsvg graph.dot -o graph.svg
+
+# Generate PDF
+dot -Tpdf graph.dot -o graph.pdf
+```
+
+### What the Visualization Shows
+
+The generated graph displays:
+- **3 Agents**: MathTutor, ChatBot, Assistant (blue boxes)
+- **2 Tools**: calculate, greet (pink ellipses)
+- **Relationships**: Dashed lines showing which agents use which tools
+- **Organization**: Clustered layout with modern color scheme
+
+This visual representation helps understand:
+- Agent specializations and capabilities
+- Tool sharing between agents
+- Overall system architecture
+- Multi-agent relationships
+
 ## 🔧 Customization
 
 ### Adding New Tools

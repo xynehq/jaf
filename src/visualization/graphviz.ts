@@ -6,6 +6,8 @@
 
 import { digraph } from 'graphviz';
 import { Agent, Tool, RunnerConfig } from '../adk/types';
+import { writeFileSync } from 'fs';
+import { execSync } from 'child_process';
 
 // ========== Core Visualization Types ==========
 
@@ -212,80 +214,9 @@ export const generateRunnerGraph = async (
       colorScheme = 'modern'
     } = options;
 
-    const graph = digraph('RunnerGraph');
-    
-    graph.set('rankdir', rankdir);
-    graph.set('label', title);
-    graph.set('labelloc', 't');
-    graph.set('fontsize', '16');
-    graph.set('fontname', 'Arial Bold');
-    graph.set('bgcolor', 'white');
-    graph.set('compound', 'true');
-    
-    const styles = COLOR_SCHEMES[colorScheme];
-    
-    // Create clusters for different components
-    const agentCluster = graph.addCluster('cluster_agents');
-    agentCluster.set('label', 'Agents');
-    agentCluster.set('style', 'filled');
-    agentCluster.set('fillcolor', '#f8f9fa');
-    
-    const sessionCluster = graph.addCluster('cluster_session');
-    sessionCluster.set('label', 'Session Layer');
-    sessionCluster.set('style', 'filled');
-    sessionCluster.set('fillcolor', '#fff3cd');
-    
-    // Add agent and tools
-    addAgentNode(agentCluster, config.agent, styles, showToolDetails, showSubAgents);
-    
-    // Add session provider
-    const sessionNode = sessionCluster.addNode('session_provider');
-    sessionNode.set('label', 'Session\\nProvider');
-    sessionNode.set('shape', 'box');
-    sessionNode.set('fillcolor', '#ffc107');
-    sessionNode.set('fontcolor', 'black');
-    sessionNode.set('style', 'filled,rounded');
-    
-    // Add runner node
-    const runnerNode = graph.addNode('runner');
-    runnerNode.set('label', 'Runner');
-    runnerNode.set('shape', 'diamond');
-    runnerNode.set('fillcolor', '#28a745');
-    runnerNode.set('fontcolor', 'white');
-    runnerNode.set('style', 'filled');
-    runnerNode.set('fontsize', '14');
-    runnerNode.set('fontname', 'Arial Bold');
-    
-    // Add edges
-    const runnerToAgent = graph.addEdge(runnerNode, config.agent.id);
-    runnerToAgent.set('color', styles.edge.color);
-    runnerToAgent.set('style', styles.edge.style);
-    runnerToAgent.set('label', 'executes');
-    
-    const runnerToSession = graph.addEdge(runnerNode, sessionNode);
-    runnerToSession.set('color', '#ffc107');
-    runnerToSession.set('style', 'dashed');
-    runnerToSession.set('label', 'manages');
-    
-    // Generate output
-    const finalOutputPath = `${outputPath}.${outputFormat}`;
-    
-    return new Promise((resolve) => {
-      graph.output(outputFormat as any, finalOutputPath, (code: number) => {
-        if (code === 0) {
-          resolve({
-            success: true,
-            outputPath: finalOutputPath,
-            graphDot: graph.to_dot()
-          });
-        } else {
-          resolve({
-            success: false,
-            error: `Graphviz process exited with code ${code}`
-          });
-        }
-      });
-    });
+    // Skip the graphviz library and go directly to fallback method
+    // The graphviz npm package has issues with hanging, so we use our own implementation
+    return await generateGraphWithFallback(config, options);
     
   } catch (error) {
     return {
@@ -293,6 +224,196 @@ export const generateRunnerGraph = async (
       error: error instanceof Error ? error.message : 'Unknown error occurred'
     };
   }
+};
+
+// Fallback method using manual DOT generation and system graphviz
+const generateGraphWithFallback = async (
+  config: RunnerConfig,
+  options: GraphOptions
+): Promise<GraphResult> => {
+  const {
+    title = 'FAF Runner Architecture',
+    rankdir = 'TB',
+    outputFormat = 'png',
+    outputPath = './runner-graph',
+    showToolDetails = true,
+    showSubAgents = true,
+    colorScheme = 'modern'
+  } = options;
+
+  try {
+    // Generate DOT content manually
+    const dotContent = generateRunnerDOT(config, {
+      title,
+      rankdir,
+      showToolDetails,
+      showSubAgents,
+      colorScheme
+    });
+
+    // Write DOT file
+    const dotPath = `${outputPath}.dot`;
+    writeFileSync(dotPath, dotContent);
+
+    // Try to use system graphviz
+    const finalOutputPath = `${outputPath}.${outputFormat}`;
+    
+    try {
+      execSync(`dot -T${outputFormat} "${dotPath}" -o "${finalOutputPath}"`, { 
+        stdio: 'pipe' 
+      });
+      
+      return {
+        success: true,
+        outputPath: finalOutputPath,
+        graphDot: dotContent
+      };
+    } catch (execError) {
+      return {
+        success: false,
+        error: `Graphviz not installed or failed to execute. Install with: brew install graphviz (macOS) or sudo apt-get install graphviz (Linux)`,
+        graphDot: dotContent
+      };
+    }
+    
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to generate DOT content'
+    };
+  }
+};
+
+// Manual DOT generation for runner
+const generateRunnerDOT = (
+  config: RunnerConfig,
+  options: {
+    title: string;
+    rankdir: string;
+    showToolDetails: boolean;
+    showSubAgents: boolean;
+    colorScheme: string;
+  }
+): string => {
+  const { title, rankdir, showToolDetails, showSubAgents, colorScheme } = options;
+  const styles = COLOR_SCHEMES[colorScheme as keyof typeof COLOR_SCHEMES];
+  
+  let dot = `digraph "RunnerGraph" {
+    rankdir=${rankdir};
+    label="${title}";
+    labelloc=t;
+    fontsize=16;
+    fontname="Arial Bold";
+    bgcolor=white;
+    pad=0.5;
+    compound=true;
+
+    // Runner node
+    "runner" [
+        label="Runner",
+        shape=diamond,
+        fillcolor="#28a745",
+        fontcolor=white,
+        style=filled,
+        fontsize=14,
+        fontname="Arial Bold"
+    ];
+
+    // Session provider node  
+    "session_provider" [
+        label="Session\\nProvider",
+        shape=box,
+        fillcolor="#ffc107",
+        fontcolor=black,
+        style="filled,rounded"
+    ];
+
+    // Agent node
+    "${config.agent.id}" [
+        label="${config.agent.config.name}\\n(${config.agent.config.model})\\n${config.agent.config.tools.length} tools",
+        shape=box,
+        fillcolor="${styles.agent.fillcolor}",
+        fontcolor="${styles.agent.fontcolor}",
+        style="${styles.agent.style}"
+    ];
+
+    // Runner connections
+    "runner" -> "${config.agent.id}" [
+        color="${styles.edge.color}",
+        style="${styles.edge.style}",
+        label="executes"
+    ];
+
+    "runner" -> "session_provider" [
+        color="#ffc107",
+        style=dashed,
+        label="manages"
+    ];
+`;
+
+  // Add tool nodes and connections if requested
+  if (showToolDetails) {
+    for (const tool of config.agent.config.tools) {
+      dot += `
+    // Tool: ${tool.name}
+    "${tool.name}" [
+        label="${tool.name}\\n${tool.description.substring(0, 30)}${tool.description.length > 30 ? '...' : ''}",
+        shape=ellipse,
+        fillcolor="${styles.tool.fillcolor}",
+        fontcolor="${styles.tool.fontcolor}",
+        style="${styles.tool.style}"
+    ];
+
+    "${config.agent.id}" -> "${tool.name}" [
+        color="${styles.toolEdge.color}",
+        style="${styles.toolEdge.style}",
+        penwidth="${styles.toolEdge.penwidth}"
+    ];
+`;
+    }
+  }
+
+  // Add sub-agents if requested
+  if (showSubAgents && config.agent.config.subAgents) {
+    for (const subAgent of config.agent.config.subAgents) {
+      const subAgentId = `${config.agent.id}_sub_${subAgent.name}`;
+      dot += `
+    // Sub-agent: ${subAgent.name}
+    "${subAgentId}" [
+        label="${subAgent.name}",
+        shape=box,
+        fillcolor="${styles.subAgent.fillcolor}",
+        fontcolor="${styles.subAgent.fontcolor}",
+        style="${styles.subAgent.style}"
+    ];
+
+    "${config.agent.id}" -> "${subAgentId}" [
+        color="${styles.edge.color}",
+        style=dashed,
+        label="delegates"
+    ];
+`;
+    }
+  }
+
+  dot += `
+    // Clusters for organization
+    subgraph cluster_agents {
+        label="Agents";
+        style=filled;
+        fillcolor="#f8f9fa";
+        "${config.agent.id}";
+    }
+
+    subgraph cluster_session {
+        label="Session Layer";
+        style=filled;
+        fillcolor="#fff3cd";
+        "session_provider";
+    }
+}`;
+
+  return dot;
 };
 
 // ========== Helper Functions ==========
