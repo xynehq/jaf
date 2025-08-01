@@ -19,6 +19,9 @@ export * from './memory/providers/in-memory';
 export * from './memory/providers/redis';
 export * from './memory/providers/postgres';
 
+// A2A Protocol Support
+export * from './a2a';
+
 import { v4 as uuidv4 } from 'uuid';
 import { TraceId, RunId, createTraceId, createRunId } from './core/types';
 

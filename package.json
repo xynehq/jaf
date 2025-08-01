@@ -9,14 +9,20 @@
     "dev": "tsx watch src/index.ts",
     "test": "jest",
     "lint": "eslint src --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "a2a:example": "tsx src/a2a/examples/server-example.ts",
+    "a2a:client": "tsx src/a2a/examples/client-example.ts",
+    "a2a:dev": "tsx watch src/a2a/examples/server-example.ts"
   },
   "keywords": [
     "ai",
     "agents",
     "functional",
     "typescript",
-    "llm"
+    "llm",
+    "a2a",
+    "agent2agent",
+    "protocol"
   ],
   "author": "",
   "license": "MIT",
