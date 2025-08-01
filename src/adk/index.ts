@@ -326,14 +326,14 @@ import {
   runAgentStream,
   createFunctionTool
 } from './index';
-import { Agent, Tool, RunnerConfig, SessionProvider } from './types';
+import { Agent, Tool, RunnerConfig, SessionProvider, Model, ToolParameterType } from './types';
 
 /**
  * Quick setup for a simple agent with in-memory session management
  */
 export const quickSetup = (
   name: string,
-  model: string,
+  model: Model | string,
   instruction: string,
   tools: Tool[] = []
 ) => {
@@ -354,10 +354,10 @@ export const quickSetup = (
  * Create a weather agent with built-in tools
  */
 export const createQuickWeatherAgent = () => {
-  const weatherTool = createFunctionTool(
-    'get_weather',
-    'Get current weather information',
-    (params, context) => {
+  const weatherTool = createFunctionTool({
+    name: 'get_weather',
+    description: 'Get current weather information',
+    execute: (params, context) => {
       const { location } = params as { location: string };
       return {
         location,
@@ -366,19 +366,19 @@ export const createQuickWeatherAgent = () => {
         humidity: 65
       };
     },
-    [
+    parameters: [
       {
         name: 'location',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'City or location name',
         required: true
       }
     ]
-  );
+  });
   
   return quickSetup(
     'weather_agent',
-    'gemini-2.0-flash',
+    Model.GEMINI_2_0_FLASH,
     'You are a helpful weather assistant. Use the get_weather tool to provide accurate weather information.',
     [weatherTool]
   );
@@ -388,10 +388,10 @@ export const createQuickWeatherAgent = () => {
  * Create a chat agent with calculator capabilities
  */
 export const createQuickChatAgent = () => {
-  const calcTool = createFunctionTool(
-    'calculate',
-    'Perform mathematical calculations',
-    (params, context) => {
+  const calcTool = createFunctionTool({
+    name: 'calculate',
+    description: 'Perform mathematical calculations',
+    execute: (params, context) => {
       const { expression } = params as { expression: string };
       try {
         // Simple calculator - in production use a proper math parser
@@ -401,19 +401,19 @@ export const createQuickChatAgent = () => {
         throw new Error(`Invalid expression: ${expression}`);
       }
     },
-    [
+    parameters: [
       {
         name: 'expression',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Mathematical expression to evaluate',
         required: true
       }
     ]
-  );
+  });
   
   return quickSetup(
     'chat_agent',
-    'gemini-2.0-flash',
+    Model.GEMINI_2_0_FLASH,
     'You are a friendly assistant that can help with general questions and math calculations.',
     [calcTool]
   );
@@ -433,7 +433,7 @@ export const bridgeToFAF = (fafAgent: any) => {
   // This would need to be implemented based on FAF's actual structure
   return createAgent({
     name: fafAgent.name || 'faf_agent',
-    model: fafAgent.model || 'gemini-2.0-flash',
+    model: fafAgent.model || Model.GEMINI_2_0_FLASH,
     instruction: fafAgent.instruction || 'FAF agent',
     tools: fafAgent.tools || []
   });

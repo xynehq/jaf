@@ -28,7 +28,9 @@ import {
   Content,
   Agent,
   RunnerConfig,
-  SessionProvider
+  SessionProvider,
+  Model,
+  ToolParameterType
 } from '../index';
 
 // ========== Schema Validation Example ==========
@@ -70,7 +72,7 @@ const bookingRequestValidator = createObjectValidator<BookingRequest>(
 
 // ========== Guardrails Example ==========
 
-const contentModerationGuardrail: GuardrailFunction = async (message, context) => {
+const contentModerationGuardrail: GuardrailFunction = async (message) => {
   const messageText = message.parts
     .filter(p => p.type === 'text')
     .map(p => p.text)
@@ -108,7 +110,7 @@ const contentModerationGuardrail: GuardrailFunction = async (message, context) =
   return { allowed: true };
 };
 
-const rateLimitGuardrail: GuardrailFunction = async (message, context) => {
+const rateLimitGuardrail: GuardrailFunction = async (_message, context) => {
   // Simple rate limiting based on session message count
   const messageCount = context.session.messages.length;
   
@@ -126,10 +128,10 @@ const rateLimitGuardrail: GuardrailFunction = async (message, context) => {
 // ========== Advanced Agent with Schema Validation ==========
 
 export const createBookingAgent = () => {
-  const processBookingTool = createFunctionTool(
-    'process_booking',
-    'Process a service booking request with validation',
-    (params: unknown) => {
+  const processBookingTool = createFunctionTool({
+    name: 'process_booking',
+    description: 'Process a service booking request with validation',
+    execute: (params: unknown) => {
       // Validate input using schema
       const validation = bookingRequestValidator.validate(params);
       
@@ -159,49 +161,49 @@ export const createBookingAgent = () => {
         contactMethod: 'email'
       };
     },
-    [
+    parameters: [
       {
         name: 'customerName',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Customer full name',
         required: true
       },
       {
         name: 'serviceType',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Type of service (consultation, maintenance, repair)',
         required: true
       },
       {
         name: 'preferredDate',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Preferred date in YYYY-MM-DD format',
         required: true
       },
       {
         name: 'duration',
-        type: 'number',
+        type: ToolParameterType.NUMBER,
         description: 'Duration in hours',
         required: true
       },
       {
         name: 'urgent',
-        type: 'boolean',
+        type: ToolParameterType.BOOLEAN,
         description: 'Whether this is urgent',
         required: true
       },
       {
         name: 'contactInfo',
-        type: 'object',
+        type: ToolParameterType.OBJECT,
         description: 'Customer contact information',
         required: true
       }
     ]
-  );
+  });
 
   const agent = createAgent({
     name: 'booking_agent',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: `You are a professional booking assistant. Help customers schedule services.
     
     When processing bookings:
@@ -236,10 +238,10 @@ export const createBookingAgent = () => {
 // ========== Streaming with Monitoring Example ==========
 
 export const createStreamingAgent = () => {
-  const storyTool = createFunctionTool(
-    'generate_story_part',
-    'Generate part of a story',
-    (params, context) => {
+  const storyTool = createFunctionTool({
+    name: 'generate_story_part',
+    description: 'Generate part of a story',
+    execute: (params) => {
       const { theme, character, setting } = params as { theme: string; character: string; setting: string };
       const storyParts = [
         `In the ${setting}, ${character} discovered something extraordinary about ${theme}.`,
@@ -257,31 +259,31 @@ export const createStreamingAgent = () => {
         timestamp: new Date().toISOString()
       };
     },
-    [
+    parameters: [
       {
         name: 'theme',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Story theme or topic',
         required: true
       },
       {
         name: 'character',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Main character name',
         required: true
       },
       {
         name: 'setting',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Story setting or location',
         required: true
       }
     ]
-  );
+  });
 
   const agent = createAgent({
     name: 'streaming_storyteller',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: `You are an interactive storyteller. Create engaging stories using the generate_story_part tool.
     Build stories progressively, creating suspense and engaging narratives.`,
     tools: [storyTool]

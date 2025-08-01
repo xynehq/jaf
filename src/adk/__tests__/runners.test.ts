@@ -24,6 +24,8 @@ import {
   createCalculatorTool
 } from '../tools';
 
+import { Model, ToolParameterType } from '../types';
+
 import {
   createInMemorySessionProvider,
   addMessageToSession
@@ -44,26 +46,26 @@ import {
 import { RunnerConfig, RunContext, AgentConfig, GuardrailFunction, AgentError } from '../types';
 
 describe('Runner System', () => {
-  const mockTool = createFunctionTool(
-    'mock_tool',
-    'A mock tool for testing',
-    (params, context) => {
+  const mockTool = createFunctionTool({
+    name: 'mock_tool',
+    description: 'A mock tool for testing',
+    execute: (params, context) => {
       const typedParams = params as { input: string };
       return `Processed: ${typedParams.input}`;
     },
-    [
+    parameters: [
       {
         name: 'input',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Input to process',
         required: true
       }
     ]
-  );
+  });
 
   const mockAgent = createAgent({
     name: 'test_agent',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: 'You are a test agent',
     tools: [mockTool]
   });
@@ -198,7 +200,7 @@ describe('Runner System', () => {
     test('runAgent should handle tool execution', async () => {
       const toolAgent = createAgent({
         name: 'tool_agent',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'Use tools to help users',
         tools: [createEchoTool()]
       });
@@ -258,32 +260,32 @@ describe('Runner System', () => {
   describe('Multi-Agent Execution', () => {
     const weatherAgent: AgentConfig = {
       name: 'weather_agent',
-      model: 'gemini-2.0-flash',
+      model: Model.GEMINI_2_0_FLASH,
       instruction: 'Provide weather information',
-      tools: [createFunctionTool(
-        'get_weather',
-        'Get weather',
-        (params, context) => ({ temp: 25, condition: 'sunny' }),
-        []
-      )]
+      tools: [createFunctionTool({
+        name: 'get_weather',
+        description: 'Get weather',
+        execute: (params, context) => ({ temp: 25, condition: 'sunny' }),
+        parameters: []
+      })]
     };
 
     const newsAgent: AgentConfig = {
       name: 'news_agent',
-      model: 'gemini-2.0-flash',
+      model: Model.GEMINI_2_0_FLASH,
       instruction: 'Provide news information',
-      tools: [createFunctionTool(
-        'get_news',
-        'Get news',
-        (params, context) => ['Breaking news 1', 'Breaking news 2'],
-        []
-      )]
+      tools: [createFunctionTool({
+        name: 'get_news',
+        description: 'Get news',
+        execute: (params, context) => ['Breaking news 1', 'Breaking news 2'],
+        parameters: []
+      })]
     };
 
     test('runAgent should handle sequential multi-agent', async () => {
       const multiAgent = createMultiAgent(
         'sequential_coordinator',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Coordinate agents sequentially',
         [weatherAgent, newsAgent],
         'sequential'
@@ -301,7 +303,7 @@ describe('Runner System', () => {
     test('runAgent should handle parallel multi-agent', async () => {
       const multiAgent = createMultiAgent(
         'parallel_coordinator',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Coordinate agents in parallel',
         [weatherAgent, newsAgent],
         'parallel'
@@ -318,7 +320,7 @@ describe('Runner System', () => {
     test('runAgent should handle conditional multi-agent', async () => {
       const multiAgent = createMultiAgent(
         'conditional_coordinator',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Choose appropriate agent based on request',
         [weatherAgent, newsAgent],
         'conditional'
@@ -340,7 +342,7 @@ describe('Runner System', () => {
     test('runAgent should handle hierarchical multi-agent', async () => {
       const multiAgent = createMultiAgent(
         'hierarchical_coordinator',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Hierarchical agent coordination',
         [weatherAgent, newsAgent],
         'hierarchical'
@@ -461,11 +463,11 @@ describe('Runner System', () => {
     test('getRunnerStats should handle multi-agent configuration', () => {
       const multiAgent = createMultiAgent(
         'coordinator',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Coordinate sub-agents',
         [
-          { name: 'sub1', model: 'model', instruction: 'Sub 1', tools: [] },
-          { name: 'sub2', model: 'model', instruction: 'Sub 2', tools: [] }
+          { name: 'sub1', model: Model.GEMINI_2_0_FLASH, instruction: 'Sub 1', tools: [] },
+          { name: 'sub2', model: Model.GEMINI_2_0_FLASH, instruction: 'Sub 2', tools: [] }
         ],
         'conditional'
       );
@@ -536,19 +538,19 @@ describe('Runner System', () => {
     test('runAgent should provide tool context', async () => {
       let capturedContext: any = null;
       
-      const contextCapturingTool = createFunctionTool(
-        'context_tool',
-        'Captures tool context',
-        (params, context) => {
+      const contextCapturingTool = createFunctionTool({
+        name: 'context_tool',
+        description: 'Captures tool context',
+        execute: (params, context) => {
           capturedContext = context;
           return 'Context captured';
         },
-        []
-      );
+        parameters: []
+      });
       
       const agentWithContextTool = createAgent({
         name: 'context_agent',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'Test tool context',
         tools: [contextCapturingTool]
       });
@@ -564,28 +566,28 @@ describe('Runner System', () => {
     });
 
     test('runAgent should handle agent transfer actions', async () => {
-      const transferTool = createFunctionTool(
-        'transfer_tool',
-        'Transfers to another agent',
-        (params, context) => {
+      const transferTool = createFunctionTool({
+        name: 'transfer_tool',
+        description: 'Transfers to another agent',
+        execute: (params, context) => {
           if (context.actions) {
             context.actions.transferToAgent = 'target_agent';
           }
           return 'Transfer initiated';
         },
-        []
-      );
+        parameters: []
+      });
       
       const subAgent: AgentConfig = {
         name: 'target_agent',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'Target agent for transfer',
         tools: []
       };
       
       const transferAgent = createMultiAgent(
         'transfer_agent',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Can transfer to other agents',
         [subAgent],
         'conditional'
@@ -636,10 +638,10 @@ describe('Runner System', () => {
   describe('Integration Tests', () => {
     test('should handle complete agent workflow', async () => {
       // Create a realistic agent with multiple tools
-      const weatherTool = createFunctionTool(
-        'get_weather',
-        'Get weather information',
-        (params, context) => {
+      const weatherTool = createFunctionTool({
+        name: 'get_weather',
+        description: 'Get weather information',
+        execute: (params, context) => {
           const typedParams = params as { location: string };
           return {
             location: typedParams.location,
@@ -648,21 +650,21 @@ describe('Runner System', () => {
             humidity: 65
           };
         },
-        [
+        parameters: [
           {
             name: 'location',
-            type: 'string',
+            type: ToolParameterType.STRING,
             description: 'City name',
             required: true
           }
         ]
-      );
+      });
       
       const calcTool = createCalculatorTool();
       
       const realisticAgent = createAgent({
         name: 'realistic_agent',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'You are a helpful assistant with weather and calculation capabilities',
         tools: [weatherTool, calcTool]
       });
@@ -687,7 +689,7 @@ describe('Runner System', () => {
     test('should handle streaming workflow', async () => {
       const streamingAgent = createAgent({
         name: 'streaming_agent',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'Provide streaming responses',
         tools: [createEchoTool()]
       });

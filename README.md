@@ -19,6 +19,7 @@ A purely functional agent framework built on immutable state, type safety, and c
 - **Effects at the Edge**: Side effects isolated in Provider modules
 - **Composition over Configuration**: Build complex behavior by composing simple functions
 - **Type-Safe by Design**: Leverages TypeScript's advanced features for compile-time safety
+- **Functional Composition**: Complex behaviors built through function composition, not inheritance or mutation
 
 ## 🚀 Quick Start
 
@@ -165,6 +166,165 @@ const initialState = {
 };
 
 const result = await run(initialState, config);
+```
+
+## 🔄 Function Composition
+
+FAF emphasizes function composition to build complex behaviors from simple, reusable functions:
+
+### Composing Tools
+
+```typescript
+import { createFunctionTool, composeTool, withRetry, withCache } from '@xynehq/faf';
+
+// Simple base tools
+const fetchWeatherTool = createFunctionTool({
+  name: 'fetch_weather',
+  description: 'Fetch weather data',
+  execute: async ({ location }) => {
+    const response = await fetch(`/api/weather?location=${location}`);
+    return response.json();
+  },
+  parameters: [{ name: 'location', type: 'string', required: true }]
+});
+
+const formatTemperatureTool = createFunctionTool({
+  name: 'format_temp',
+  description: 'Format temperature reading',
+  execute: ({ temp, unit }) => `${temp}°${unit.toUpperCase()}`,
+  parameters: [
+    { name: 'temp', type: 'number', required: true },
+    { name: 'unit', type: 'string', required: true }
+  ]
+});
+
+// Compose tools with higher-order functions
+const cachedWeatherTool = withCache(fetchWeatherTool, { ttl: 300000 }); // 5 min cache
+const reliableWeatherTool = withRetry(cachedWeatherTool, { maxRetries: 3 });
+
+// Chain tools together
+const weatherReportTool = composeTool([
+  reliableWeatherTool,
+  formatTemperatureTool
+], 'weather_report', 'Get formatted weather report');
+```
+
+### Composing Validators
+
+```typescript
+import { compose, createValidator } from '@xynehq/faf';
+
+// Base validators
+const isPositive = createValidator<number>(
+  n => n > 0,
+  'Value must be positive'
+);
+
+const isInteger = createValidator<number>(
+  n => Number.isInteger(n),
+  'Value must be an integer'
+);
+
+const isInRange = (min: number, max: number) => createValidator<number>(
+  n => n >= min && n <= max,
+  `Value must be between ${min} and ${max}`
+);
+
+// Compose validators
+const validateAge = compose(
+  isPositive,
+  isInteger,
+  isInRange(0, 150)
+);
+
+// Use in tool parameters
+const ageTool = createFunctionTool({
+  name: 'process_age',
+  description: 'Process age data',
+  execute: ({ age }) => `Age ${age} is valid`,
+  parameters: [{
+    name: 'age',
+    type: 'number',
+    required: true,
+    validate: validateAge
+  }]
+});
+```
+
+### Composing Agent Behaviors
+
+```typescript
+import { createAgent, withMiddleware, withFallback } from '@xynehq/faf';
+
+// Base agents
+const primaryAgent = createAgent({
+  name: 'primary',
+  model: 'gpt-4',
+  instruction: 'Primary processing agent',
+  tools: [calculatorTool]
+});
+
+const fallbackAgent = createAgent({
+  name: 'fallback',
+  model: 'gpt-3.5-turbo',
+  instruction: 'Fallback processing agent',
+  tools: [simpleMathTool]
+});
+
+// Compose with middleware
+const loggingMiddleware = (agent) => ({
+  ...agent,
+  execute: async (input) => {
+    console.log(`[${agent.name}] Processing:`, input);
+    const result = await agent.execute(input);
+    console.log(`[${agent.name}] Result:`, result);
+    return result;
+  }
+});
+
+const rateLimitMiddleware = (limit: number) => (agent) => {
+  let count = 0;
+  const resetTime = Date.now() + 60000;
+  
+  return {
+    ...agent,
+    execute: async (input) => {
+      if (Date.now() > resetTime) {
+        count = 0;
+      }
+      if (count >= limit) {
+        throw new Error('Rate limit exceeded');
+      }
+      count++;
+      return agent.execute(input);
+    }
+  };
+};
+
+// Compose everything
+const productionAgent = compose(
+  withFallback(fallbackAgent),
+  withMiddleware(loggingMiddleware),
+  withMiddleware(rateLimitMiddleware(100))
+)(primaryAgent);
+```
+
+### Composing Memory Providers
+
+```typescript
+import { composeMemoryProviders, createCacheLayer } from '@xynehq/faf';
+
+// Layer memory providers for performance and reliability
+const memoryProvider = composeMemoryProviders([
+  createCacheLayer({ maxSize: 100 }),      // L1: In-memory cache
+  createRedisProvider({ ttl: 3600 }),      // L2: Redis cache
+  createPostgresProvider({ table: 'chat' }) // L3: Persistent storage
+]);
+
+// The composed provider automatically:
+// - Reads from the fastest available layer
+// - Writes to all layers
+// - Falls back on layer failure
 ```
 
 ## 🛡️ Security & Validation

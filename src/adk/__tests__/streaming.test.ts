@@ -527,9 +527,12 @@ describe('Streaming System', () => {
       monitor.monitor(createMessageDeltaEvent(createUserMessage('Test')));
       
       // Add a small delay between events to ensure duration tracking
-      await new Promise(resolve => setTimeout(resolve, 1));
+      await new Promise(resolve => setTimeout(resolve, 10));
       
       monitor.monitor(createErrorEvent('Error'));
+      
+      await new Promise(resolve => setTimeout(resolve, 10));
+      
       monitor.monitor(createMessageCompleteEvent());
       
       const metrics = monitor.getMetrics();
@@ -539,7 +542,7 @@ describe('Streaming System', () => {
       expect(metrics.eventsByType.error).toBe(1);
       expect(metrics.eventsByType.message_complete).toBe(1);
       expect(metrics.errors).toBe(1);
-      expect(metrics.duration).toBeGreaterThan(0);
+      expect(metrics.duration).toBeGreaterThanOrEqual(20);
     });
   });
 

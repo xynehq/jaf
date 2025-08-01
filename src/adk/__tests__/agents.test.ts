@@ -33,19 +33,19 @@ import {
 } from '../agents';
 
 import { createFunctionTool } from '../tools';
-import { AgentConfig, Tool } from '../types';
+import { AgentConfig, Tool, Model } from '../types';
 
 describe('Agent System', () => {
-  const mockTool: Tool = createFunctionTool(
-    'test_tool',
-    'A test tool',
-    () => 'test result',
-    []
-  );
+  const mockTool: Tool = createFunctionTool({
+    name: 'test_tool',
+    description: 'A test tool',
+    execute: () => 'test result',
+    parameters: []
+  });
 
   const mockConfig: AgentConfig = {
     name: 'test_agent',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: 'You are a test agent',
     tools: [mockTool]
   };
@@ -194,7 +194,12 @@ describe('Agent System', () => {
 
     test('addToolToAgent should add tool', () => {
       const agent = createAgent({ ...mockConfig, tools: [] });
-      const newTool = createFunctionTool('new_tool', 'New tool', () => 'result', []);
+      const newTool = createFunctionTool({
+        name: 'new_tool',
+        description: 'New tool',
+        execute: () => 'result',
+        parameters: []
+      });
       const updated = addToolToAgent(agent, newTool);
       
       expect(updated.config.tools).toHaveLength(1);

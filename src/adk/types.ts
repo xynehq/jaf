@@ -6,14 +6,45 @@
 
 // ========== Core Primitives ==========
 
+export enum ContentRole {
+  USER = 'user',
+  MODEL = 'model',
+  SYSTEM = 'system'
+}
+
+export enum Model {
+  // Google Models
+  GEMINI_2_0_FLASH = 'gemini-2.0-flash',
+  GEMINI_1_5_PRO = 'gemini-1.5-pro',
+  GEMINI_1_5_FLASH = 'gemini-1.5-flash',
+  // OpenAI Models
+  GPT_4_TURBO = 'gpt-4-turbo',
+  GPT_4 = 'gpt-4',
+  GPT_3_5_TURBO = 'gpt-3.5-turbo',
+  // Anthropic Models
+  CLAUDE_3_OPUS = 'claude-3-opus',
+  CLAUDE_3_SONNET = 'claude-3-sonnet',
+  CLAUDE_3_HAIKU = 'claude-3-haiku',
+  // Custom Models
+  CUSTOM = 'custom'
+}
+
 export interface Content {
-  role: 'user' | 'model' | 'system';
+  role: ContentRole | 'user' | 'model' | 'system';
   parts: Part[];
   metadata?: Record<string, unknown>;
 }
 
+export enum PartType {
+  TEXT = 'text',
+  IMAGE = 'image',
+  AUDIO = 'audio',
+  FUNCTION_CALL = 'function_call',
+  FUNCTION_RESPONSE = 'function_response'
+}
+
 export interface Part {
-  type: 'text' | 'image' | 'audio' | 'function_call' | 'function_response';
+  type: PartType | 'text' | 'image' | 'audio' | 'function_call' | 'function_response';
   text?: string;
   data?: ArrayBuffer | string;
   functionCall?: FunctionCall;
@@ -45,7 +76,7 @@ export interface Agent {
 
 export interface AgentConfig {
   name: string;
-  model: string;
+  model: Model | string;
   instruction: string;
   description?: string;
   tools: Tool[];
@@ -74,9 +105,33 @@ export interface Tool {
   metadata?: ToolMetadata;
 }
 
+export interface FunctionToolConfig {
+  name: string;
+  description: string;
+  execute: (params: Record<string, unknown>, context: ToolContext) => unknown | Promise<unknown>;
+  parameters?: ToolParameter[];
+  metadata?: Partial<ToolMetadata>;
+}
+
+export enum ToolParameterType {
+  STRING = 'string',
+  NUMBER = 'number',
+  BOOLEAN = 'boolean',
+  OBJECT = 'object',
+  ARRAY = 'array'
+}
+
+export enum ToolSource {
+  FUNCTION = 'function',
+  OPENAPI = 'openapi',
+  CREWAI = 'crewai',
+  LANGCHAIN = 'langchain',
+  MCP = 'mcp'
+}
+
 export interface ToolParameter {
   name: string;
-  type: 'string' | 'number' | 'boolean' | 'object' | 'array';
+  type: ToolParameterType | 'string' | 'number' | 'boolean' | 'object' | 'array';
   description: string;
   required?: boolean;
   default?: unknown;
@@ -86,7 +141,7 @@ export interface ToolParameter {
 }
 
 export interface ToolMetadata {
-  source: 'function' | 'openapi' | 'crewai' | 'langchain' | 'mcp';
+  source: ToolSource | 'function' | 'openapi' | 'crewai' | 'langchain' | 'mcp';
   version?: string;
   author?: string;
   tags?: string[];

@@ -12,7 +12,9 @@ import {
   runAgent,
   runAgentStream,
   createUserMessage,
-  quickSetup
+  quickSetup,
+  Model,
+  ToolParameterType
 } from '../index';
 
 // ========== Example 1: Simple Chat Agent ==========
@@ -21,7 +23,7 @@ export const createBasicChatAgent = () => {
   // Create a simple agent
   const agent = createAgent({
     name: 'basic_chat',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: 'You are a friendly assistant. Be helpful and conversational.',
     tools: []
   });
@@ -39,10 +41,10 @@ export const createBasicChatAgent = () => {
 
 export const createAgentWithTools = () => {
   // Create some tools
-  const greetingTool = createFunctionTool(
-    'greeting',
-    'Generate a personalized greeting',
-    (params, context) => {
+  const greetingTool = createFunctionTool({
+    name: 'greeting',
+    description: 'Generate a personalized greeting',
+    execute: (params, context) => {
       const { name, timeOfDay } = params as { name: string; timeOfDay: string };
       const greetings = {
         morning: 'Good morning',
@@ -54,27 +56,27 @@ export const createAgentWithTools = () => {
       const greeting = greetings[timeOfDay as keyof typeof greetings] || 'Hello';
       return `${greeting}, ${name}! How can I help you today?`;
     },
-    [
+    parameters: [
       {
         name: 'name',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Person\'s name',
         required: true
       },
       {
         name: 'timeOfDay',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Time of day (morning, afternoon, evening, night)',
         required: true,
         enum: ['morning', 'afternoon', 'evening', 'night']
       }
     ]
-  );
+  });
 
-  const mathTool = createFunctionTool(
-    'calculate',
-    'Perform basic mathematical operations',
-    (params, context) => {
+  const mathTool = createFunctionTool({
+    name: 'calculate',
+    description: 'Perform basic mathematical operations',
+    execute: (params, context) => {
       const { operation, a, b } = params as { operation: string; a: number; b: number };
       switch (operation) {
         case 'add':
@@ -89,33 +91,33 @@ export const createAgentWithTools = () => {
           throw new Error(`Unknown operation: ${operation}`);
       }
     },
-    [
+    parameters: [
       {
         name: 'operation',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Mathematical operation',
         required: true,
         enum: ['add', 'subtract', 'multiply', 'divide']
       },
       {
         name: 'a',
-        type: 'number',
+        type: ToolParameterType.NUMBER,
         description: 'First number',
         required: true
       },
       {
         name: 'b',
-        type: 'number',
+        type: ToolParameterType.NUMBER,
         description: 'Second number',
         required: true
       }
     ]
-  );
+  });
 
   // Create agent with tools
   const agent = createAgent({
     name: 'assistant_with_tools',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: `You are a helpful assistant with access to greeting and calculation tools.
     Use the greeting tool to welcome users personally, and the calculate tool for math operations.
     Always be friendly and helpful.`,
@@ -131,20 +133,20 @@ export const createAgentWithTools = () => {
 // ========== Example 3: Quick Setup Usage ==========
 
 export const createQuickAgent = () => {
-  const timestampTool = createFunctionTool(
-    'get_timestamp',
-    'Get the current timestamp',
-    () => ({
+  const timestampTool = createFunctionTool({
+    name: 'get_timestamp',
+    description: 'Get the current timestamp',
+    execute: () => ({
       timestamp: new Date().toISOString(),
       unix: Date.now(),
       formatted: new Date().toLocaleString()
     }),
-    []
-  );
+    parameters: []
+  });
 
   return quickSetup(
     'timestamp_agent',
-    'gemini-2.0-flash',
+    Model.GEMINI_2_0_FLASH,
     'You are a time-keeping assistant. Use the get_timestamp tool to provide current time information.',
     [timestampTool]
   );

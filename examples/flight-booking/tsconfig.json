@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "../..",
+    "baseUrl": "../..",
+    "paths": {
+      "functional-agent-framework": ["./src/index"],
+      "functional-agent-framework/*": ["./src/*"]
+    }
+  },
+  "include": [
+    "index.ts",
+    "multi-agent.ts",
+    "faf-server.ts",
+    "../../src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

@@ -27,7 +27,7 @@ import {
 import { createAgent } from '../agents';
 import { createInMemorySessionProvider } from '../sessions';
 import { createUserMessage } from '../content';
-import { Tool, ToolContext, OpenAPISpec } from '../types';
+import { Tool, ToolContext, OpenAPISpec, Model, ToolParameterType } from '../types';
 
 describe('Tool System', () => {
   const mockSession = {
@@ -58,22 +58,22 @@ describe('Tool System', () => {
 
   describe('Function Tool Creation', () => {
     test('createFunctionTool should create valid tool', () => {
-      const tool = createFunctionTool(
-        'test_tool',
-        'A test tool',
-        (params, context) => {
+      const tool = createFunctionTool({
+        name: 'test_tool',
+        description: 'A test tool',
+        execute: (params, context) => {
           const typedParams = params as { input: string };
           return `Hello ${typedParams.input}`;
         },
-        [
+        parameters: [
           {
             name: 'input',
-            type: 'string',
+            type: ToolParameterType.STRING,
             description: 'Input parameter',
             required: true
           }
         ]
-      );
+      });
 
       expect(tool.name).toBe('test_tool');
       expect(tool.description).toBe('A test tool');
@@ -89,19 +89,19 @@ describe('Tool System', () => {
         return typedParams.value * 2;
       };
 
-      const tool = createAsyncFunctionTool(
-        'async_tool',
-        'An async tool',
-        asyncFunc,
-        [
+      const tool = createAsyncFunctionTool({
+        name: 'async_tool',
+        description: 'An async tool',
+        execute: asyncFunc,
+        parameters: [
           {
             name: 'value',
-            type: 'number',
+            type: ToolParameterType.NUMBER,
             description: 'Number to double',
             required: true
           }
         ]
-      );
+      });
 
       const result = await tool.execute({ value: 5 }, mockContext);
       
@@ -114,7 +114,12 @@ describe('Tool System', () => {
         throw new Error('Function error');
       };
 
-      const tool = createFunctionTool('error_tool', 'Error tool', throwingFunc, []);
+      const tool = createFunctionTool({
+        name: 'error_tool',
+        description: 'Error tool',
+        execute: throwingFunc,
+        parameters: []
+      });
       const result = await tool.execute({}, mockContext);
 
       expect(result.success).toBe(false);
@@ -122,22 +127,22 @@ describe('Tool System', () => {
     });
 
     test('createFunctionTool should validate parameters', async () => {
-      const tool = createFunctionTool(
-        'param_tool',
-        'Parameter validation tool',
-        (params, context) => {
+      const tool = createFunctionTool({
+        name: 'param_tool',
+        description: 'Parameter validation tool',
+        execute: (params, context) => {
           const typedParams = params as { required: string };
           return typedParams.required;
         },
-        [
+        parameters: [
           {
             name: 'required',
-            type: 'string',
+            type: ToolParameterType.STRING,
             description: 'Required parameter',
             required: true
           }
         ]
-      );
+      });
 
       // Missing required parameter
       const result = await tool.execute({}, mockContext);
@@ -323,7 +328,7 @@ describe('Tool System', () => {
     test('validateToolParameter should validate parameter structure', () => {
       const validParam = {
         name: 'test_param',
-        type: 'string' as const,
+        type: ToolParameterType.STRING,
         description: 'Test parameter',
         required: true
       };
@@ -354,13 +359,13 @@ describe('Tool System', () => {
       const schema = [
         {
           name: 'required_param',
-          type: 'string' as const,
+          type: ToolParameterType.STRING,
           description: 'Required parameter',
           required: true
         },
         {
           name: 'optional_param',
-          type: 'number' as const,
+          type: ToolParameterType.NUMBER,
           description: 'Optional parameter',
           required: false
         }
@@ -402,19 +407,19 @@ describe('Tool System', () => {
     });
 
     test('executeTool should handle validation errors', async () => {
-      const tool = createFunctionTool(
-        'test_tool',
-        'Test tool',
-        (params, context) => 'result',
-        [
+      const tool = createFunctionTool({
+        name: 'test_tool',
+        description: 'Test tool',
+        execute: (params, context) => 'result',
+        parameters: [
           {
             name: 'required',
-            type: 'string',
+            type: ToolParameterType.STRING,
             description: 'Required param',
             required: true
           }
         ]
-      );
+      });
 
       const result = await executeTool(tool, {}, mockContext);
       
@@ -533,14 +538,14 @@ describe('Tool System', () => {
     });
 
     test('tool execution should catch and return errors gracefully', async () => {
-      const tool = createFunctionTool(
-        'error_tool',
-        'Tool that throws',
-        (params, context) => {
+      const tool = createFunctionTool({
+        name: 'error_tool',
+        description: 'Tool that throws',
+        execute: (params, context) => {
           throw new Error('Tool execution error');
         },
-        []
-      );
+        parameters: []
+      });
 
       const result = await tool.execute({}, mockContext);
       
@@ -566,15 +571,15 @@ describe('Tool System', () => {
         }
       };
 
-      const tool = createFunctionTool(
-        'artifact_tool',
-        'Tool that uses artifacts',
-        (params, context: ToolContext) => {
+      const tool = createFunctionTool({
+        name: 'artifact_tool',
+        description: 'Tool that uses artifacts',
+        execute: (params, context: ToolContext) => {
           context.actions.addArtifact?.('test_key', 'test_value');
           return context.actions.getArtifact?.('test_key');
         },
-        []
-      );
+        parameters: []
+      });
 
       const result = await tool.execute({}, mockContextWithActions);
       
@@ -592,15 +597,15 @@ describe('Tool System', () => {
         }
       };
 
-      const tool = createFunctionTool(
-        'transfer_tool',
-        'Tool that transfers to another agent',
-        (params, context: ToolContext) => {
+      const tool = createFunctionTool({
+        name: 'transfer_tool',
+        description: 'Tool that transfers to another agent',
+        execute: (params, context: ToolContext) => {
           context.actions.transferToAgent = 'specialist_agent';
           return 'Transfer initiated';
         },
-        []
-      );
+        parameters: []
+      });
 
       const result = await tool.execute({}, mockContextWithTransfer);
       

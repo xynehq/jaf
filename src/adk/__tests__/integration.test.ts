@@ -18,7 +18,10 @@ import {
   getTextContent,
   quickSetup,
   createQuickWeatherAgent,
-  createQuickChatAgent
+  createQuickChatAgent,
+  Model,
+  ToolParameterType,
+  AgentEvent
 } from '../index';
 
 import { streamToArray } from '../streaming';
@@ -27,29 +30,29 @@ describe('ADK Layer Integration', () => {
   describe('End-to-End Agent Workflows', () => {
     test('should create and run a complete agent workflow', async () => {
       // Create tools
-      const greetingTool = createFunctionTool(
-        'greet',
-        'Generate a greeting',
-        (params, context) => {
+      const greetingTool = createFunctionTool({
+        name: 'greet',
+        description: 'Generate a greeting',
+        execute: (params) => {
           const typedParams = params as { name: string };
           return `Hello, ${typedParams.name}! Welcome to FAF ADK!`;
         },
-        [
+        parameters: [
           {
             name: 'name',
-            type: 'string',
+            type: ToolParameterType.STRING,
             description: 'Name to greet',
             required: true
           }
         ]
-      );
+      });
 
       const calculatorTool = createCalculatorTool();
 
       // Create agent
       const agent = createAgent({
         name: 'integration_agent',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'You are a helpful assistant that can greet users and perform calculations',
         tools: [greetingTool, calculatorTool]
       });
@@ -86,7 +89,7 @@ describe('ADK Layer Integration', () => {
     test('should handle streaming agent interactions', async () => {
       const { run, stream } = quickSetup(
         'streaming_test_agent',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'You are a storytelling agent that provides engaging narratives',
         [createEchoTool()]
       );
@@ -100,7 +103,7 @@ describe('ADK Layer Integration', () => {
 
       // Test streaming execution
       const streamingEvents = stream({ userId: 'user_123' }, message);
-      const events = await streamToArray(streamingEvents);
+      const events = await streamToArray<AgentEvent>(streamingEvents);
       
       expect(events.length).toBeGreaterThan(0);
       expect(events[0].type).toBe('message_start');
@@ -110,12 +113,12 @@ describe('ADK Layer Integration', () => {
       // Create specialized agents
       const weatherAgent = createAgent({
         name: 'weather_specialist',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'Provide weather information',
-        tools: [createFunctionTool(
-          'get_weather',
-          'Get weather data',
-          (params, context) => {
+        tools: [createFunctionTool({
+          name: 'get_weather',
+          description: 'Get weather data',
+          execute: (params) => {
             const typedParams = params as { location: string };
             return {
               location: typedParams.location,
@@ -124,13 +127,13 @@ describe('ADK Layer Integration', () => {
               humidity: 60
             };
           },
-          [{ name: 'location', type: 'string', description: 'Location', required: true }]
-        )]
+          parameters: [{ name: 'location', type: ToolParameterType.STRING, description: 'Location', required: true }]
+        })]
       });
 
       const mathAgent = createAgent({
         name: 'math_specialist', 
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'Perform mathematical calculations',
         tools: [createCalculatorTool()]
       });
@@ -138,7 +141,7 @@ describe('ADK Layer Integration', () => {
       // Create coordinator
       const coordinator = createMultiAgent(
         'smart_coordinator',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Coordinate between weather and math specialists based on user requests',
         [weatherAgent.config, mathAgent.config],
         'conditional'
@@ -199,7 +202,7 @@ describe('ADK Layer Integration', () => {
     test('should maintain conversation history across multiple interactions', async () => {
       const agent = createSimpleAgent(
         'persistent_agent',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Remember our conversation history',
         []
       );
@@ -230,7 +233,7 @@ describe('ADK Layer Integration', () => {
     test('should handle multiple users with separate sessions', async () => {
       const agent = createSimpleAgent(
         'multi_user_agent',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Handle multiple users',
         []
       );
@@ -262,10 +265,10 @@ describe('ADK Layer Integration', () => {
 
   describe('Tool Integration', () => {
     test('should handle complex tool interactions', async () => {
-      const dataProcessingTool = createFunctionTool(
-        'process_data',
-        'Process and analyze data',
-        (params, context) => {
+      const dataProcessingTool = createFunctionTool({
+        name: 'process_data',
+        description: 'Process and analyze data',
+        execute: (params, context) => {
           const typedParams = params as { data: number[]; operation: string };
           const { data, operation } = typedParams;
           switch (operation) {
@@ -281,25 +284,25 @@ describe('ADK Layer Integration', () => {
               throw new Error(`Unknown operation: ${operation}`);
           }
         },
-        [
+        parameters: [
           {
             name: 'data',
-            type: 'array',
+            type: ToolParameterType.ARRAY,
             description: 'Array of numbers to process',
             required: true
           },
           {
             name: 'operation',
-            type: 'string',
+            type: ToolParameterType.STRING,
             description: 'Operation to perform (sum, average, max, min)',
             required: true
           }
         ]
-      );
+      });
 
       const agent = createAgent({
         name: 'data_agent',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'Help users process and analyze numerical data',
         tools: [dataProcessingTool]
       });
@@ -322,29 +325,29 @@ describe('ADK Layer Integration', () => {
 
   describe('Error Handling and Recovery', () => {
     test('should handle tool execution errors gracefully', async () => {
-      const errorTool = createFunctionTool(
-        'error_tool',
-        'A tool that sometimes fails',
-        (params, context) => {
+      const errorTool = createFunctionTool({
+        name: 'error_tool',
+        description: 'A tool that sometimes fails',
+        execute: (params, context) => {
           const typedParams = params as { shouldFail: boolean };
           if (typedParams.shouldFail) {
             throw new Error('Tool execution failed');
           }
           return { success: true };
         },
-        [
+        parameters: [
           {
             name: 'shouldFail',
-            type: 'boolean',
+            type: ToolParameterType.BOOLEAN,
             description: 'Whether the tool should fail',
             required: true
           }
         ]
-      );
+      });
 
       const agent = createAgent({
         name: 'error_handling_agent',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'Handle tool errors gracefully',
         tools: [errorTool]
       });
@@ -397,7 +400,7 @@ describe('ADK Layer Integration', () => {
     test('should handle multiple concurrent agent executions', async () => {
       const agent = createSimpleAgent(
         'concurrent_agent',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Handle concurrent requests',
         [createEchoTool()]
       );
@@ -426,7 +429,7 @@ describe('ADK Layer Integration', () => {
     test('should handle large conversation histories', async () => {
       const agent = createSimpleAgent(
         'history_agent',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Handle large conversation histories',
         []
       );
@@ -459,36 +462,36 @@ describe('ADK Layer Integration', () => {
 
   describe('Complex Scenarios', () => {
     test('should handle agent delegation and transfer', async () => {
-      const transferTool = createFunctionTool(
-        'transfer_request',
-        'Transfer to specialist agent',
-        (params, context) => {
+      const transferTool = createFunctionTool({
+        name: 'transfer_request',
+        description: 'Transfer to specialist agent',
+        execute: (params, context) => {
           const typedParams = params as { targetAgent: string };
           if (context.actions) {
             context.actions.transferToAgent = typedParams.targetAgent;
           }
           return { transferred: true, target: typedParams.targetAgent };
         },
-        [
+        parameters: [
           {
             name: 'targetAgent',
-            type: 'string',
+            type: ToolParameterType.STRING,
             description: 'Name of target agent',
             required: true
           }
         ]
-      );
+      });
 
       const specialistAgent = createAgent({
         name: 'specialist',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'I am a specialist agent',
         tools: []
       });
 
       const coordinatorAgent = createMultiAgent(
         'coordinator',
-        'gemini-2.0-flash',
+        Model.GEMINI_2_0_FLASH,
         'Coordinate and transfer to specialists when needed',
         [specialistAgent.config],
         'conditional'
@@ -511,10 +514,10 @@ describe('ADK Layer Integration', () => {
     });
 
     test('should handle mixed content types and complex interactions', async () => {
-      const multiModalTool = createFunctionTool(
-        'analyze_content',
-        'Analyze different types of content',
-        (params, context) => {
+      const multiModalTool = createFunctionTool({
+        name: 'analyze_content',
+        description: 'Analyze different types of content',
+        execute: (params, context) => {
           const typedParams = params as { contentType: string; data: string };
           const { contentType, data } = typedParams;
           switch (contentType) {
@@ -533,25 +536,25 @@ describe('ADK Layer Integration', () => {
               return { type: 'unknown', data };
           }
         },
-        [
+        parameters: [
           {
             name: 'contentType',
-            type: 'string',
+            type: ToolParameterType.STRING,
             description: 'Type of content to analyze',
             required: true
           },
           {
             name: 'data',
-            type: 'string',
+            type: ToolParameterType.STRING,
             description: 'Content data to analyze',
             required: true
           }
         ]
-      );
+      });
 
       const agent = createAgent({
         name: 'content_analyzer',
-        model: 'gemini-2.0-flash',
+        model: Model.GEMINI_2_0_FLASH,
         instruction: 'Analyze various types of content provided by users',
         tools: [multiModalTool]
       });

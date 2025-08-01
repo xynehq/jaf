@@ -12,16 +12,18 @@ import {
   createRunnerConfig,
   runAgent,
   createUserMessage,
-  AgentConfig
+  AgentConfig,
+  Model,
+  ToolParameterType
 } from '../index';
 
 // ========== Specialized Agents ==========
 
 export const createWeatherSpecialistAgent = (): AgentConfig => {
-  const weatherTool = createFunctionTool(
-    'get_weather',
-    'Get current weather information',
-    (params, context) => {
+  const weatherTool = createFunctionTool({
+    name: 'get_weather',
+    description: 'Get current weather information',
+    execute: (params) => {
       const { location } = params as { location: string };
       // Mock weather data
       const weatherData = {
@@ -43,19 +45,19 @@ export const createWeatherSpecialistAgent = (): AgentConfig => {
         forecast: 'Clear skies expected for the next few days'
       };
     },
-    [
+    parameters: [
       {
         name: 'location',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'City or location name',
         required: true
       }
     ]
-  );
+  });
 
   return {
     name: 'weather_specialist',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: `You are a weather specialist. Use the get_weather tool to provide accurate, 
     detailed weather information. Include temperature, conditions, and helpful advice based on the weather.`,
     tools: [weatherTool]
@@ -63,10 +65,10 @@ export const createWeatherSpecialistAgent = (): AgentConfig => {
 };
 
 export const createNewsSpecialistAgent = (): AgentConfig => {
-  const newsTool = createFunctionTool(
-    'get_news',
-    'Get latest news headlines',
-    ({ category, limit }: { category?: string; limit?: number }) => {
+  const newsTool = createFunctionTool({
+    name: 'get_news',
+    description: 'Get latest news headlines',
+    execute: ({ category, limit }: { category?: string; limit?: number }) => {
       // Mock news data
       const newsCategories = {
         tech: [
@@ -98,27 +100,27 @@ export const createNewsSpecialistAgent = (): AgentConfig => {
         timestamp: new Date().toISOString()
       };
     },
-    [
+    parameters: [
       {
         name: 'category',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'News category (tech, business, science)',
         required: false,
         enum: ['tech', 'business', 'science']
       },
       {
         name: 'limit',
-        type: 'number',
+        type: ToolParameterType.NUMBER,
         description: 'Number of headlines to return',
         required: false,
         default: 3
       }
     ]
-  );
+  });
 
   return {
     name: 'news_specialist',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: `You are a news specialist. Use the get_news tool to provide current news headlines. 
     Summarize the news clearly and provide context when helpful.`,
     tools: [newsTool]
@@ -126,10 +128,10 @@ export const createNewsSpecialistAgent = (): AgentConfig => {
 };
 
 export const createCalculatorSpecialistAgent = (): AgentConfig => {
-  const advancedCalcTool = createFunctionTool(
-    'advanced_calculate',
-    'Perform complex mathematical calculations',
-    (params, context) => {
+  const advancedCalcTool = createFunctionTool({
+    name: 'advanced_calculate',
+    description: 'Perform complex mathematical calculations',
+    execute: (params) => {
       const { expression, type } = params as { expression: string; type?: string };
       try {
         let result;
@@ -173,26 +175,26 @@ export const createCalculatorSpecialistAgent = (): AgentConfig => {
         throw new Error(`Invalid expression: ${expression}`);
       }
     },
-    [
+    parameters: [
       {
         name: 'expression',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Mathematical expression to evaluate',
         required: true
       },
       {
         name: 'type',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Type of calculation (basic, percentage, area)',
         required: false,
         enum: ['basic', 'percentage', 'area']
       }
     ]
-  );
+  });
 
   return {
     name: 'calculator_specialist',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: `You are a mathematics specialist. Use the advanced_calculate tool for all 
     mathematical operations. Explain your calculations clearly and provide step-by-step solutions when helpful.`,
     tools: [advancedCalcTool]
@@ -208,7 +210,7 @@ export const createMultiAgentCoordinator = () => {
 
   const coordinator = createMultiAgent(
     'smart_coordinator',
-    'gemini-2.0-flash',
+    Model.GEMINI_2_0_FLASH,
     `You are an intelligent coordinator that manages multiple specialist agents.
     
     Based on the user's request, delegate to the appropriate specialist:
@@ -234,7 +236,7 @@ export const createSequentialAgentPipeline = () => {
   // Agent 1: Data Collector
   const dataCollectorAgent: AgentConfig = {
     name: 'data_collector',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: 'You collect and organize raw data. Extract key information and prepare it for analysis.',
     tools: []
   };
@@ -242,7 +244,7 @@ export const createSequentialAgentPipeline = () => {
   // Agent 2: Data Analyzer
   const dataAnalyzerAgent: AgentConfig = {
     name: 'data_analyzer',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: 'You analyze data provided by the data collector. Look for patterns, insights, and trends.',
     tools: []
   };
@@ -250,14 +252,14 @@ export const createSequentialAgentPipeline = () => {
   // Agent 3: Report Generator
   const reportGeneratorAgent: AgentConfig = {
     name: 'report_generator',
-    model: 'gemini-2.0-flash',
+    model: Model.GEMINI_2_0_FLASH,
     instruction: 'You create comprehensive reports based on analysis. Present findings clearly and actionably.',
     tools: []
   };
 
   const sequentialCoordinator = createMultiAgent(
     'sequential_pipeline',
-    'gemini-2.0-flash',
+    Model.GEMINI_2_0_FLASH,
     'You coordinate a sequential data processing pipeline: collection → analysis → reporting.',
     [dataCollectorAgent, dataAnalyzerAgent, reportGeneratorAgent],
     'sequential'

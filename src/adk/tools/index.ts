@@ -17,20 +17,19 @@ import {
   ToolError,
   ValidationResult,
   throwToolError,
-  createToolError
+  createToolError,
+  FunctionToolConfig,
+  ToolSource,
+  ToolParameterType
 } from '../types';
 
 // ========== Tool Creation ==========
 
-export const createFunctionTool = (
-  name: string,
-  description: string,
-  func: (params: Record<string, unknown>, context: ToolContext) => unknown | Promise<unknown>,
-  parameters: ToolParameter[] = [],
-  metadata?: Partial<ToolMetadata>
-): Tool => {
+export const createFunctionTool = (config: FunctionToolConfig): Tool => {
+  const { name, description, execute, parameters = [], metadata } = config;
+  
   const toolMetadata: ToolMetadata = {
-    source: 'function',
+    source: ToolSource.FUNCTION,
     version: '1.0.0',
     ...metadata
   };
@@ -47,7 +46,7 @@ export const createFunctionTool = (
       }
       
       // Execute function with params and context
-      const result = await func(params, context);
+      const result = await execute(params, context);
       
       return {
         success: true,
@@ -72,13 +71,25 @@ export const createFunctionTool = (
   };
 };
 
-export const createAsyncFunctionTool = (
+// Legacy function signature for backward compatibility
+export const createFunctionToolLegacy = (
   name: string,
   description: string,
-  asyncFunc: (...args: any[]) => Promise<any>,
-  parameters: ToolParameter[] = []
+  func: (params: Record<string, unknown>, context: ToolContext) => unknown | Promise<unknown>,
+  parameters: ToolParameter[] = [],
+  metadata?: Partial<ToolMetadata>
 ): Tool => {
-  return createFunctionTool(name, description, asyncFunc, parameters);
+  return createFunctionTool({
+    name,
+    description,
+    execute: func,
+    parameters,
+    metadata
+  });
+};
+
+export const createAsyncFunctionTool = (config: FunctionToolConfig): Tool => {
+  return createFunctionTool(config);
 };
 
 // ========== OpenAPI Tool Generation ==========
@@ -141,7 +152,7 @@ const createToolFromOperation = async (
     parameters,
     execute: executor,
     metadata: {
-      source: 'openapi',
+      source: ToolSource.OPENAPI,
       version: spec.info.version,
       tags: ['api', 'openapi']
     }
@@ -292,7 +303,7 @@ export const createCrewAIAdapter = (crewAITool: any): Tool => {
     parameters,
     execute: executor,
     metadata: {
-      source: 'crewai',
+      source: ToolSource.CREWAI,
       version: '1.0.0',
       tags: ['crewai', 'external']
     }
@@ -335,7 +346,7 @@ export const createLangChainAdapter = (langChainTool: any): Tool => {
     parameters,
     execute: executor,
     metadata: {
-      source: 'langchain',
+      source: ToolSource.LANGCHAIN,
       version: '1.0.0',
       tags: ['langchain', 'external']
     }
@@ -563,29 +574,29 @@ export { createToolError }
 // ========== Built-in Tools ==========
 
 export const createEchoTool = (): Tool => {
-  return createFunctionTool(
-    'echo',
-    'Echoes back the input message',
-    (params) => {
+  return createFunctionTool({
+    name: 'echo',
+    description: 'Echoes back the input message',
+    execute: (params) => {
       const typedParams = params as { message: string };
       return typedParams.message;
     },
-    [
+    parameters: [
       {
         name: 'message',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'The message to echo back',
         required: true
       }
     ]
-  );
+  });
 };
 
 export const createCalculatorTool = (): Tool => {
-  return createFunctionTool(
-    'calculator',
-    'Performs basic mathematical calculations',
-    (params) => {
+  return createFunctionTool({
+    name: 'calculator',
+    description: 'Performs basic mathematical calculations',
+    execute: (params) => {
       const typedParams = params as { expression: string };
       try {
         // Simple calculator - in production use a proper math parser
@@ -595,25 +606,25 @@ export const createCalculatorTool = (): Tool => {
         throw new Error(`Invalid expression: ${typedParams.expression}`);
       }
     },
-    [
+    parameters: [
       {
         name: 'expression',
-        type: 'string',
+        type: ToolParameterType.STRING,
         description: 'Mathematical expression to evaluate (e.g., "2 + 2")',
         required: true
       }
     ]
-  );
+  });
 };
 
 export const createTimestampTool = (): Tool => {
-  return createFunctionTool(
-    'timestamp',
-    'Returns the current timestamp',
-    () => ({
+  return createFunctionTool({
+    name: 'timestamp',
+    description: 'Returns the current timestamp',
+    execute: () => ({
       timestamp: new Date().toISOString(),
       unix: Date.now()
     }),
-    []
-  );
+    parameters: []
+  });
 };

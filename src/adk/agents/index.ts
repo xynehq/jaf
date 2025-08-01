@@ -18,7 +18,8 @@ import {
   ValidationResult,
   AgentError,
   throwAgentError,
-  createAgentError
+  createAgentError,
+  Model
 } from '../types';
 
 // ========== ID Generation ==========
@@ -48,7 +49,7 @@ export const createAgent = (config: AgentConfig): Agent => {
 
 export const createSimpleAgent = (
   name: string,
-  model: string,
+  model: Model | string,
   instruction: string,
   tools: Tool[] = []
 ): Agent => {
@@ -62,7 +63,7 @@ export const createSimpleAgent = (
 
 export const createMultiAgent = (
   name: string,
-  model: string,
+  model: Model | string,
   instruction: string,
   subAgents: AgentConfig[],
   delegationStrategy: DelegationStrategy = 'conditional'
@@ -299,7 +300,7 @@ export const getAgentStats = (agent: Agent) => {
 export const createWeatherAgent = (): Agent => {
   return createSimpleAgent(
     'weather_agent',
-    'gemini-2.0-flash',
+    Model.GEMINI_2_0_FLASH,
     'You are a helpful weather assistant. Use the available tools to provide accurate weather information.',
     []
   );
@@ -308,7 +309,7 @@ export const createWeatherAgent = (): Agent => {
 export const createChatAgent = (): Agent => {
   return createSimpleAgent(
     'chat_agent',
-    'gemini-2.0-flash',
+    Model.GEMINI_2_0_FLASH,
     'You are a friendly and helpful conversational assistant. Engage naturally with users and be helpful.',
     []
   );
@@ -317,7 +318,7 @@ export const createChatAgent = (): Agent => {
 export const createCodeAgent = (): Agent => {
   return createSimpleAgent(
     'code_agent',
-    'gemini-2.0-flash',
+    Model.GEMINI_2_0_FLASH,
     'You are a programming assistant. Help users with code, debugging, and software development questions.',
     []
   );
