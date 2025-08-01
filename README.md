@@ -2,6 +2,9 @@
 
 [![CI](https://github.com/xynehq/faf/workflows/CI/badge.svg)](https://github.com/xynehq/faf/actions)
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue)](https://xynehq.github.io/faf/)
+[![npm version](https://img.shields.io/npm/v/@xynehq/faf.svg)](https://www.npmjs.com/package/@xynehq/faf)
+[![npm downloads](https://img.shields.io/npm/dm/@xynehq/faf.svg)](https://www.npmjs.com/package/@xynehq/faf)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ![Functional Agent Framework](/docs/cover.png?raw=true "Functional Agent Framework")
 
