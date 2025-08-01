@@ -1,15 +1,24 @@
 {
-  "name": "functional-agent-framework",
-  "version": "0.0.1",
+  "name": "@xynehq/faf",
+  "version": "0.1.0",
   "description": "A purely functional agent framework with immutable state and composable tools",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "test": "jest",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run lint && npm run test && npm run build",
+    "prepare": "npm run build",
+    "version": "npm run build && git add -A",
+    "postversion": "git push && git push --tags",
     "a2a:example": "tsx src/a2a/examples/server-example.ts",
     "a2a:client": "tsx src/a2a/examples/client-example.ts",
     "a2a:dev": "tsx watch src/a2a/examples/server-example.ts"
@@ -22,10 +31,21 @@
     "llm",
     "a2a",
     "agent2agent",
-    "protocol"
+    "protocol",
+    "faf",
+    "adk",
+    "agent-development-kit"
   ],
-  "author": "",
+  "author": "Xyne HQ",
   "license": "MIT",
+  "homepage": "https://xynehq.github.io/faf/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xynehq/faf.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xynehq/faf/issues"
+  },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
     "@modelcontextprotocol/sdk": "^0.4.0",

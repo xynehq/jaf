@@ -23,7 +23,8 @@ export * from './memory/providers/postgres';
 export * from './a2a';
 
 // ADK Layer - Functional Agent Development Kit
-// export * from './adk';  // Temporarily disabled due to export conflicts
+// Re-export specific ADK modules to avoid conflicts
+export * as ADK from './adk';
 
 import { v4 as uuidv4 } from 'uuid';
 import { TraceId, RunId, createTraceId, createRunId } from './core/types';

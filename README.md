@@ -19,10 +19,34 @@ A purely functional agent framework built on immutable state, type safety, and c
 
 ## 🚀 Quick Start
 
+### Installation
+
 ```bash
+# Install from npm
+npm install @xynehq/faf
+
+# Or using yarn
+yarn add @xynehq/faf
+
+# Or using pnpm
+pnpm add @xynehq/faf
+```
+
+### Development Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/xynehq/faf.git
+cd faf
+
+# Install dependencies
 npm install
+
+# Build the project
 npm run build
-npm test     # Run tests
+
+# Run tests
+npm test
 ```
 
 ## 📁 Project Structure
@@ -82,7 +106,7 @@ docs/               # Documentation
 
 ```typescript
 import { z } from 'zod';
-import { Agent, Tool, RunState, run } from 'functional-agent-framework';
+import { Agent, Tool, RunState, run } from '@xynehq/faf';
 
 // Define your context type
 type MyContext = {
@@ -116,7 +140,7 @@ const mathAgent: Agent<MyContext, string> = {
 ### Running the Framework
 
 ```typescript
-import { run, makeLiteLLMProvider } from 'functional-agent-framework';
+import { run, makeLiteLLMProvider } from '@xynehq/faf';
 
 const modelProvider = makeLiteLLMProvider('http://localhost:4000');
 const agentRegistry = new Map([['MathTutor', mathAgent]]);
@@ -145,7 +169,7 @@ const result = await run(initialState, config);
 ### Composable Validation Policies
 
 ```typescript
-import { createPathValidator, createPermissionValidator, composeValidations } from 'functional-agent-framework';
+import { createPathValidator, createPermissionValidator, composeValidations } from '@xynehq/faf';
 
 // Create individual validators
 const pathValidator = createPathValidator(['/shared', '/public']);
@@ -161,7 +185,7 @@ const secureFileTool = withValidation(baseFileTool, combinedValidator);
 ### Guardrails
 
 ```typescript
-import { createContentFilter, createRateLimiter } from 'functional-agent-framework';
+import { createContentFilter, createRateLimiter } from '@xynehq/faf';
 
 const config = {
   // ... other config
@@ -178,7 +202,7 @@ const config = {
 ## 🔗 Agent Handoffs
 
 ```typescript
-import { handoffTool } from 'functional-agent-framework';
+import { handoffTool } from '@xynehq/faf';
 
 const triageAgent: Agent<Context, { agentName: string }> = {
   name: 'TriageAgent',
@@ -196,7 +220,7 @@ const triageAgent: Agent<Context, { agentName: string }> = {
 ### Real-time Tracing
 
 ```typescript
-import { ConsoleTraceCollector, FileTraceCollector } from 'functional-agent-framework';
+import { ConsoleTraceCollector, FileTraceCollector } from '@xynehq/faf';
 
 // Console logging
 const consoleTracer = new ConsoleTraceCollector();
@@ -216,7 +240,7 @@ const config = {
 ### Error Handling
 
 ```typescript
-import { FAFErrorHandler } from 'functional-agent-framework';
+import { FAFErrorHandler } from '@xynehq/faf';
 
 if (result.outcome.status === 'error') {
   const formattedError = FAFErrorHandler.format(result.outcome.error);
@@ -232,7 +256,7 @@ if (result.outcome.status === 'error') {
 ### LiteLLM Provider
 
 ```typescript
-import { makeLiteLLMProvider } from 'functional-agent-framework';
+import { makeLiteLLMProvider } from '@xynehq/faf';
 
 // Connect to LiteLLM proxy for 100+ model support
 const modelProvider = makeLiteLLMProvider(
@@ -244,7 +268,7 @@ const modelProvider = makeLiteLLMProvider(
 ### MCP (Model Context Protocol) Tools
 
 ```typescript
-import { makeMCPClient, mcpToolToFAFTool } from 'functional-agent-framework';
+import { makeMCPClient, mcpToolToFAFTool } from '@xynehq/faf';
 
 // Connect to MCP server
 const mcpClient = await makeMCPClient('python', ['-m', 'mcp_server']);
@@ -263,7 +287,7 @@ const fafTools = mcpTools.map(tool =>
 FAF includes a built-in development server for testing agents locally via HTTP endpoints:
 
 ```typescript
-import { runServer, makeLiteLLMProvider, createInMemoryProvider } from 'functional-agent-framework';
+import { runServer, makeLiteLLMProvider, createInMemoryProvider } from '@xynehq/faf';
 
 const myAgent = {
   name: 'MyAgent',

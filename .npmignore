@@ -1,0 +1,50 @@
+# Source files (we only ship compiled JS)
+src/
+tsconfig.json
+jest.config.js
+
+# Development files
+.github/
+.vscode/
+.idea/
+*.log
+*.tgz
+
+# Documentation files
+docs/
+mkdocs.yml
+requirements.txt
+site/
+_site/
+
+# Test files
+**/__tests__/
+**/*.test.ts
+**/*.spec.ts
+coverage/
+
+# Example files
+examples/
+
+# Config files
+.eslintrc*
+.prettierrc*
+.gitignore
+.env*
+
+# Build artifacts
+*.map
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+
+# Misc
+node_modules/
+tmp/
+temp/
