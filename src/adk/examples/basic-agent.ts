@@ -42,7 +42,8 @@ export const createAgentWithTools = () => {
   const greetingTool = createFunctionTool(
     'greeting',
     'Generate a personalized greeting',
-    ({ name, timeOfDay }: { name: string; timeOfDay: string }) => {
+    (params, context) => {
+      const { name, timeOfDay } = params as { name: string; timeOfDay: string };
       const greetings = {
         morning: 'Good morning',
         afternoon: 'Good afternoon',
@@ -73,7 +74,8 @@ export const createAgentWithTools = () => {
   const mathTool = createFunctionTool(
     'calculate',
     'Perform basic mathematical operations',
-    ({ operation, a, b }: { operation: string; a: number; b: number }) => {
+    (params, context) => {
+      const { operation, a, b } = params as { operation: string; a: number; b: number };
       switch (operation) {
         case 'add':
           return { result: a + b, operation: `${a} + ${b}` };

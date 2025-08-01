@@ -30,7 +30,10 @@ describe('ADK Layer Integration', () => {
       const greetingTool = createFunctionTool(
         'greet',
         'Generate a greeting',
-        ({ name }: { name: string }) => `Hello, ${name}! Welcome to FAF ADK!`,
+        (params, context) => {
+          const typedParams = params as { name: string };
+          return `Hello, ${typedParams.name}! Welcome to FAF ADK!`;
+        },
         [
           {
             name: 'name',
@@ -112,12 +115,15 @@ describe('ADK Layer Integration', () => {
         tools: [createFunctionTool(
           'get_weather',
           'Get weather data',
-          ({ location }: { location: string }) => ({
-            location,
-            temperature: 22,
-            condition: 'sunny',
-            humidity: 60
-          }),
+          (params, context) => {
+            const typedParams = params as { location: string };
+            return {
+              location: typedParams.location,
+              temperature: 22,
+              condition: 'sunny',
+              humidity: 60
+            };
+          },
           [{ name: 'location', type: 'string', description: 'Location', required: true }]
         )]
       });
@@ -259,7 +265,9 @@ describe('ADK Layer Integration', () => {
       const dataProcessingTool = createFunctionTool(
         'process_data',
         'Process and analyze data',
-        ({ data, operation }: { data: number[]; operation: string }) => {
+        (params, context) => {
+          const typedParams = params as { data: number[]; operation: string };
+          const { data, operation } = typedParams;
           switch (operation) {
             case 'sum':
               return { result: data.reduce((a, b) => a + b, 0), operation };
@@ -317,8 +325,9 @@ describe('ADK Layer Integration', () => {
       const errorTool = createFunctionTool(
         'error_tool',
         'A tool that sometimes fails',
-        ({ shouldFail }: { shouldFail: boolean }) => {
-          if (shouldFail) {
+        (params, context) => {
+          const typedParams = params as { shouldFail: boolean };
+          if (typedParams.shouldFail) {
             throw new Error('Tool execution failed');
           }
           return { success: true };
@@ -453,11 +462,12 @@ describe('ADK Layer Integration', () => {
       const transferTool = createFunctionTool(
         'transfer_request',
         'Transfer to specialist agent',
-        ({ targetAgent }: { targetAgent: string }, context: any) => {
+        (params, context) => {
+          const typedParams = params as { targetAgent: string };
           if (context.actions) {
-            context.actions.transferToAgent = targetAgent;
+            context.actions.transferToAgent = typedParams.targetAgent;
           }
-          return { transferred: true, target: targetAgent };
+          return { transferred: true, target: typedParams.targetAgent };
         },
         [
           {
@@ -504,7 +514,9 @@ describe('ADK Layer Integration', () => {
       const multiModalTool = createFunctionTool(
         'analyze_content',
         'Analyze different types of content',
-        ({ contentType, data }: { contentType: string; data: string }) => {
+        (params, context) => {
+          const typedParams = params as { contentType: string; data: string };
+          const { contentType, data } = typedParams;
           switch (contentType) {
             case 'text':
               return { type: 'text', length: data.length, words: data.split(' ').length };

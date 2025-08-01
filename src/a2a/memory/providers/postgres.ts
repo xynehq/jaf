@@ -176,7 +176,10 @@ export const createA2APostgresTaskProvider = async (
     };
   };
 
-  return {
+  // Forward declare provider for recursive calls  
+  // let provider: A2ATaskProvider;
+
+  const providerImpl = {
     storeTask: async (task: A2ATask, metadata?: { expiresAt?: Date; [key: string]: any }) => {
       try {
         // Validate and sanitize task
@@ -242,7 +245,7 @@ export const createA2APostgresTaskProvider = async (
     updateTask: async (task: A2ATask, metadata?: { [key: string]: any }) => {
       try {
         // Check if task exists
-        const existingResult = await provider.getTask(task.id);
+        const existingResult = await providerImpl.getTask(task.id);
         if (!existingResult.success) {
           return existingResult;
         }
@@ -295,7 +298,7 @@ export const createA2APostgresTaskProvider = async (
     updateTaskStatus: async (taskId: string, newState: TaskState, statusMessage?: any, timestamp?: string) => {
       try {
         // Get existing task
-        const existingResult = await provider.getTask(taskId);
+        const existingResult = await providerImpl.getTask(taskId);
         if (!existingResult.success) {
           return existingResult;
         }
@@ -316,7 +319,7 @@ export const createA2APostgresTaskProvider = async (
           }
         };
 
-        return provider.updateTask(updatedTask);
+        return providerImpl.updateTask(updatedTask);
       } catch (error) {
         return createFailure(
           createA2ATaskStorageError('update-status', 'postgres', taskId, error as Error)
@@ -365,7 +368,7 @@ export const createA2APostgresTaskProvider = async (
     },
 
     getTasksByContext: async (contextId: string, limit?: number) => {
-      return provider.findTasks({ contextId, limit });
+      return providerImpl.findTasks({ contextId, limit });
     },
 
     deleteTask: async (taskId: string) => {
@@ -494,219 +497,5 @@ export const createA2APostgresTaskProvider = async (
     }
   };
 
-  // Create the provider reference for internal use
-  const provider: A2ATaskProvider = {
-    storeTask: async (task: A2ATask, metadata?: { expiresAt?: Date; [key: string]: any }) => {
-      try {
-        const sanitizeResult = sanitizeTask(task);
-        if (!sanitizeResult.success) return sanitizeResult as any;
-
-        const serializeResult = serializeA2ATask(sanitizeResult.data, metadata);
-        if (!serializeResult.success) return serializeResult as any;
-
-        const serialized = serializeResult.data;
-        const query = SQL_QUERIES.INSERT_TASK.replace(/a2a_tasks/g, tableName);
-        await client.query(query, [
-          serialized.taskId, serialized.contextId, serialized.state, serialized.taskData,
-          serialized.statusMessage, new Date(serialized.createdAt), new Date(serialized.updatedAt),
-          metadata?.expiresAt || null, metadata ? JSON.stringify(metadata) : null
-        ]);
-
-        return createSuccess(undefined);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('store', 'postgres', task.id, error as Error));
-      }
-    },
-
-    getTask: async (taskId: string) => {
-      try {
-        const query = SQL_QUERIES.SELECT_TASK.replace(/a2a_tasks/g, tableName);
-        const result = await client.query(query, [taskId]);
-
-        if (result.rows.length === 0) return createSuccess(null);
-
-        const row = result.rows[0];
-        const serialized = rowToSerializedTask(row);
-        const deserializeResult = deserializeA2ATask(serialized);
-
-        return deserializeResult.success ? createSuccess(deserializeResult.data) : deserializeResult;
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('get', 'postgres', taskId, error as Error));
-      }
-    },
-
-    updateTask: async (task: A2ATask, metadata?: { [key: string]: any }) => {
-      try {
-        const existingResult = await provider.getTask(task.id);
-        if (!existingResult.success) return existingResult;
-        if (!existingResult.data) return createFailure(createA2ATaskNotFoundError(task.id, 'postgres'));
-
-        const sanitizeResult = sanitizeTask(task);
-        if (!sanitizeResult.success) return sanitizeResult as any;
-
-        const existingQuery = SQL_QUERIES.SELECT_TASK.replace(/a2a_tasks/g, tableName);
-        const existingData = await client.query(existingQuery, [task.id]);
-        const existingMetadata = existingData.rows[0]?.metadata || {};
-        const mergedMetadata = { ...existingMetadata, ...metadata };
-
-        const serializeResult = serializeA2ATask(sanitizeResult.data, mergedMetadata);
-        if (!serializeResult.success) return serializeResult as any;
-
-        const serialized = serializeResult.data;
-        const query = SQL_QUERIES.UPDATE_TASK.replace(/a2a_tasks/g, tableName);
-        const result = await client.query(query, [
-          task.id, serialized.state, serialized.taskData, serialized.statusMessage,
-          new Date(serialized.updatedAt), JSON.stringify(mergedMetadata)
-        ]);
-
-        if (result.rowCount === 0) return createFailure(createA2ATaskNotFoundError(task.id, 'postgres'));
-        return createSuccess(undefined);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('update', 'postgres', task.id, error as Error));
-      }
-    },
-
-    updateTaskStatus: async (taskId: string, newState: TaskState, statusMessage?: any, timestamp?: string) => {
-      try {
-        const existingResult = await provider.getTask(taskId);
-        if (!existingResult.success) return existingResult;
-        if (!existingResult.data) return createFailure(createA2ATaskNotFoundError(taskId, 'postgres'));
-
-        const task = existingResult.data;
-        const updatedTask: A2ATask = {
-          ...task,
-          status: {
-            ...task.status,
-            state: newState,
-            message: statusMessage || task.status.message,
-            timestamp: timestamp || new Date().toISOString()
-          }
-        };
-
-        return provider.updateTask(updatedTask);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('update-status', 'postgres', taskId, error as Error));
-      }
-    },
-
-    findTasks: async (query: A2ATaskQuery) => {
-      try {
-        const { clause, params } = buildWhereClause(query);
-        
-        let sql = `
-          SELECT task_id, context_id, state, task_data, status_message, 
-                 created_at, updated_at, expires_at, metadata
-          FROM ${tableName} 
-          ${clause}
-          ORDER BY created_at DESC
-        `;
-
-        if (query.limit) sql += ` LIMIT ${query.limit}`;
-        if (query.offset) sql += ` OFFSET ${query.offset}`;
-
-        const result = await client.query(sql, params);
-        const tasks: A2ATask[] = [];
-
-        for (const row of result.rows) {
-          const serialized = rowToSerializedTask(row);
-          const deserializeResult = deserializeA2ATask(serialized);
-          if (deserializeResult.success) tasks.push(deserializeResult.data);
-        }
-
-        return createSuccess(tasks);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('find', 'postgres', undefined, error as Error));
-      }
-    },
-
-    getTasksByContext: async (contextId: string, limit?: number) => {
-      return provider.findTasks({ contextId, limit });
-    },
-
-    deleteTask: async (taskId: string) => {
-      try {
-        const query = SQL_QUERIES.DELETE_TASK.replace(/a2a_tasks/g, tableName);
-        const result = await client.query(query, [taskId]);
-        return createSuccess(result.rowCount > 0);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('delete', 'postgres', taskId, error as Error));
-      }
-    },
-
-    deleteTasksByContext: async (contextId: string) => {
-      try {
-        const query = SQL_QUERIES.DELETE_TASKS_BY_CONTEXT.replace(/a2a_tasks/g, tableName);
-        const result = await client.query(query, [contextId]);
-        return createSuccess(result.rowCount || 0);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('delete-by-context', 'postgres', undefined, error as Error));
-      }
-    },
-
-    cleanupExpiredTasks: async () => {
-      try {
-        const query = SQL_QUERIES.CLEANUP_EXPIRED.replace(/a2a_tasks/g, tableName);
-        const result = await client.query(query);
-        return createSuccess(result.rowCount || 0);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('cleanup', 'postgres', undefined, error as Error));
-      }
-    },
-
-    getTaskStats: async (contextId?: string) => {
-      try {
-        const tasksByState: Record<TaskState, number> = {
-          submitted: 0, working: 0, 'input-required': 0, completed: 0,
-          canceled: 0, failed: 0, rejected: 0, 'auth-required': 0, unknown: 0
-        };
-
-        const stateQuery = SQL_QUERIES.STATS_BY_STATE.replace(/a2a_tasks/g, tableName);
-        const stateResult = await client.query(stateQuery, [contextId || null]);
-        
-        let totalTasks = 0;
-        for (const row of stateResult.rows) {
-          const state = row.state as TaskState;
-          const count = parseInt(row.count);
-          if (state in tasksByState) tasksByState[state] = count;
-          totalTasks += count;
-        }
-
-        const dateQuery = SQL_QUERIES.DATE_RANGE.replace(/a2a_tasks/g, tableName);
-        const dateResult = await client.query(dateQuery, [contextId || null]);
-        
-        let oldestTask: Date | undefined;
-        let newestTask: Date | undefined;
-        
-        if (dateResult.rows.length > 0 && dateResult.rows[0].oldest) {
-          oldestTask = new Date(dateResult.rows[0].oldest);
-          newestTask = new Date(dateResult.rows[0].newest);
-        }
-
-        return createSuccess({ totalTasks, tasksByState, oldestTask, newestTask });
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('stats', 'postgres', undefined, error as Error));
-      }
-    },
-
-    healthCheck: async () => {
-      try {
-        const startTime = Date.now();
-        await client.query('SELECT 1');
-        const latencyMs = Date.now() - startTime;
-        return createSuccess({ healthy: true, latencyMs });
-      } catch (error) {
-        return createSuccess({ healthy: false, error: (error as Error).message });
-      }
-    },
-
-    close: async () => {
-      try {
-        return createSuccess(undefined);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('close', 'postgres', undefined, error as Error));
-      }
-    }
-  };
-
-  return provider;
+  return providerImpl;
 };

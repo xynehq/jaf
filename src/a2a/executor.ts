@@ -7,7 +7,6 @@ import type {
   A2AAgent, 
   A2ATask, 
   A2AMessage,
-  StreamEvent,
   AgentState,
   A2AStreamEvent
 } from './types.js';

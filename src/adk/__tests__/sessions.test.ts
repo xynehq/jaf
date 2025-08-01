@@ -608,7 +608,12 @@ describe('Session Management', () => {
       
       const wrappedFunction = withSessionErrorHandling(throwingFunction, 'session_123');
       
-      await expect(wrappedFunction()).rejects.toThrow(sessionError);
+      await expect(wrappedFunction()).rejects.toMatchObject({
+        name: 'SessionError',
+        message: 'Session error',
+        code: 'SESSION_ERROR',
+        sessionId: 'session_123'
+      });
     });
 
     test('Redis provider should handle JSON parsing errors', async () => {

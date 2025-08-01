@@ -5,15 +5,12 @@
 
 import {
   createA2AClient,
-  sendMessage,
-  streamMessage,
   getAgentCard,
   sendMessageToAgent,
   streamMessageToAgent,
   checkA2AHealth,
   getA2ACapabilities,
   connectToA2AAgent,
-  discoverAgents
 } from '../client.js';
 
 // Pure function to demonstrate basic client usage

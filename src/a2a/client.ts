@@ -10,7 +10,6 @@ import type {
   JSONRPCResponse,
   SendMessageRequest,
   SendStreamingMessageRequest,
-  A2AMessage,
   AgentCard,
   A2AStreamEvent
 } from './types.js';

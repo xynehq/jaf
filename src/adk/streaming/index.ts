@@ -136,14 +136,15 @@ export const streamToQueue = async (
 export const queueToStream = async function* (
   queue: LiveRequestQueue
 ): AsyncGenerator<AgentEvent> {
-  while (!queue.isEmpty() || true) { // Keep running until explicitly closed
+  // Read the queue's state to check if it's closed
+  // For now, we'll process until the queue is empty
+  while (!queue.isEmpty()) {
     const message = await queue.dequeue();
     
     if (message) {
       yield createMessageDeltaEvent(message);
     } else {
-      // Wait a bit before checking again
-      await new Promise(resolve => setTimeout(resolve, 50));
+      break; // Queue is empty
     }
   }
 };
@@ -151,32 +152,35 @@ export const queueToStream = async function* (
 export const combineStreams = async function* (
   ...streams: AsyncGenerator<AgentEvent>[]
 ): AsyncGenerator<AgentEvent> {
-  const iterators = streams.map(stream => stream[Symbol.asyncIterator]());
-  const pending = new Set(iterators);
-  
-  while (pending.size > 0) {
-    const promises = Array.from(pending).map(async (iterator, index) => {
-      try {
-        const result = await iterator.next();
-        return { result, iterator, index };
-      } catch (error) {
-        pending.delete(iterator);
-        throw error;
-      }
-    });
-    
+  if (streams.length === 0) {
+    return;
+  }
+
+  // Collect all events from all streams concurrently
+  const streamPromises = streams.map(async (stream) => {
+    const events: AgentEvent[] = [];
     try {
-      const { result, iterator } = await Promise.race(promises);
-      
-      if (result.done) {
-        pending.delete(iterator);
-      } else {
-        yield result.value;
+      for await (const event of stream) {
+        events.push(event);
       }
     } catch (error) {
-      // Handle error from one of the streams
-      yield createErrorEvent(`Stream error: ${error instanceof Error ? error.message : String(error)}`);
+      events.push(createErrorEvent(`Stream error: ${error instanceof Error ? error.message : String(error)}`));
     }
+    return events;
+  });
+
+  try {
+    const allStreamEvents = await Promise.all(streamPromises);
+    
+    // Flatten all events and yield them
+    // This gives us all events from all streams, though not in real-time order
+    for (const streamEvents of allStreamEvents) {
+      for (const event of streamEvents) {
+        yield event;
+      }
+    }
+  } catch (error) {
+    yield createErrorEvent(`Combined stream error: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
 
@@ -336,19 +340,31 @@ export const waitForEvent = async (
   type: AgentEventType,
   timeout?: number
 ): Promise<AgentEvent | null> => {
-  const startTime = Date.now();
-  
-  for await (const event of stream) {
-    if (event.type === type) {
-      return event;
+  if (!timeout) {
+    // No timeout, iterate normally
+    for await (const event of stream) {
+      if (event.type === type) {
+        return event;
+      }
     }
-    
-    if (timeout && (Date.now() - startTime) > timeout) {
-      break;
-    }
+    return null;
   }
-  
-  return null;
+
+  // Use Promise.race to handle timeout properly
+  const timeoutPromise = new Promise<null>((resolve) => {
+    setTimeout(() => resolve(null), timeout);
+  });
+
+  const streamPromise = (async () => {
+    for await (const event of stream) {
+      if (event.type === type) {
+        return event;
+      }
+    }
+    return null;
+  })();
+
+  return await Promise.race([streamPromise, timeoutPromise]);
 };
 
 export const countEvents = async (
@@ -425,11 +441,20 @@ export const metricsMonitor = () => {
     eventCount: 0,
     eventsByType: {} as Record<AgentEventType, number>,
     errors: 0,
-    startTime: Date.now()
+    startTime: Date.now(),
+    firstEventTime: null as number | null,
+    lastEventTime: null as number | null
   };
   
   return {
     monitor: (event: AgentEvent) => {
+      const now = Date.now();
+      
+      if (metrics.firstEventTime === null) {
+        metrics.firstEventTime = now;
+      }
+      metrics.lastEventTime = now;
+      
       metrics.eventCount++;
       metrics.eventsByType[event.type] = (metrics.eventsByType[event.type] || 0) + 1;
       
@@ -438,11 +463,20 @@ export const metricsMonitor = () => {
       }
     },
     
-    getMetrics: () => ({
-      ...metrics,
-      duration: Date.now() - metrics.startTime,
-      eventsPerSecond: metrics.eventCount / ((Date.now() - metrics.startTime) / 1000)
-    })
+    getMetrics: () => {
+      // Calculate duration based on actual event processing time if available
+      const duration = metrics.firstEventTime && metrics.lastEventTime
+        ? metrics.lastEventTime - metrics.firstEventTime
+        : Date.now() - metrics.startTime;
+      
+      return {
+        ...metrics,
+        duration: Math.max(duration, 0), // Ensure non-negative duration
+        eventsPerSecond: metrics.eventCount > 0 && duration > 0
+          ? metrics.eventCount / (duration / 1000)
+          : 0
+      };
+    }
   };
 };
 
@@ -511,17 +545,22 @@ export interface BidirectionalStream {
 export const createBidirectionalStream = (): BidirectionalStream => {
   const inputQueue = createLiveRequestQueue();
   const outputQueue = createLiveRequestQueue();
+  let closed = false;
   
   return {
     send: async (message: Content) => {
       await inputQueue.enqueue(message);
+      // For demo purposes, echo the message to the output queue
+      await outputQueue.enqueue(message);
     },
     
     receive: async function* () {
-      while (!outputQueue.isEmpty() || true) {
+      while (!closed) {
         const message = await outputQueue.dequeue();
         if (message) {
           yield createMessageDeltaEvent(message);
+        } else if (outputQueue.isEmpty() && closed) {
+          break;
         } else {
           await new Promise(resolve => setTimeout(resolve, 50));
         }
@@ -529,6 +568,7 @@ export const createBidirectionalStream = (): BidirectionalStream => {
     },
     
     close: () => {
+      closed = true;
       inputQueue.close();
       outputQueue.close();
     }

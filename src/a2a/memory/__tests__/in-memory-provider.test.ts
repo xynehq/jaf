@@ -108,13 +108,17 @@ describe('A2A In-Memory Provider', () => {
 
       const getResult = await provider.getTask(task.id);
       expect(getResult.success).toBe(true);
-      expect(getResult.data).toBeDefined();
+      if (getResult.success) {
+        expect(getResult.data).toBeDefined();
+      }
     });
 
     it('should return null for non-existent task', async () => {
       const getResult = await provider.getTask('non_existent');
       expect(getResult.success).toBe(true);
-      expect(getResult.data).toBeNull();
+      if (getResult.success) {
+        expect(getResult.data).toBeNull();
+      }
     });
 
     it('should not return expired tasks', async () => {
@@ -127,7 +131,9 @@ describe('A2A In-Memory Provider', () => {
 
       const getResult = await provider.getTask(task.id);
       expect(getResult.success).toBe(true);
-      expect(getResult.data).toBeNull();
+      if (getResult.success) {
+        expect(getResult.data).toBeNull();
+      }
     });
 
     it('should reject duplicate task IDs', async () => {
@@ -320,17 +326,23 @@ describe('A2A In-Memory Provider', () => {
 
       const deleteResult = await provider.deleteTask(task.id);
       expect(deleteResult.success).toBe(true);
-      expect(deleteResult.data).toBe(true);
+      if (deleteResult.success) {
+        expect(deleteResult.data).toBe(true);
+      }
 
       const getResult = await provider.getTask(task.id);
       expect(getResult.success).toBe(true);
-      expect(getResult.data).toBeNull();
+      if (getResult.success) {
+        expect(getResult.data).toBeNull();
+      }
     });
 
     it('should return false when deleting non-existent task', async () => {
       const deleteResult = await provider.deleteTask('non_existent');
       expect(deleteResult.success).toBe(true);
-      expect(deleteResult.data).toBe(false);
+      if (deleteResult.success) {
+        expect(deleteResult.data).toBe(false);
+      }
     });
 
     it('should delete tasks by context', async () => {
@@ -346,7 +358,9 @@ describe('A2A In-Memory Provider', () => {
 
       const deleteResult = await provider.deleteTasksByContext('ctx1');
       expect(deleteResult.success).toBe(true);
-      expect(deleteResult.data).toBe(2); // Should delete 2 tasks
+      if (deleteResult.success) {
+        expect(deleteResult.data).toBe(2); // Should delete 2 tasks
+      }
 
       const remainingTasks = await provider.findTasks({});
       expect(remainingTasks.success).toBe(true);
@@ -422,7 +436,9 @@ describe('A2A In-Memory Provider', () => {
 
       const cleanupResult = await provider.cleanupExpiredTasks();
       expect(cleanupResult.success).toBe(true);
-      expect(cleanupResult.data).toBe(1); // Should clean up 1 expired task
+      if (cleanupResult.success) {
+        expect(cleanupResult.data).toBe(1); // Should clean up 1 expired task
+      }
 
       const remainingTasks = await provider.findTasks({});
       expect(remainingTasks.success).toBe(true);
@@ -438,7 +454,9 @@ describe('A2A In-Memory Provider', () => {
 
       const cleanupResult = await provider.cleanupExpiredTasks();
       expect(cleanupResult.success).toBe(true);
-      expect(cleanupResult.data).toBe(0);
+      if (cleanupResult.success) {
+        expect(cleanupResult.data).toBe(0);
+      }
     });
   });
 
@@ -508,7 +526,9 @@ describe('A2A In-Memory Provider', () => {
       // Task should still exist and be valid
       const finalTask = await provider.getTask(task.id);
       expect(finalTask.success).toBe(true);
-      expect(finalTask.data).toBeDefined();
+      if (finalTask.success) {
+        expect(finalTask.data).toBeDefined();
+      }
     });
   });
 

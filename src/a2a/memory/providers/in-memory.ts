@@ -52,9 +52,9 @@ interface InMemoryTaskState {
 /**
  * Create an in-memory A2A task provider
  */
-export const createA2AInMemoryTaskProvider = (
+export const createA2AInMemoryTaskProvider = async (
   config: A2AInMemoryTaskConfig
-): A2ATaskProvider => {
+): Promise<A2ATaskProvider> => {
   // Initialize immutable state
   let state: InMemoryTaskState = {
     tasks: new Map(),
@@ -151,6 +151,7 @@ export const createA2AInMemoryTaskProvider = (
     return createSuccess(undefined);
   };
 
+  // Create the provider object with proper implementation
   return {
     storeTask: async (task: A2ATask, metadata?: { expiresAt?: Date; [key: string]: any }) => {
       try {
@@ -158,6 +159,18 @@ export const createA2AInMemoryTaskProvider = (
         const sanitizeResult = sanitizeTask(task);
         if (!sanitizeResult.success) {
           return sanitizeResult as any;
+        }
+
+        // Check for duplicate task ID
+        if (state.tasks.has(task.id)) {
+          return createFailure(
+            createA2ATaskStorageError(
+              'store',
+              'in-memory',
+              task.id,
+              new Error(`Task with ID ${task.id} already exists`)
+            )
+          );
         }
 
         // Check storage limits
@@ -178,6 +191,7 @@ export const createA2AInMemoryTaskProvider = (
           contextId: serializedTask.contextId,
           state: serializedTask.state as TaskState,
           taskData: serializedTask.taskData,
+          statusMessage: serializedTask.statusMessage,
           createdAt: new Date(serializedTask.createdAt),
           updatedAt: new Date(serializedTask.updatedAt),
           expiresAt: metadata?.expiresAt,
@@ -265,6 +279,7 @@ export const createA2AInMemoryTaskProvider = (
           ...existing,
           state: serializedTask.state as TaskState,
           taskData: serializedTask.taskData,
+          statusMessage: serializedTask.statusMessage,
           updatedAt: new Date(serializedTask.updatedAt),
           metadata: mergedMetadata
         };
@@ -338,8 +353,42 @@ export const createA2AInMemoryTaskProvider = (
           }
         };
 
-        // Use updateTask for the actual update
-        return await provider.updateTask(updatedTask);
+        // Update task directly to avoid circular reference
+        const sanitizeResult = sanitizeTask(updatedTask);
+        if (!sanitizeResult.success) {
+          return sanitizeResult as any;
+        }
+
+        const mergedMetadata = { ...existing.metadata };
+        const serializeResult = serializeA2ATask(sanitizeResult.data, mergedMetadata);
+        if (!serializeResult.success) {
+          return serializeResult as any;
+        }
+
+        const serializedTask = serializeResult.data;
+        const updatedStorage: A2ATaskStorage = {
+          ...existing,
+          state: serializedTask.state as TaskState,
+          taskData: serializedTask.taskData,
+          statusMessage: serializedTask.statusMessage,
+          updatedAt: new Date(serializedTask.updatedAt),
+          metadata: mergedMetadata
+        };
+
+        const newTasks = new Map(state.tasks);
+        newTasks.set(taskId, updatedStorage);
+
+        let contextIndex = state.contextIndex;
+        let stateIndex = state.stateIndex;
+        if (existing.state !== updatedTask.status.state) {
+          const removeResult = removeFromIndices(contextIndex, stateIndex, taskId, updatedTask.contextId, existing.state);
+          const addResult = addToIndices(removeResult.contextIndex, removeResult.stateIndex, taskId, updatedTask.contextId, updatedTask.status.state);
+          contextIndex = addResult.contextIndex;
+          stateIndex = addResult.stateIndex;
+        }
+
+        updateState({ ...state, tasks: newTasks, contextIndex, stateIndex });
+        return createSuccess(undefined);
       } catch (error) {
         return createFailure(
           createA2ATaskStorageError('update-status', 'in-memory', taskId, error as Error)
@@ -352,7 +401,14 @@ export const createA2AInMemoryTaskProvider = (
         let taskIds: Set<string> = new Set();
 
         // Start with all tasks or filter by context/state
-        if (query.contextId) {
+        if (query.contextId && query.state) {
+          // Both context and state - find intersection
+          const contextTasks = state.contextIndex.get(query.contextId) || new Set();
+          const stateTasks = state.stateIndex.get(query.state) || new Set();
+          
+          // Get intersection of both sets
+          taskIds = new Set([...contextTasks].filter(id => stateTasks.has(id)));
+        } else if (query.contextId) {
           const contextTasks = state.contextIndex.get(query.contextId);
           if (contextTasks) {
             taskIds = new Set(contextTasks);
@@ -403,7 +459,36 @@ export const createA2AInMemoryTaskProvider = (
     },
 
     getTasksByContext: async (contextId: string, limit?: number) => {
-      return provider.findTasks({ contextId, limit });
+      try {
+        const contextTasks = state.contextIndex.get(contextId);
+        if (!contextTasks) {
+          return createSuccess([]);
+        }
+
+        const results: A2ATask[] = [];
+        for (const taskId of contextTasks) {
+          if (limit && results.length >= limit) break;
+
+          const stored = state.tasks.get(taskId);
+          if (!stored) continue;
+          if (stored.expiresAt && stored.expiresAt < new Date()) continue;
+
+          const deserializeResult = deserializeA2ATask(convertStorageToSerialized(stored));
+          if (deserializeResult.success) {
+            results.push(deserializeResult.data);
+          }
+        }
+
+        const sortedResults = results.sort((a, b) => 
+          new Date(b.status.timestamp || '').getTime() - new Date(a.status.timestamp || '').getTime()
+        );
+
+        return createSuccess(sortedResults);
+      } catch (error) {
+        return createFailure(
+          createA2ATaskStorageError('get-by-context', 'in-memory', undefined, error as Error)
+        );
+      }
     },
 
     deleteTask: async (taskId: string) => {
@@ -453,12 +538,38 @@ export const createA2AInMemoryTaskProvider = (
         }
 
         let deletedCount = 0;
+        const newTasks = new Map(state.tasks);
+        let contextIndex = state.contextIndex;
+        let stateIndex = state.stateIndex;
+
         for (const taskId of contextTasks) {
-          const deleteResult = await provider.deleteTask(taskId);
-          if (deleteResult.success && deleteResult.data) {
+          const existing = newTasks.get(taskId);
+          if (existing) {
+            newTasks.delete(taskId);
+            
+            const removeResult = removeFromIndices(
+              contextIndex,
+              stateIndex,
+              taskId,
+              existing.contextId,
+              existing.state
+            );
+            contextIndex = removeResult.contextIndex;
+            stateIndex = removeResult.stateIndex;
             deletedCount++;
           }
         }
+
+        updateState({
+          ...state,
+          tasks: newTasks,
+          contextIndex,
+          stateIndex,
+          stats: {
+            ...state.stats,
+            totalTasks: newTasks.size
+          }
+        });
 
         return createSuccess(deletedCount);
       } catch (error) {
@@ -473,14 +584,37 @@ export const createA2AInMemoryTaskProvider = (
         const now = new Date();
         let cleanedCount = 0;
 
+        const newTasks = new Map(state.tasks);
+        let contextIndex = state.contextIndex;
+        let stateIndex = state.stateIndex;
+
         for (const [taskId, stored] of state.tasks) {
           if (stored.expiresAt && stored.expiresAt < now) {
-            const deleteResult = await provider.deleteTask(taskId);
-            if (deleteResult.success && deleteResult.data) {
-              cleanedCount++;
-            }
+            newTasks.delete(taskId);
+            
+            const removeResult = removeFromIndices(
+              contextIndex,
+              stateIndex,
+              taskId,
+              stored.contextId,
+              stored.state
+            );
+            contextIndex = removeResult.contextIndex;
+            stateIndex = removeResult.stateIndex;
+            cleanedCount++;
           }
         }
+
+        updateState({
+          ...state,
+          tasks: newTasks,
+          contextIndex,
+          stateIndex,
+          stats: {
+            ...state.stats,
+            totalTasks: newTasks.size
+          }
+        });
 
         return createSuccess(cleanedCount);
       } catch (error) {
@@ -583,319 +717,6 @@ export const createA2AInMemoryTaskProvider = (
         return createFailure(
           createA2ATaskStorageError('close', 'in-memory', undefined, error as Error)
         );
-      }
-    }
-  };
-
-  // Create the provider object
-  const provider = {
-    storeTask: async (task: A2ATask, metadata?: { expiresAt?: Date; [key: string]: any }) => {
-      // Implementation moved to return object above
-      return createSuccess(undefined);
-    },
-    getTask: async (taskId: string) => createSuccess(null),
-    updateTask: async (task: A2ATask, metadata?: { [key: string]: any }) => createSuccess(undefined),
-    updateTaskStatus: async (taskId: string, state: TaskState, statusMessage?: any, timestamp?: string) => createSuccess(undefined),
-    findTasks: async (query: A2ATaskQuery) => createSuccess([]),
-    getTasksByContext: async (contextId: string, limit?: number) => createSuccess([]),
-    deleteTask: async (taskId: string) => createSuccess(false),
-    deleteTasksByContext: async (contextId: string) => createSuccess(0),
-    cleanupExpiredTasks: async () => createSuccess(0),
-    getTaskStats: async (contextId?: string) => createSuccess({
-      totalTasks: 0,
-      tasksByState: {
-        submitted: 0, working: 0, 'input-required': 0, completed: 0,
-        canceled: 0, failed: 0, rejected: 0, 'auth-required': 0, unknown: 0
-      }
-    }),
-    healthCheck: async () => createSuccess({ healthy: true }),
-    close: async () => createSuccess(undefined)
-  } as A2ATaskProvider;
-
-  // Re-implement with proper access to provider reference
-  return {
-    storeTask: async (task: A2ATask, metadata?: { expiresAt?: Date; [key: string]: any }) => {
-      try {
-        const sanitizeResult = sanitizeTask(task);
-        if (!sanitizeResult.success) return sanitizeResult as any;
-
-        const limitsResult = checkStorageLimits(state.tasks);
-        if (!limitsResult.success) return limitsResult;
-
-        const serializeResult = serializeA2ATask(sanitizeResult.data, metadata);
-        if (!serializeResult.success) return serializeResult as any;
-
-        const serializedTask = serializeResult.data;
-        const taskStorage: A2ATaskStorage = {
-          taskId: serializedTask.taskId,
-          contextId: serializedTask.contextId,
-          state: serializedTask.state as TaskState,
-          taskData: serializedTask.taskData,
-          createdAt: new Date(serializedTask.createdAt),
-          updatedAt: new Date(serializedTask.updatedAt),
-          expiresAt: metadata?.expiresAt,
-          metadata: metadata ? { ...metadata } : undefined
-        };
-
-        const newTasks = new Map(state.tasks);
-        newTasks.set(task.id, taskStorage);
-
-        const { contextIndex, stateIndex } = addToIndices(
-          state.contextIndex, state.stateIndex, task.id, task.contextId, task.status.state
-        );
-
-        updateState({
-          ...state,
-          tasks: newTasks,
-          contextIndex,
-          stateIndex,
-          stats: { ...state.stats, totalTasks: newTasks.size }
-        });
-
-        return createSuccess(undefined);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('store', 'in-memory', task.id, error as Error));
-      }
-    },
-
-    getTask: async (taskId: string) => {
-      try {
-        const stored = state.tasks.get(taskId);
-        if (!stored) return createSuccess(null);
-        if (stored.expiresAt && stored.expiresAt < new Date()) return createSuccess(null);
-
-        const deserializeResult = deserializeA2ATask(convertStorageToSerialized(stored));
-        return deserializeResult.success ? createSuccess(deserializeResult.data) : deserializeResult;
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('get', 'in-memory', taskId, error as Error));
-      }
-    },
-
-    updateTask: async (task: A2ATask, metadata?: { [key: string]: any }) => {
-      try {
-        const existing = state.tasks.get(task.id);
-        if (!existing) return createFailure(createA2ATaskNotFoundError(task.id, 'in-memory'));
-
-        const sanitizeResult = sanitizeTask(task);
-        if (!sanitizeResult.success) return sanitizeResult as any;
-
-        const mergedMetadata = { ...existing.metadata, ...metadata };
-        const serializeResult = serializeA2ATask(sanitizeResult.data, mergedMetadata);
-        if (!serializeResult.success) return serializeResult as any;
-
-        const serializedTask = serializeResult.data;
-        const updatedStorage: A2ATaskStorage = {
-          ...existing,
-          state: serializedTask.state as TaskState,
-          taskData: serializedTask.taskData,
-          updatedAt: new Date(serializedTask.updatedAt),
-          metadata: mergedMetadata
-        };
-
-        const newTasks = new Map(state.tasks);
-        newTasks.set(task.id, updatedStorage);
-
-        let contextIndex = state.contextIndex;
-        let stateIndex = state.stateIndex;
-        if (existing.state !== task.status.state) {
-          const removeResult = removeFromIndices(contextIndex, stateIndex, task.id, task.contextId, existing.state);
-          const addResult = addToIndices(removeResult.contextIndex, removeResult.stateIndex, task.id, task.contextId, task.status.state);
-          contextIndex = addResult.contextIndex;
-          stateIndex = addResult.stateIndex;
-        }
-
-        updateState({ ...state, tasks: newTasks, contextIndex, stateIndex });
-        return createSuccess(undefined);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('update', 'in-memory', task.id, error as Error));
-      }
-    },
-
-    updateTaskStatus: async (taskId: string, newState: TaskState, statusMessage?: any, timestamp?: string) => {
-      try {
-        const existing = state.tasks.get(taskId);
-        if (!existing) return createFailure(createA2ATaskNotFoundError(taskId, 'in-memory'));
-
-        const deserializeResult = deserializeA2ATask(convertStorageToSerialized(existing));
-        if (!deserializeResult.success) return deserializeResult;
-
-        const task = deserializeResult.data;
-        const updatedTask: A2ATask = {
-          ...task,
-          status: {
-            ...task.status,
-            state: newState,
-            message: statusMessage || task.status.message,
-            timestamp: timestamp || new Date().toISOString()
-          }
-        };
-
-        return provider.updateTask(updatedTask);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('update-status', 'in-memory', taskId, error as Error));
-      }
-    },
-
-    findTasks: async (query: A2ATaskQuery) => {
-      try {
-        let taskIds: Set<string> = new Set();
-
-        if (query.contextId) {
-          const contextTasks = state.contextIndex.get(query.contextId);
-          if (contextTasks) taskIds = new Set(contextTasks);
-        } else if (query.state) {
-          const stateTasks = state.stateIndex.get(query.state);
-          if (stateTasks) taskIds = new Set(stateTasks);
-        } else {
-          taskIds = new Set(state.tasks.keys());
-        }
-
-        const results: A2ATask[] = [];
-        for (const taskId of taskIds) {
-          if (query.taskId && taskId !== query.taskId) continue;
-
-          const stored = state.tasks.get(taskId);
-          if (!stored) continue;
-          if (stored.expiresAt && stored.expiresAt < new Date()) continue;
-          if (query.since && stored.createdAt < query.since) continue;
-          if (query.until && stored.createdAt > query.until) continue;
-
-          const deserializeResult = deserializeA2ATask(convertStorageToSerialized(stored));
-          if (deserializeResult.success) results.push(deserializeResult.data);
-        }
-
-        const offset = query.offset || 0;
-        const limit = query.limit || results.length;
-        const paginatedResults = results
-          .sort((a, b) => new Date(b.status.timestamp || '').getTime() - new Date(a.status.timestamp || '').getTime())
-          .slice(offset, offset + limit);
-
-        return createSuccess(paginatedResults);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('find', 'in-memory', undefined, error as Error));
-      }
-    },
-
-    getTasksByContext: async (contextId: string, limit?: number) => {
-      return provider.findTasks({ contextId, limit });
-    },
-
-    deleteTask: async (taskId: string) => {
-      try {
-        const existing = state.tasks.get(taskId);
-        if (!existing) return createSuccess(false);
-
-        const newTasks = new Map(state.tasks);
-        newTasks.delete(taskId);
-
-        const { contextIndex, stateIndex } = removeFromIndices(
-          state.contextIndex, state.stateIndex, taskId, existing.contextId, existing.state
-        );
-
-        updateState({
-          ...state,
-          tasks: newTasks,
-          contextIndex,
-          stateIndex,
-          stats: { ...state.stats, totalTasks: newTasks.size }
-        });
-
-        return createSuccess(true);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('delete', 'in-memory', taskId, error as Error));
-      }
-    },
-
-    deleteTasksByContext: async (contextId: string) => {
-      try {
-        const contextTasks = state.contextIndex.get(contextId);
-        if (!contextTasks) return createSuccess(0);
-
-        let deletedCount = 0;
-        for (const taskId of contextTasks) {
-          const deleteResult = await provider.deleteTask(taskId);
-          if (deleteResult.success && deleteResult.data) deletedCount++;
-        }
-
-        return createSuccess(deletedCount);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('delete-by-context', 'in-memory', undefined, error as Error));
-      }
-    },
-
-    cleanupExpiredTasks: async () => {
-      try {
-        const now = new Date();
-        let cleanedCount = 0;
-
-        for (const [taskId, stored] of state.tasks) {
-          if (stored.expiresAt && stored.expiresAt < now) {
-            const deleteResult = await provider.deleteTask(taskId);
-            if (deleteResult.success && deleteResult.data) cleanedCount++;
-          }
-        }
-
-        return createSuccess(cleanedCount);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('cleanup', 'in-memory', undefined, error as Error));
-      }
-    },
-
-    getTaskStats: async (contextId?: string) => {
-      try {
-        const tasksByState: Record<TaskState, number> = {
-          submitted: 0, working: 0, 'input-required': 0, completed: 0,
-          canceled: 0, failed: 0, rejected: 0, 'auth-required': 0, unknown: 0
-        };
-
-        let totalTasks = 0;
-        let oldestTask: Date | undefined;
-        let newestTask: Date | undefined;
-
-        const tasksToCount = contextId 
-          ? (state.contextIndex.get(contextId) || new Set())
-          : new Set(state.tasks.keys());
-
-        for (const taskId of tasksToCount) {
-          const stored = state.tasks.get(taskId);
-          if (!stored || (stored.expiresAt && stored.expiresAt < new Date())) continue;
-
-          totalTasks++;
-          tasksByState[stored.state]++;
-
-          if (!oldestTask || stored.createdAt < oldestTask) oldestTask = stored.createdAt;
-          if (!newestTask || stored.createdAt > newestTask) newestTask = stored.createdAt;
-        }
-
-        return createSuccess({ totalTasks, tasksByState, oldestTask, newestTask });
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('stats', 'in-memory', undefined, error as Error));
-      }
-    },
-
-    healthCheck: async () => {
-      try {
-        const startTime = Date.now();
-        const taskCount = state.tasks.size;
-        const latencyMs = Date.now() - startTime;
-        return createSuccess({ healthy: true, latencyMs });
-      } catch (error) {
-        return createSuccess({ healthy: false, error: (error as Error).message });
-      }
-    },
-
-    close: async () => {
-      try {
-        updateState({
-          tasks: new Map(),
-          contextIndex: new Map(),
-          stateIndex: new Map(),
-          config,
-          stats: { totalTasks: 0, createdAt: new Date() }
-        });
-        return createSuccess(undefined);
-      } catch (error) {
-        return createFailure(createA2ATaskStorageError('close', 'in-memory', undefined, error as Error));
       }
     }
   };

@@ -9,9 +9,10 @@ export class FAFErrorHandler {
       case 'ModelBehaviorError':
         return `Model behavior error: ${error.detail}`;
       
-      case 'DecodeError':
+      case 'DecodeError': {
         const issues = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
         return `Decode error: ${issues}`;
+      }
       
       case 'InputGuardrailTripwire':
         return `Input guardrail triggered: ${error.reason}`;

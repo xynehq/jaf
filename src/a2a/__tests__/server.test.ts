@@ -10,8 +10,6 @@ import {
   createA2ATool,
   generateAgentCard,
   type A2AServerConfig,
-  type A2AAgent,
-  type AgentCard
 } from '../index';
 
 describe('A2A Server', () => {
@@ -48,8 +46,8 @@ describe('A2A Server', () => {
   };
 
   describe('createA2AServer', () => {
-    it('should create A2A server with valid configuration', () => {
-      const server = createA2AServer(serverConfig);
+    it('should create A2A server with valid configuration', async () => {
+      const server = await createA2AServer(serverConfig);
 
       expect(server).toBeDefined();
       expect(server.app).toBeDefined();
@@ -60,25 +58,25 @@ describe('A2A Server', () => {
       expect(typeof server.removeAgent).toBe('function');
     }, 1000); // 1 second timeout
 
-    it('should create server with default host', () => {
+    it('should create server with default host', async () => {
       const configWithoutHost = {
         ...serverConfig,
         host: undefined
       };
 
-      const server = createA2AServer(configWithoutHost);
+      const server = await createA2AServer(configWithoutHost);
       expect(server.config.host).toBe('localhost');
     }, 1000);
 
-    it('should create server with default capabilities', () => {
-      const server = createA2AServer(serverConfig);
+    it('should create server with default capabilities', async () => {
+      const server = await createA2AServer(serverConfig);
       
       expect(server.config.capabilities?.streaming).toBe(true);
       expect(server.config.capabilities?.pushNotifications).toBe(false);
       expect(server.config.capabilities?.stateTransitionHistory).toBe(true);
     }, 1000);
 
-    it('should create server with custom capabilities', () => {
+    it('should create server with custom capabilities', async () => {
       const configWithCapabilities = {
         ...serverConfig,
         capabilities: {
@@ -88,7 +86,7 @@ describe('A2A Server', () => {
         }
       };
 
-      const server = createA2AServer(configWithCapabilities);
+      const server = await createA2AServer(configWithCapabilities);
       
       expect(server.config.capabilities?.streaming).toBe(false);
       expect(server.config.capabilities?.pushNotifications).toBe(true);
@@ -97,8 +95,8 @@ describe('A2A Server', () => {
   });
 
   describe('Server Agent Management', () => {
-    it('should add agent to server', () => {
-      const server = createA2AServer(serverConfig);
+    it('should add agent to server', async () => {
+      const server = await createA2AServer(serverConfig);
       
       const newAgent = createA2AAgent({
         name: 'NewAgent',
@@ -114,8 +112,8 @@ describe('A2A Server', () => {
       expect(updatedConfig.agents.size).toBe(2); // original + new
     }, 1000);
 
-    it('should remove agent from server', () => {
-      const server = createA2AServer(serverConfig);
+    it('should remove agent from server', async () => {
+      const server = await createA2AServer(serverConfig);
       
       const updatedConfig = server.removeAgent('test');
       
@@ -123,8 +121,8 @@ describe('A2A Server', () => {
       expect(updatedConfig.agents.size).toBe(0);
     }, 1000);
 
-    it('should update agent card when adding agent', () => {
-      const server = createA2AServer(serverConfig);
+    it('should update agent card when adding agent', async () => {
+      const server = await createA2AServer(serverConfig);
       
       const newAgent = createA2AAgent({
         name: 'NewAgent',
@@ -207,17 +205,17 @@ describe('A2A Server', () => {
   });
 
   describe('Server Configuration Validation', () => {
-    it('should require agents map', () => {
-      expect(() => {
+    it('should require agents map', async () => {
+      await expect(
         createA2AServer({
           ...serverConfig,
           agents: new Map() // Empty map
-        });
-      }).not.toThrow(); // Empty map should be allowed
+        })
+      ).resolves.toBeDefined(); // Empty map should be allowed
     }, 1000);
 
-    it('should require agent card configuration', () => {
-      expect(() => {
+    it('should require agent card configuration', async () => {
+      await expect(
         createA2AServer({
           ...serverConfig,
           agentCard: {
@@ -229,22 +227,22 @@ describe('A2A Server', () => {
               url: 'https://test.com'
             }
           }
-        });
-      }).not.toThrow();
+        })
+      ).resolves.toBeDefined();
     }, 1000);
 
-    it('should require valid port', () => {
-      expect(() => {
+    it('should require valid port', async () => {
+      await expect(
         createA2AServer({
           ...serverConfig,
           port: 3002
-        });
-      }).not.toThrow();
+        })
+      ).resolves.toBeDefined();
     }, 1000);
   });
 
   describe('Server Default Values', () => {
-    it('should use default values for optional configuration', () => {
+    it('should use default values for optional configuration', async () => {
       const minimalConfig: A2AServerConfig = {
         agents: new Map([['test', testAgent]]),
         agentCard: {
@@ -259,7 +257,7 @@ describe('A2A Server', () => {
         port: 3003
       };
 
-      const server = createA2AServer(minimalConfig);
+      const server = await createA2AServer(minimalConfig);
 
       expect(server.config.host).toBe('localhost');
       expect(server.config.capabilities?.streaming).toBe(true);

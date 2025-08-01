@@ -34,7 +34,7 @@ import {
 // ========== Schema Validation Example ==========
 
 // Custom schema for booking requests
-interface BookingRequest {
+interface BookingRequest extends Record<string, unknown> {
   customerName: string;
   serviceType: 'consultation' | 'maintenance' | 'repair';
   preferredDate: string;
@@ -239,7 +239,8 @@ export const createStreamingAgent = () => {
   const storyTool = createFunctionTool(
     'generate_story_part',
     'Generate part of a story',
-    ({ theme, character, setting }: { theme: string; character: string; setting: string }) => {
+    (params, context) => {
+      const { theme, character, setting } = params as { theme: string; character: string; setting: string };
       const storyParts = [
         `In the ${setting}, ${character} discovered something extraordinary about ${theme}.`,
         `The ${theme} seemed to pulse with an otherworldly energy as ${character} approached.`,
@@ -316,7 +317,7 @@ export async function runSchemaValidationExample() {
     console.log('User:', validBookingMessage.parts[0].text);
     console.log('Agent:', response.content.parts[0].text);
   } catch (error) {
-    console.log('Error:', error.message);
+    console.log('Error:', (error as Error).message);
   }
 
   // Test invalid booking request (blocked by guardrail)
@@ -332,7 +333,7 @@ export async function runSchemaValidationExample() {
     console.log('User:', blockedMessage.parts[0].text);
     console.log('Agent:', response.content.parts[0].text);
   } catch (error) {
-    console.log('Blocked by guardrail:', error.message);
+    console.log('Blocked by guardrail:', (error as Error).message);
   }
 }
 
@@ -403,7 +404,8 @@ export async function runAdvancedStreamingExample() {
   console.log('Processing queued messages:');
 
   // Process messages from queue
-  while (!queue.isEmpty() || true) {
+  let isQueueActive = true;
+  while (isQueueActive) {
     const message = await queue.dequeue();
     
     if (!message) {
@@ -414,6 +416,7 @@ export async function runAdvancedStreamingExample() {
     console.log('Processing:', message.parts[0].text);
     
     if (queue.isEmpty()) {
+      isQueueActive = false;
       break;
     }
   }

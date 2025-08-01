@@ -9,7 +9,8 @@ import {
   A2AInMemoryTaskConfig, 
   A2ARedisTaskConfig, 
   A2APostgresTaskConfig,
-  createA2ATaskStorageError
+  createA2ATaskStorageError,
+  A2ATaskProviderConfigSchema
 } from './types.js';
 import { createA2AInMemoryTaskProvider } from './providers/in-memory.js';
 import { createA2ARedisTaskProvider } from './providers/redis.js';
@@ -25,6 +26,17 @@ export const createA2ATaskProvider = async (
     postgres?: any; // PostgreSQL client instance
   }
 ): Promise<A2ATaskProvider> => {
+  // Validate configuration first
+  const validationResult = validateA2ATaskProviderConfig(config);
+  if (!validationResult.valid) {
+    throw createA2ATaskStorageError(
+      'create-provider',
+      config?.type || 'unknown',
+      undefined,
+      new Error(`Invalid configuration: ${validationResult.errors.join(', ')}`)
+    );
+  }
+
   switch (config.type) {
     case 'memory':
       return createA2AInMemoryTaskProvider(config as A2AInMemoryTaskConfig);
@@ -65,73 +77,96 @@ export const createA2ATaskProviderFromEnv = async (
     postgres?: any;
   }
 ): Promise<A2ATaskProvider> => {
-  const taskMemoryType = process.env.FAF_A2A_MEMORY_TYPE || 'memory';
+  const taskMemoryType = process.env.FAF_A2A_TASK_PROVIDER_TYPE || 'memory';
 
   switch (taskMemoryType) {
     case 'memory':
       return createA2AInMemoryTaskProvider({
         type: 'memory',
-        keyPrefix: process.env.FAF_A2A_KEY_PREFIX || 'faf:a2a:tasks:',
-        defaultTtl: process.env.FAF_A2A_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_DEFAULT_TTL) : undefined,
-        cleanupInterval: parseInt(process.env.FAF_A2A_CLEANUP_INTERVAL || '3600'),
-        maxTasks: parseInt(process.env.FAF_A2A_MAX_TASKS || '10000'),
-        maxTasksPerContext: parseInt(process.env.FAF_A2A_MAX_TASKS_PER_CONTEXT || '1000'),
-        enableHistory: process.env.FAF_A2A_ENABLE_HISTORY !== 'false',
-        enableArtifacts: process.env.FAF_A2A_ENABLE_ARTIFACTS !== 'false'
+        keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
+        defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+        cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+        maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+        maxTasksPerContext: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
+        enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+        enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
       });
 
     case 'redis':
       if (!externalClients?.redis) {
-        throw createA2ATaskStorageError(
-          'create-provider-from-env',
-          'redis',
-          undefined,
-          new Error('Redis client required for Redis A2A task provider')
-        );
+        // Fall back to in-memory provider when Redis client is not available
+        console.warn('Redis client not provided, falling back to in-memory A2A task provider');
+        return createA2AInMemoryTaskProvider({
+          type: 'memory',
+          keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
+          defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+          cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+          maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+          maxTasksPerContext: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
+          enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+          enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
+        });
       }
       return await createA2ARedisTaskProvider({
         type: 'redis',
-        keyPrefix: process.env.FAF_A2A_KEY_PREFIX || 'faf:a2a:tasks:',
-        defaultTtl: process.env.FAF_A2A_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_DEFAULT_TTL) : undefined,
-        cleanupInterval: parseInt(process.env.FAF_A2A_CLEANUP_INTERVAL || '3600'),
-        maxTasks: parseInt(process.env.FAF_A2A_MAX_TASKS || '10000'),
-        enableHistory: process.env.FAF_A2A_ENABLE_HISTORY !== 'false',
-        enableArtifacts: process.env.FAF_A2A_ENABLE_ARTIFACTS !== 'false',
-        host: process.env.FAF_A2A_REDIS_HOST || 'localhost',
-        port: parseInt(process.env.FAF_A2A_REDIS_PORT || '6379'),
-        password: process.env.FAF_A2A_REDIS_PASSWORD,
-        db: parseInt(process.env.FAF_A2A_REDIS_DB || '0')
+        keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
+        defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+        cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+        maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+        enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+        enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false',
+        host: process.env.FAF_A2A_TASK_PROVIDER_REDIS_HOST || 'localhost',
+        port: parseInt(process.env.FAF_A2A_TASK_PROVIDER_REDIS_PORT || '6379'),
+        password: process.env.FAF_A2A_TASK_PROVIDER_REDIS_PASSWORD,
+        db: parseInt(process.env.FAF_A2A_TASK_PROVIDER_REDIS_DB || '0')
       }, externalClients.redis);
 
     case 'postgres':
       if (!externalClients?.postgres) {
-        throw createA2ATaskStorageError(
-          'create-provider-from-env',
-          'postgres',
-          undefined,
-          new Error('PostgreSQL client required for PostgreSQL A2A task provider')
-        );
+        // Fall back to in-memory provider when PostgreSQL client is not available
+        console.warn('PostgreSQL client not provided, falling back to in-memory A2A task provider');
+        return createA2AInMemoryTaskProvider({
+          type: 'memory',
+          keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
+          defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+          cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+          maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+          maxTasksPerContext: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
+          enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+          enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
+        });
       }
       return await createA2APostgresTaskProvider({
         type: 'postgres',
-        keyPrefix: process.env.FAF_A2A_KEY_PREFIX || 'faf:a2a:tasks:',
-        defaultTtl: process.env.FAF_A2A_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_DEFAULT_TTL) : undefined,
-        cleanupInterval: parseInt(process.env.FAF_A2A_CLEANUP_INTERVAL || '3600'),
-        maxTasks: parseInt(process.env.FAF_A2A_MAX_TASKS || '10000'),
-        enableHistory: process.env.FAF_A2A_ENABLE_HISTORY !== 'false',
-        enableArtifacts: process.env.FAF_A2A_ENABLE_ARTIFACTS !== 'false',
-        host: process.env.FAF_A2A_POSTGRES_HOST || 'localhost',
-        port: parseInt(process.env.FAF_A2A_POSTGRES_PORT || '5432'),
-        database: process.env.FAF_A2A_POSTGRES_DB || 'faf_a2a',
-        username: process.env.FAF_A2A_POSTGRES_USER || 'postgres',
-        password: process.env.FAF_A2A_POSTGRES_PASSWORD,
-        ssl: process.env.FAF_A2A_POSTGRES_SSL === 'true',
-        tableName: process.env.FAF_A2A_POSTGRES_TABLE || 'a2a_tasks',
-        maxConnections: parseInt(process.env.FAF_A2A_POSTGRES_MAX_CONNECTIONS || '10')
+        keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
+        defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+        cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+        maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+        enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+        enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false',
+        host: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_PORT || '5432'),
+        database: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_DATABASE || 'faf_a2a',
+        username: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_USERNAME || 'postgres',
+        password: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_PASSWORD,
+        ssl: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_SSL === 'true',
+        tableName: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_TABLE || 'a2a_tasks',
+        maxConnections: parseInt(process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_MAX_CONNECTIONS || '10')
       }, externalClients.postgres);
 
     default:
-      throw new Error(`Unknown A2A task provider type: ${taskMemoryType}`);
+      // Fall back to in-memory provider for unknown types
+      console.warn(`Unknown A2A task provider type "${taskMemoryType}", falling back to in-memory provider`);
+      return createA2AInMemoryTaskProvider({
+        type: 'memory',
+        keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
+        defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+        cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+        maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+        maxTasksPerContext: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
+        enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+        enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
+      });
   }
 };
 
@@ -352,55 +387,81 @@ export const createCompositeA2ATaskProvider = (
 /**
  * Pure function to validate A2A task provider configuration
  */
-export const validateA2ATaskProviderConfig = (config: A2ATaskProviderConfig): { valid: boolean; errors: string[] } => {
+export const validateA2ATaskProviderConfig = (config: any): { valid: boolean; errors: string[] } => {
   const errors: string[] = [];
 
-  if (!config.type) {
-    errors.push('Provider type is required');
-  } else if (!['memory', 'redis', 'postgres'].includes(config.type)) {
-    errors.push(`Invalid provider type: ${config.type}`);
-  }
+  try {
 
-  if (config.maxTasks && config.maxTasks <= 0) {
-    errors.push('maxTasks must be greater than 0');
-  }
+    // Basic checks first
+    if (!config || typeof config !== 'object') {
+      errors.push('Configuration must be a valid object');
+      return { valid: false, errors };
+    }
 
-  if (config.cleanupInterval && config.cleanupInterval <= 0) {
-    errors.push('cleanupInterval must be greater than 0');
-  }
+    // Check for completely empty config (should fail)
+    if (Object.keys(config).length === 0) {
+      errors.push('Configuration cannot be empty');
+      return { valid: false, errors };
+    }
 
-  if (config.defaultTtl && config.defaultTtl <= 0) {
-    errors.push('defaultTtl must be greater than 0');
-  }
+    // Check for missing type field (this is the only truly required field)
+    if (!config.type) {
+      errors.push('Provider type is required');
+      return { valid: false, errors };
+    }
 
-  // Type-specific validation
-  switch (config.type) {
-    case 'memory':
-      const memoryConfig = config as A2AInMemoryTaskConfig;
-      if (memoryConfig.maxTasksPerContext && memoryConfig.maxTasksPerContext <= 0) {
-        errors.push('maxTasksPerContext must be greater than 0');
-      }
-      break;
+    // Try to parse with the schema - this will validate type and apply defaults
+    const parsed = A2ATaskProviderConfigSchema.safeParse(config);
+    
+    if (!parsed.success) {
+      // Extract error messages from Zod validation
+      parsed.error.errors.forEach((err: any) => {
+        const path = err.path.length > 0 ? err.path.join('.') : 'root';
+        errors.push(`${path}: ${err.message}`);
+      });
+    }
 
-    case 'redis':
-      const redisConfig = config as A2ARedisTaskConfig;
-      if (redisConfig.port && (redisConfig.port < 1 || redisConfig.port > 65535)) {
-        errors.push('Redis port must be between 1 and 65535');
-      }
-      if (redisConfig.db && redisConfig.db < 0) {
-        errors.push('Redis database index must be non-negative');
-      }
-      break;
+    // Additional custom validation for values that would be problematic
+    if (config.maxTasks !== undefined && config.maxTasks <= 0) {
+      errors.push('maxTasks must be greater than 0');
+    }
+    
+    if (config.cleanupInterval !== undefined && config.cleanupInterval <= 0) {
+      errors.push('cleanupInterval must be greater than 0');
+    }
+    
+    if (config.defaultTtl !== undefined && config.defaultTtl <= 0) {
+      errors.push('defaultTtl must be greater than 0');
+    }
 
-    case 'postgres':
-      const pgConfig = config as A2APostgresTaskConfig;
-      if (pgConfig.port && (pgConfig.port < 1 || pgConfig.port > 65535)) {
-        errors.push('PostgreSQL port must be between 1 and 65535');
-      }
-      if (pgConfig.maxConnections && pgConfig.maxConnections <= 0) {
-        errors.push('maxConnections must be greater than 0');
-      }
-      break;
+    // Type-specific validation
+    switch (config.type) {
+      case 'memory':
+        if (config.maxTasksPerContext !== undefined && config.maxTasksPerContext <= 0) {
+          errors.push('maxTasksPerContext must be greater than 0');
+        }
+        break;
+
+      case 'redis':
+        if (config.port !== undefined && (config.port < 1 || config.port > 65535)) {
+          errors.push('Redis port must be between 1 and 65535');
+        }
+        if (config.db !== undefined && config.db < 0) {
+          errors.push('Redis database index must be non-negative');
+        }
+        break;
+
+      case 'postgres':
+        if (config.port !== undefined && (config.port < 1 || config.port > 65535)) {
+          errors.push('PostgreSQL port must be between 1 and 65535');
+        }
+        if (config.maxConnections !== undefined && config.maxConnections <= 0) {
+          errors.push('maxConnections must be greater than 0');
+        }
+        break;
+    }
+  } catch (error) {
+    errors.push(`Validation error: ${(error as Error).message || 'Unknown error'}`);
   }
 
   return {

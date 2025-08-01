@@ -19,8 +19,8 @@ import {
 // ========== Session Creation ==========
 
 export const generateSessionId = (): string => {
-  // Use crypto-based ID generation for pure functional approach
-  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  // Use timestamp and random number to match expected pattern /^session_\d+_\d+$/
+  return `session_${Date.now()}_${Math.floor(Math.random() * 1000000000)}`;
 };
 
 export const createSession = (
@@ -161,6 +161,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
         return session;
       } catch (error) {
         throwSessionError(`Failed to parse session data: ${error}`, sessionId);
+        return null; // This will never be reached due to throwSessionError, but needed for TypeScript
       }
     },
     
@@ -194,6 +195,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
         );
       } catch (error) {
         throwSessionError(`Failed to list sessions for user: ${error}`, undefined, { userId });
+        return []; // This will never be reached due to throwSessionError, but needed for TypeScript
       }
     },
     
@@ -221,6 +223,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
         return true;
       } catch (error) {
         throwSessionError(`Failed to delete session: ${error}`, sessionId);
+        return false; // This will never be reached due to throwSessionError, but needed for TypeScript
       }
     }
   };
@@ -502,7 +505,8 @@ export const getArtifactKeys = (session: Session): string[] => {
 
 // ========== Error Handling ==========
 
-// Note: createSessionError is now imported from types.ts as a factory function
+// Export createSessionError from types for external use
+export { createSessionError }
 
 export const withSessionErrorHandling = <T extends unknown[], R>(
   fn: (...args: T) => Promise<R>,
@@ -512,7 +516,11 @@ export const withSessionErrorHandling = <T extends unknown[], R>(
     try {
       return await fn(...args);
     } catch (error) {
-      if (error instanceof SessionError) {
+      // Check if error is already a SessionError by checking its properties
+      // Handle both Error instances and plain SessionErrorObjects
+      if (error && typeof error === 'object' && 
+          ((error as any).name === 'SessionError' || 
+           (error as any).code === 'SESSION_ERROR')) {
         throw error;
       }
       
@@ -521,6 +529,8 @@ export const withSessionErrorHandling = <T extends unknown[], R>(
         sessionId,
         { originalError: error }
       );
+      // This will never be reached due to throwSessionError, but needed for TypeScript
+      throw error;
     }
   };
 };

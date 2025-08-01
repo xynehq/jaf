@@ -62,12 +62,13 @@ export class ConsoleTraceCollector implements TraceCollector {
       case 'llm_call_start':
         console.log(`${prefix} Calling ${event.data.model} for agent ${event.data.agentName}`);
         break;
-      case 'llm_call_end':
+      case 'llm_call_end': {
         const choice = event.data.choice;
         const hasTools = choice.message?.tool_calls?.length > 0;
         const hasContent = !!choice.message?.content;
         console.log(`${prefix} LLM responded with ${hasTools ? 'tool calls' : hasContent ? 'content' : 'empty response'}`);
         break;
+      }
       case 'tool_call_start':
         console.log(`${prefix} Executing tool ${event.data.toolName} with args:`, event.data.args);
         break;
@@ -77,7 +78,7 @@ export class ConsoleTraceCollector implements TraceCollector {
       case 'handoff':
         console.log(`${prefix} Agent handoff: ${event.data.from} → ${event.data.to}`);
         break;
-      case 'run_end':
+      case 'run_end': {
         const outcome = event.data.outcome;
         if (outcome.status === 'completed') {
           console.log(`${prefix} Run completed successfully`);
@@ -85,6 +86,7 @@ export class ConsoleTraceCollector implements TraceCollector {
           console.error(`${prefix} Run failed:`, outcome.error._tag, outcome.error);
         }
         break;
+      }
     }
   }
 
@@ -115,6 +117,7 @@ export class FileTraceCollector implements TraceCollector {
     };
     
     try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const fs = require('fs');
       fs.appendFileSync(this.filePath, JSON.stringify(logEntry) + '\n');
     } catch (error) {

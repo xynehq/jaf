@@ -1,5 +1,7 @@
 # Functional Agent Framework (FAF)
 
+[![CI](https://github.com/xynehq/faf/workflows/CI/badge.svg)](https://github.com/xynehq/faf/actions)
+
 ![Functional Agent Framework](/docs/cover.png?raw=true "Functional Agent Framework")
 
 A purely functional agent framework built on immutable state, type safety, and composable policies. FAF enables building production-ready AI agent systems with built-in security, observability, and error handling.

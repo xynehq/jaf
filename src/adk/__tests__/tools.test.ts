@@ -61,7 +61,10 @@ describe('Tool System', () => {
       const tool = createFunctionTool(
         'test_tool',
         'A test tool',
-        (params: { input: string }) => `Hello ${params.input}`,
+        (params, context) => {
+          const typedParams = params as { input: string };
+          return `Hello ${typedParams.input}`;
+        },
         [
           {
             name: 'input',
@@ -80,9 +83,10 @@ describe('Tool System', () => {
     });
 
     test('createAsyncFunctionTool should create async tool', async () => {
-      const asyncFunc = async (params: { value: number }) => {
+      const asyncFunc = async (params: Record<string, unknown>, context: any) => {
+        const typedParams = params as { value: number };
         await new Promise(resolve => setTimeout(resolve, 10));
-        return params.value * 2;
+        return typedParams.value * 2;
       };
 
       const tool = createAsyncFunctionTool(
@@ -121,7 +125,10 @@ describe('Tool System', () => {
       const tool = createFunctionTool(
         'param_tool',
         'Parameter validation tool',
-        (params: { required: string }) => params.required,
+        (params, context) => {
+          const typedParams = params as { required: string };
+          return typedParams.required;
+        },
         [
           {
             name: 'required',
@@ -398,7 +405,7 @@ describe('Tool System', () => {
       const tool = createFunctionTool(
         'test_tool',
         'Test tool',
-        () => 'result',
+        (params, context) => 'result',
         [
           {
             name: 'required',
@@ -529,7 +536,7 @@ describe('Tool System', () => {
       const tool = createFunctionTool(
         'error_tool',
         'Tool that throws',
-        () => {
+        (params, context) => {
           throw new Error('Tool execution error');
         },
         []
@@ -562,7 +569,7 @@ describe('Tool System', () => {
       const tool = createFunctionTool(
         'artifact_tool',
         'Tool that uses artifacts',
-        (params: any, context: ToolContext) => {
+        (params, context: ToolContext) => {
           context.actions.addArtifact?.('test_key', 'test_value');
           return context.actions.getArtifact?.('test_key');
         },
@@ -588,7 +595,7 @@ describe('Tool System', () => {
       const tool = createFunctionTool(
         'transfer_tool',
         'Tool that transfers to another agent',
-        (params: any, context: ToolContext) => {
+        (params, context: ToolContext) => {
           context.actions.transferToAgent = 'specialist_agent';
           return 'Transfer initiated';
         },

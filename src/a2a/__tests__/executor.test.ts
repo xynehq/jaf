@@ -10,7 +10,6 @@ import {
   createA2AAgent,
   createA2ATool,
   createA2ATextMessage,
-  type A2AAgent,
   type A2AExecutionContext,
   type A2AStreamEvent
 } from '../index';
@@ -26,36 +25,6 @@ describe('A2A Executor', () => {
       };
     }
   };
-
-  // Mock model provider with tool calls
-  const mockToolCallModelProvider = {
-    async getCompletion() {
-      return {
-        message: {
-          tool_calls: [
-            {
-              id: 'call_1',
-              type: 'function' as const,
-              function: {
-                name: 'test_tool',
-                arguments: JSON.stringify({ input: 'test_value' })
-              }
-            }
-          ]
-        }
-      };
-    }
-  };
-
-  // Test tools
-  const testTool = createA2ATool({
-    name: 'test_tool',
-    description: 'A test tool',
-    parameters: z.object({
-      input: z.string()
-    }),
-    execute: async ({ input }) => `Processed: ${input}`
-  });
 
   const formTool = createA2ATool({
     name: 'form_tool',
@@ -97,13 +66,6 @@ describe('A2A Executor', () => {
     description: 'Simple test agent',
     instruction: 'You are a helpful assistant',
     tools: []
-  });
-
-  const toolAgent = createA2AAgent({
-    name: 'ToolAgent',
-    description: 'Agent with tools',
-    instruction: 'Use tools to help users',
-    tools: [testTool]
   });
 
   const formAgent = createA2AAgent({

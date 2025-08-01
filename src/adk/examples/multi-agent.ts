@@ -21,7 +21,8 @@ export const createWeatherSpecialistAgent = (): AgentConfig => {
   const weatherTool = createFunctionTool(
     'get_weather',
     'Get current weather information',
-    ({ location }: { location: string }) => {
+    (params, context) => {
+      const { location } = params as { location: string };
       // Mock weather data
       const weatherData = {
         'new york': { temp: 15, condition: 'cloudy', humidity: 78 },
@@ -128,12 +129,13 @@ export const createCalculatorSpecialistAgent = (): AgentConfig => {
   const advancedCalcTool = createFunctionTool(
     'advanced_calculate',
     'Perform complex mathematical calculations',
-    ({ expression, type }: { expression: string; type?: string }) => {
+    (params, context) => {
+      const { expression, type } = params as { expression: string; type?: string };
       try {
         let result;
         
         switch (type) {
-          case 'percentage':
+          case 'percentage': {
             // Handle percentage calculations
             const percentMatch = expression.match(/(\d+)\s*%\s*of\s*(\d+)/i);
             if (percentMatch) {
@@ -143,8 +145,9 @@ export const createCalculatorSpecialistAgent = (): AgentConfig => {
               result = eval(expression);
             }
             break;
+          }
             
-          case 'area':
+          case 'area': {
             // Handle area calculations
             const areaMatch = expression.match(/circle\s*r=(\d+)/i);
             if (areaMatch) {
@@ -154,6 +157,7 @@ export const createCalculatorSpecialistAgent = (): AgentConfig => {
               result = eval(expression);
             }
             break;
+          }
             
           default:
             result = eval(expression);

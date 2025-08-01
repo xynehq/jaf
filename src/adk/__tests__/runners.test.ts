@@ -47,7 +47,10 @@ describe('Runner System', () => {
   const mockTool = createFunctionTool(
     'mock_tool',
     'A mock tool for testing',
-    (params: { input: string }) => `Processed: ${params.input}`,
+    (params, context) => {
+      const typedParams = params as { input: string };
+      return `Processed: ${typedParams.input}`;
+    },
     [
       {
         name: 'input',
@@ -260,7 +263,7 @@ describe('Runner System', () => {
       tools: [createFunctionTool(
         'get_weather',
         'Get weather',
-        () => ({ temp: 25, condition: 'sunny' }),
+        (params, context) => ({ temp: 25, condition: 'sunny' }),
         []
       )]
     };
@@ -272,7 +275,7 @@ describe('Runner System', () => {
       tools: [createFunctionTool(
         'get_news',
         'Get news',
-        () => ['Breaking news 1', 'Breaking news 2'],
+        (params, context) => ['Breaking news 1', 'Breaking news 2'],
         []
       )]
     };
@@ -536,7 +539,7 @@ describe('Runner System', () => {
       const contextCapturingTool = createFunctionTool(
         'context_tool',
         'Captures tool context',
-        (params: any, context: any) => {
+        (params, context) => {
           capturedContext = context;
           return 'Context captured';
         },
@@ -564,7 +567,7 @@ describe('Runner System', () => {
       const transferTool = createFunctionTool(
         'transfer_tool',
         'Transfers to another agent',
-        (params: any, context: any) => {
+        (params, context) => {
           if (context.actions) {
             context.actions.transferToAgent = 'target_agent';
           }
@@ -636,12 +639,15 @@ describe('Runner System', () => {
       const weatherTool = createFunctionTool(
         'get_weather',
         'Get weather information',
-        ({ location }: { location: string }) => ({
-          location,
-          temperature: 22,
-          condition: 'sunny',
-          humidity: 65
-        }),
+        (params, context) => {
+          const typedParams = params as { location: string };
+          return {
+            location: typedParams.location,
+            temperature: 22,
+            condition: 'sunny',
+            humidity: 65
+          };
+        },
         [
           {
             name: 'location',

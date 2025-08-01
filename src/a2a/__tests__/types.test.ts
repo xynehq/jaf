@@ -5,11 +5,8 @@
 
 import { 
   A2AMessage, 
-  A2APart, 
   A2ATask, 
-  A2AArtifact,
   AgentCard,
-  AgentSkill,
   JSONRPCRequest,
   JSONRPCResponse,
   SendMessageRequest,

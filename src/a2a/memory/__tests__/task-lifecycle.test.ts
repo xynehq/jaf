@@ -121,7 +121,7 @@ describe('A2A Task Lifecycle Integration', () => {
       }
 
       // Step 4: Complete the task
-      const completedTask = { 
+      const completedTask: A2ATask = { 
         ...submittedTask, 
         status: { 
           ...submittedTask.status, 
@@ -131,7 +131,7 @@ describe('A2A Task Lifecycle Integration', () => {
             parts: [{ kind: 'text' as const, text: 'Task completed successfully!' }],
             messageId: 'msg_completed',
             contextId,
-            kind: 'message'
+            kind: 'message' as const
           }
         },
         artifacts: [
@@ -139,8 +139,7 @@ describe('A2A Task Lifecycle Integration', () => {
             artifactId: 'result_artifact',
             name: 'Task Result',
             description: 'The final result of the task',
-            parts: [{ kind: 'text' as const, text: 'Task completed with success!' }],
-            kind: 'artifact'
+            parts: [{ kind: 'text' as const, text: 'Task completed with success!' }]
           }
         ]
       };
@@ -357,9 +356,19 @@ describe('A2A Task Lifecycle Integration', () => {
 
       // Create old tasks (simulate by modifying after storage)
       for (let i = 1; i <= 5; i++) {
-        const task = createTestTask(`old_task_${i}`, contextId, 'completed');
-        task.status.timestamp = oldTimestamp.toISOString();
-        task.metadata!.createdAt = oldTimestamp.toISOString();
+        const baseTask = createTestTask(`old_task_${i}`, contextId, 'completed');
+        // Create new task with old timestamps using immutable patterns
+        const task: A2ATask = {
+          ...baseTask,
+          status: {
+            ...baseTask.status,
+            timestamp: oldTimestamp.toISOString()
+          },
+          metadata: {
+            ...baseTask.metadata,
+            createdAt: oldTimestamp.toISOString()
+          }
+        };
         await provider.storeTask(task);
       }
 
@@ -552,7 +561,8 @@ describe('A2A Task Lifecycle Integration', () => {
       let allTasks: A2ATask[] = [];
       let offset = 0;
 
-      while (true) {
+      let hasMorePages = true;
+      while (hasMorePages) {
         const pageResult = await provider.findTasks({ 
           contextId, 
           limit: pageSize, 
@@ -560,7 +570,10 @@ describe('A2A Task Lifecycle Integration', () => {
         });
         
         expect(pageResult.success).toBe(true);
-        if (!pageResult.success || pageResult.data.length === 0) break;
+        if (!pageResult.success || pageResult.data.length === 0) {
+          hasMorePages = false;
+          break;
+        }
 
         allTasks = allTasks.concat(pageResult.data);
         offset += pageSize;

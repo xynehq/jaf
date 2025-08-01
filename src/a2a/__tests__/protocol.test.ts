@@ -12,10 +12,12 @@ import {
   validateSendMessageRequest,
   handleMessageSend,
   routeA2ARequest,
+  createSimpleA2ATaskProvider,
   A2AErrorCodes,
   type JSONRPCRequest,
   type SendMessageRequest,
-  type A2AAgent
+  type A2AAgent,
+  type A2ATaskProvider
 } from '../index';
 
 describe('A2A Protocol', () => {
@@ -237,7 +239,7 @@ describe('A2A Protocol', () => {
   });
 
   describe('routeA2ARequest', () => {
-    const taskStorage = new Map();
+    let taskProvider: A2ATaskProvider;
     const agentCard = {
       protocolVersion: '0.3.0',
       name: 'Test Agent',
@@ -245,6 +247,16 @@ describe('A2A Protocol', () => {
       url: 'http://localhost:3000/a2a',
       version: '1.0.0'
     };
+
+    beforeAll(async () => {
+      taskProvider = await createSimpleA2ATaskProvider('memory');
+    });
+
+    afterAll(async () => {
+      if (taskProvider) {
+        await taskProvider.close();
+      }
+    });
 
     it('should route message/send request', async () => {
       const request: JSONRPCRequest = {
@@ -261,7 +273,7 @@ describe('A2A Protocol', () => {
         }
       };
 
-      const result = routeA2ARequest(request, mockAgent, mockModelProvider, taskStorage, agentCard);
+      const result = routeA2ARequest(request, mockAgent, mockModelProvider, taskProvider, agentCard);
       expect(result).toBeInstanceOf(Promise);
 
       const response = await result as any;
@@ -284,7 +296,7 @@ describe('A2A Protocol', () => {
         }
       };
 
-      const result = routeA2ARequest(request, mockAgent, mockModelProvider, taskStorage, agentCard);
+      const result = routeA2ARequest(request, mockAgent, mockModelProvider, taskProvider, agentCard);
       expect(result).not.toBeInstanceOf(Promise);
       
       // Should return an async generator
@@ -299,7 +311,7 @@ describe('A2A Protocol', () => {
         method: 'message/send'
       };
 
-      const result = routeA2ARequest(invalidRequest, mockAgent, mockModelProvider, taskStorage, agentCard);
+      const result = routeA2ARequest(invalidRequest, mockAgent, mockModelProvider, taskProvider, agentCard);
       const response = await result as any;
 
       expect(response.jsonrpc).toBe('2.0');
@@ -314,7 +326,7 @@ describe('A2A Protocol', () => {
         method: 'unknown/method'
       };
 
-      const result = routeA2ARequest(request, mockAgent, mockModelProvider, taskStorage, agentCard);
+      const result = routeA2ARequest(request, mockAgent, mockModelProvider, taskProvider, agentCard);
       const response = await result as any;
 
       expect(response.jsonrpc).toBe('2.0');

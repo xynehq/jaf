@@ -1,5 +1,4 @@
 import { run, RunConfig, RunState, generateTraceId, generateRunId } from '../index';
-import { z } from 'zod';
 
 describe('FAF Engine', () => {
   const mockContext = { userId: 'test' };

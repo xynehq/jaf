@@ -14,6 +14,9 @@ import {
   createValidationError
 } from '../types';
 
+// Re-export createValidationError for external use
+export { createValidationError } from '../types';
+
 // ========== Schema Validator Creation ==========
 
 export const createSchemaValidator = <T>(
@@ -66,33 +69,37 @@ export const validateAgainstJsonSchema = (
   
   // Specific validations based on type
   switch (schema.type) {
-    case 'object':
+    case 'object': {
       const objectValidation = validateObject(data as Record<string, unknown>, schema);
       if (!objectValidation.success) {
         errors.push(...(objectValidation.errors || []));
       }
       break;
+    }
       
-    case 'array':
+    case 'array': {
       const arrayValidation = validateArray(data as unknown[], schema);
       if (!arrayValidation.success) {
         errors.push(...(arrayValidation.errors || []));
       }
       break;
+    }
       
-    case 'string':
+    case 'string': {
       const stringValidation = validateString(data as string, schema);
       if (!stringValidation.success) {
         errors.push(...(stringValidation.errors || []));
       }
       break;
+    }
       
-    case 'number':
+    case 'number': {
       const numberValidation = validateNumber(data as number, schema);
       if (!numberValidation.success) {
         errors.push(...(numberValidation.errors || []));
       }
       break;
+    }
   }
   
   // Enum validation

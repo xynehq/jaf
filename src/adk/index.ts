@@ -357,12 +357,15 @@ export const createQuickWeatherAgent = () => {
   const weatherTool = createFunctionTool(
     'get_weather',
     'Get current weather information',
-    ({ location }: { location: string }) => ({
-      location,
-      temperature: 22,
-      condition: 'sunny',
-      humidity: 65
-    }),
+    (params, context) => {
+      const { location } = params as { location: string };
+      return {
+        location,
+        temperature: 22,
+        condition: 'sunny',
+        humidity: 65
+      };
+    },
     [
       {
         name: 'location',
@@ -388,7 +391,8 @@ export const createQuickChatAgent = () => {
   const calcTool = createFunctionTool(
     'calculate',
     'Perform mathematical calculations',
-    ({ expression }: { expression: string }) => {
+    (params, context) => {
+      const { expression } = params as { expression: string };
       try {
         // Simple calculator - in production use a proper math parser
         const result = eval(expression);

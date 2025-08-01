@@ -14,10 +14,11 @@ import {
   generateAgentCard,
   validateJSONRPCRequest,
   validateSendMessageRequest,
-  type A2AAgent,
+  createSimpleA2ATaskProvider,
   type A2AServerConfig,
   type SendMessageRequest,
-  type JSONRPCRequest
+  type JSONRPCRequest,
+  type A2ATaskProvider
 } from '../index';
 
 describe('A2A Integration', () => {
@@ -143,7 +144,7 @@ describe('A2A Integration', () => {
   });
 
   describe('Server Configuration', () => {
-    it('should create server with multiple agents', () => {
+    it('should create server with multiple agents', async () => {
       const serverConfig: A2AServerConfig = {
         agents: new Map([
           ['math', mathAgent],
@@ -162,7 +163,7 @@ describe('A2A Integration', () => {
         host: 'localhost'
       };
 
-      const server = createA2AServer(serverConfig);
+      const server = await createA2AServer(serverConfig);
 
       expect(server.config.agents.size).toBe(2);
       expect(server.config.agents.has('math')).toBe(true);
@@ -172,7 +173,7 @@ describe('A2A Integration', () => {
   });
 
   describe('Protocol Request Handling', () => {
-    const taskStorage = new Map();
+    let taskProvider: A2ATaskProvider;
     const agentCard = {
       protocolVersion: '0.3.0',
       name: 'Test Agent',
@@ -180,6 +181,10 @@ describe('A2A Integration', () => {
       url: 'http://localhost:3000/a2a',
       version: '1.0.0'
     };
+
+    beforeAll(async () => {
+      taskProvider = await createSimpleA2ATaskProvider('memory');
+    });
 
     it('should handle valid message/send request', async () => {
       const request: SendMessageRequest = {
@@ -219,7 +224,7 @@ describe('A2A Integration', () => {
         }
       };
 
-      const result = routeA2ARequest(messageRequest, weatherAgent, mockModelProvider, taskStorage, agentCard);
+      const result = routeA2ARequest(messageRequest, weatherAgent, mockModelProvider, taskProvider, agentCard);
       expect(result).toBeInstanceOf(Promise);
 
       const response = await result as any;
@@ -242,7 +247,7 @@ describe('A2A Integration', () => {
         }
       };
 
-      const result = routeA2ARequest(streamRequest, mathAgent, mockModelProvider, taskStorage, agentCard);
+      const result = routeA2ARequest(streamRequest, mathAgent, mockModelProvider, taskProvider, agentCard);
       expect(result).not.toBeInstanceOf(Promise);
 
       const generator = result as AsyncGenerator<any>;
@@ -259,7 +264,7 @@ describe('A2A Integration', () => {
   });
 
   describe('Client-Server Communication', () => {
-    it('should create compatible client and server configurations', () => {
+    it('should create compatible client and server configurations', async () => {
       const client = createA2AClient('http://localhost:3000');
       
       const serverConfig: A2AServerConfig = {
@@ -277,7 +282,7 @@ describe('A2A Integration', () => {
         host: 'localhost'
       };
 
-      const server = createA2AServer(serverConfig);
+      const server = await createA2AServer(serverConfig);
 
       expect(client.config.baseUrl).toBe('http://localhost:3000');
       expect(server.config.port).toBe(3000);

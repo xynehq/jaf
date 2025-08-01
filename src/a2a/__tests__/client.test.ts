@@ -8,10 +8,6 @@ import {
   createMessageRequest,
   createStreamingMessageRequest,
   extractTextResponse,
-  type A2AClientState,
-  type SendMessageRequest,
-  type SendStreamingMessageRequest,
-  type A2AStreamEvent
 } from '../index';
 
 // Mock fetch for testing

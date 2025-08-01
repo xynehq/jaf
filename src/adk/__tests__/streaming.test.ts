@@ -521,10 +521,14 @@ describe('Streaming System', () => {
       consoleSpy.mockRestore();
     });
 
-    test('metricsMonitor should track metrics', () => {
+    test('metricsMonitor should track metrics', async () => {
       const monitor = metricsMonitor();
       
       monitor.monitor(createMessageDeltaEvent(createUserMessage('Test')));
+      
+      // Add a small delay between events to ensure duration tracking
+      await new Promise(resolve => setTimeout(resolve, 1));
+      
       monitor.monitor(createErrorEvent('Error'));
       monitor.monitor(createMessageCompleteEvent());
       
@@ -558,6 +562,7 @@ describe('Streaming System', () => {
     test('withStreamErrorHandling should use custom error handler', async () => {
       async function* errorStream(): AsyncGenerator<AgentEvent> {
         throw new Error('Custom error');
+        yield createMessageDeltaEvent(createUserMessage('This will not run'));
       }
       
       const customHandler = (error: Error) => 
@@ -591,6 +596,7 @@ describe('Streaming System', () => {
 
     test('retryStream should give up after max retries', async () => {
       const streamFactory = async function* (): AsyncGenerator<AgentEvent> {
+        yield createErrorEvent('Always fails');  // Yield an error event before throwing
         throw new Error('Always fails');
       };
       

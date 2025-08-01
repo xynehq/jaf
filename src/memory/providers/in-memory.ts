@@ -23,7 +23,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
     maxMessagesPerConversation: config.maxMessagesPerConversation ?? 1000
   };
   
-  let conversations = new Map<string, ConversationMemory>();
+  const conversations = new Map<string, ConversationMemory>();
   
   console.log(`[MEMORY:InMemory] Initialized with max ${fullConfig.maxConversations} conversations, ${fullConfig.maxMessagesPerConversation} messages each`);
 

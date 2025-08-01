@@ -13,7 +13,7 @@ import {
   sanitizeTask,
   A2ATaskSerialized
 } from '../serialization.js';
-import { A2ATask, A2AMessage, A2AArtifact } from '../../types.js';
+import { A2ATask, A2AMessage } from '../../types.js';
 
 describe('A2A Memory Serialization', () => {
   // Helper function to create a test task
@@ -169,7 +169,8 @@ describe('A2A Memory Serialization', () => {
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error._tag).toBe('A2ATaskStorageError');
-        expect(result.error.message).toContain('Invalid task structure');
+        expect(result.error.message).toContain('Failed to deserialize A2A task');
+        expect((result.error as any).cause?.message).toContain('Invalid task structure');
       }
     });
   });

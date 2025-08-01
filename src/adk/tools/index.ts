@@ -25,7 +25,7 @@ import {
 export const createFunctionTool = (
   name: string,
   description: string,
-  func: Function,
+  func: (params: Record<string, unknown>, context: ToolContext) => unknown | Promise<unknown>,
   parameters: ToolParameter[] = [],
   metadata?: Partial<ToolMetadata>
 ): Tool => {
@@ -500,7 +500,7 @@ export const executeTool = async (
     
     return result;
   } catch (error) {
-    if (error instanceof ToolError) {
+    if (error && typeof error === 'object' && (error as any).name === 'ToolError') {
       throw error;
     }
     
@@ -557,7 +557,8 @@ export const cloneTool = (tool: Tool): Tool => {
   };
 };
 
-// Note: createToolError is now imported from types.ts as a factory function
+// Export createToolError from types for external use
+export { createToolError }
 
 // ========== Built-in Tools ==========
 
@@ -565,7 +566,10 @@ export const createEchoTool = (): Tool => {
   return createFunctionTool(
     'echo',
     'Echoes back the input message',
-    (params: { message: string }) => params.message,
+    (params) => {
+      const typedParams = params as { message: string };
+      return typedParams.message;
+    },
     [
       {
         name: 'message',
@@ -581,13 +585,14 @@ export const createCalculatorTool = (): Tool => {
   return createFunctionTool(
     'calculator',
     'Performs basic mathematical calculations',
-    (params: { expression: string }) => {
+    (params) => {
+      const typedParams = params as { expression: string };
       try {
         // Simple calculator - in production use a proper math parser
-        const result = eval(params.expression);
-        return { result, expression: params.expression };
+        const result = eval(typedParams.expression);
+        return { result, expression: typedParams.expression };
       } catch (error) {
-        throw new Error(`Invalid expression: ${params.expression}`);
+        throw new Error(`Invalid expression: ${typedParams.expression}`);
       }
     },
     [

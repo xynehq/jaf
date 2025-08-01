@@ -351,12 +351,14 @@ export const agentFromJSON = (json: string): Agent => {
     
     return parsed;
   } catch (error) {
-    if (error instanceof AgentError) {
+    if (error && typeof error === 'object' && (error as any).name === 'AgentError') {
       throw error;
     }
     
     throwAgentError('Failed to parse agent JSON', undefined, { error: error instanceof Error ? error.message : String(error) });
   }
+  // TypeScript doesn't detect that all paths above either return or throw, so this is unreachable
+  throw new Error('Unreachable code');
 };
 
 export const compareAgents = (agent1: Agent, agent2: Agent): boolean => {
@@ -373,7 +375,8 @@ export const compareAgents = (agent1: Agent, agent2: Agent): boolean => {
 
 // ========== Agent Error Handling ==========
 
-// Note: createAgentError is now imported from types.ts as a factory function
+// Re-export createAgentError from types for convenience
+export { createAgentError };
 
 export const withAgentErrorHandling = <T extends unknown[], R>(
   fn: (...args: T) => R,
@@ -383,7 +386,7 @@ export const withAgentErrorHandling = <T extends unknown[], R>(
     try {
       return fn(...args);
     } catch (error) {
-      if (error instanceof AgentError) {
+      if (error && typeof error === 'object' && (error as any).name === 'AgentError') {
         throw error;
       }
       
@@ -393,5 +396,7 @@ export const withAgentErrorHandling = <T extends unknown[], R>(
         { originalError: error }
       );
     }
+    // TypeScript doesn't detect that all paths above either return or throw, so this is unreachable
+    throw new Error('Unreachable code');
   };
 };
