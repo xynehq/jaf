@@ -4,6 +4,25 @@
   "description": "A purely functional agent framework with immutable state and composable tools",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./adk": {
+      "import": "./dist/adk/index.js",
+      "require": "./dist/adk/index.js",
+      "types": "./dist/adk/index.d.ts"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "adk": [
+        "dist/adk/index.d.ts"
+      ]
+    }
+  },
   "files": [
     "dist",
     "README.md",
