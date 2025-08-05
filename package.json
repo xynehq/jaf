@@ -1,6 +1,6 @@
 {
   "name": "@xynehq/faf",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A purely functional agent framework with immutable state and composable tools",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
