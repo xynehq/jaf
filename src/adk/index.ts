@@ -192,6 +192,43 @@ export {
   withRunnerErrorHandling
 } from './runners';
 
+// ========== LLM Provider System ==========
+export {
+  // LLM Service Functions
+  createAdkLLMService,
+  createDefaultAdkLLMService
+} from './providers/llm-service.js';
+
+export {
+  // Configuration Functions
+  createAdkLLMConfig,
+  createDefaultAdkLLMConfig,
+  createAdkLLMConfigFromEnvironment,
+  debugAdkLLMConfig,
+  validateAdkLLMConfig,
+  
+  // Model and Provider Utils
+  getModelConfig,
+  getModelsForProvider,
+  getAllAvailableModels,
+  getProviderForModel,
+  mapAdkModelToProviderModel,
+  
+  // Configuration Types and Constants
+  DEFAULT_PROVIDER_CONFIGS,
+  loadEnvironmentConfig
+} from './config/llm-config.js';
+
+export {
+  // Type Converters
+  convertAdkContentToCoreMessage,
+  convertCoreMessageToAdkContent,
+  convertAdkAgentToCoreAgent,
+  convertCoreAgentToAdkAgent,
+  safeJsonParse,
+  safeJsonStringify
+} from './providers/type-converters.js';
+
 // ========== Schema Validation ==========
 export {
   // Schema Validator Creation

@@ -1,7 +1,8 @@
 /**
- * FAF ADK Layer - Integration Tests
+ * FAF ADK Layer - Integration Tests (Updated for Real LLM Integration)
  */
 
+import { jest } from '@jest/globals';
 import {
   createAgent,
   createSimpleAgent,
@@ -19,12 +20,21 @@ import {
   quickSetup,
   createQuickWeatherAgent,
   createQuickChatAgent,
+  createAdkLLMService,
+  createDefaultAdkLLMService,
+  createAdkLLMConfig,
+  validateAdkLLMConfig,
   Model,
   ToolParameterType,
   AgentEvent
 } from '../index';
 
 import { streamToArray } from '../streaming';
+
+// Mock the Core ModelProvider to avoid real API calls in tests
+jest.mock('../../providers/model.js', () => ({
+  makeLiteLLMProvider: jest.fn()
+}));
 
 describe('ADK Layer Integration', () => {
   describe('End-to-End Agent Workflows', () => {
@@ -393,6 +403,42 @@ describe('ADK Layer Integration', () => {
       
       await expect(runAgent(runnerConfig, { userId: 'user_123' }, message))
         .rejects.toThrow();
+    });
+  });
+
+  describe('Real LLM Integration', () => {
+    test('should create and use real LLM service', () => {
+      const config = createAdkLLMConfig('litellm');
+      const llmService = createAdkLLMService(config);
+      
+      expect(llmService).toBeDefined();
+      expect(typeof llmService.generateResponse).toBe('function');
+      expect(typeof llmService.generateStreamingResponse).toBe('function');
+    });
+
+    test('should create default LLM service from environment', () => {
+      const defaultService = createDefaultAdkLLMService();
+      
+      expect(defaultService).toBeDefined();
+      expect(typeof defaultService.generateResponse).toBe('function');
+      expect(typeof defaultService.generateStreamingResponse).toBe('function');
+    });
+
+    test('should validate LLM configuration', () => {
+      const validConfig = createAdkLLMConfig('litellm');
+      const errors = validateAdkLLMConfig(validConfig);
+      
+      expect(errors).toEqual([]);
+    });
+
+    test('should detect invalid LLM configuration', () => {
+      const invalidConfig = createAdkLLMConfig('openai');
+      invalidConfig.apiKey = ''; // Missing API key for OpenAI
+      
+      const errors = validateAdkLLMConfig(invalidConfig);
+      
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors.some(e => e.includes('API key'))).toBe(true);
     });
   });
 

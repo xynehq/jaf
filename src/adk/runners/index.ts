@@ -38,7 +38,9 @@ import {
 
 import { getOrCreateSession, addMessageToSession, addArtifactToSession } from '../sessions';
 import { executeTool } from '../tools';
-import { createUserMessage, createModelMessage, getFunctionCalls, addFunctionResponse, addFunctionCall, createFunctionCall } from '../content';
+import { createModelMessage, getFunctionCalls, createUserMessage } from '../content';
+import { createAdkLLMService } from '../providers/llm-service.js';
+import { createAdkLLMConfigFromEnvironment, createAdkLLMServiceConfig } from '../config/llm-config.js';
 
 // ========== Core Runner Functions ==========
 
@@ -153,8 +155,8 @@ const executeAgent = async (
     return await executeMultiAgent(config, currentSession, message, context);
   }
   
-  // Simulate LLM call - in real implementation, this would call the actual LLM
-  const llmResponse = await simulateLLMCall(agent, message, currentSession);
+  // Call real LLM service
+  const llmResponse = await callRealLLM(agent, message, currentSession);
   
   // Check for function calls in the response
   const functionCalls = getFunctionCalls(llmResponse);
@@ -216,9 +218,54 @@ const executeAgent = async (
       
       toolCalls.push(functionCall);
     }
+    
+    // If tools were executed, make a second LLM call to get final response with tool results
+    if (toolResponses.length > 0) {
+      // Update session with the tool calls and responses first
+      currentSession = addMessageToSession(currentSession, llmResponse);
+      
+      // Create tool response messages for each tool call (required by OpenAI format)
+      for (const toolResponse of toolResponses) {
+        const toolResultMessage: Content = {
+          role: 'tool' as any, // Tool responses must have role 'tool' for OpenAI API
+          parts: [{
+            type: 'function_response',
+            functionResponse: toolResponse
+          }],
+          metadata: {}
+        };
+        
+        // Add each tool response message to session
+        currentSession = addMessageToSession(currentSession, toolResultMessage);
+      }
+      
+      // Create a user message asking the LLM to provide a final response
+      const followUpMessage = createUserMessage('Please provide a final response based on the tool results.');
+      
+      // Make second LLM call to get final response
+      const finalResponse = await callRealLLM(agent, followUpMessage, currentSession);
+      
+      // Update session with final response
+      currentSession = addMessageToSession(currentSession, finalResponse);
+      await config.sessionProvider.updateSession(currentSession);
+      
+      // Return the final response that includes tool results
+      return {
+        content: finalResponse,
+        session: currentSession,
+        toolCalls,
+        toolResponses,
+        metadata: {
+          requestId: generateRequestId(),
+          agentId: agent.id,
+          llmCalls: 2, // Two LLM calls made
+          timestamp: new Date()
+        }
+      };
+    }
   }
   
-  // Update session with response
+  // Update session with response (no tools were called)
   currentSession = addMessageToSession(currentSession, llmResponse);
   await config.sessionProvider.updateSession(currentSession);
   
@@ -230,6 +277,7 @@ const executeAgent = async (
     metadata: {
       requestId: generateRequestId(),
       agentId: agent.id,
+      llmCalls: 1, // One LLM call made
       timestamp: new Date()
     }
   };
@@ -243,23 +291,43 @@ const executeAgentStream = async function* (
 ): AsyncGenerator<AgentEvent> {
   const agent = config.agent;
   
-  // Simulate model validation - throw error for invalid models  
-  if (agent.config.model === 'invalid_model') {
-    throw new Error('Invalid model specified');
-  }
-  
-  // Simulate streaming LLM response
-  const responseText = `Hello! I'm ${agent.config.name}. How can I help you today?`;
-  
-  // Stream response character by character (simplified)
-  for (let i = 0; i < responseText.length; i += 10) {
-    const chunk = responseText.slice(i, i + 10);
-    yield createAgentEvent('message_delta', {
-      content: createModelMessage(chunk)
+  try {
+    // Create LLM service instance with environment-based configuration
+    const llmConfig = createAdkLLMConfigFromEnvironment();
+    const llmService = createAdkLLMService(createAdkLLMServiceConfig(llmConfig));
+    
+    // Call real streaming LLM
+    const streamGenerator = llmService.generateStreamingResponse(agent, session, message, {
+      modelOverride: typeof agent.config.model === 'string' ? agent.config.model : undefined,
+      temperature: 0.7,
+      maxTokens: 2000
     });
     
-    // Simulate delay
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Stream real LLM responses
+    for await (const chunk of streamGenerator) {
+      if (chunk.isDone) {
+        break;
+      }
+      
+      if (chunk.delta) {
+        yield createAgentEvent('message_delta', {
+          content: createModelMessage(chunk.delta)
+        });
+      }
+      
+      if (chunk.functionCall) {
+        yield createAgentEvent('function_call_start', {
+          functionCall: chunk.functionCall as FunctionCall
+        });
+      }
+    }
+  } catch (error) {
+    console.error('[ADK:STREAM] Real streaming failed:', error);
+    
+    // Fallback to error message
+    yield createAgentEvent('error', {
+      error: `Streaming error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    });
   }
 };
 
@@ -429,211 +497,46 @@ const applyGuardrails = async (
   return currentMessage;
 };
 
-// ========== LLM Simulation ==========
+// ========== Real LLM Integration ==========
 
-const simulateLLMCall = async (
+const callRealLLM = async (
   agent: Agent,
   message: Content,
   session: Session
 ): Promise<Content> => {
-  // This is a mock implementation
-  // In real implementation, this would call the actual LLM service
-  
-  // Simulate model validation - throw error for invalid models
-  if (agent.config.model === 'invalid_model') {
-    throw new Error('Invalid model specified');
-  }
-  
-  const messageText = message.parts
-    .filter(p => p.type === 'text')
-    .map(p => p.text)
-    .join(' ');
-  
-  // Create response content
-  let responseContent = createModelMessage(`${agent.config.name} processing: "${messageText}"`);
-  
-  // Analyze message to determine if tools should be called
-  const shouldCallTools = shouldCallToolsForMessage(messageText, agent.config.tools);
-  
-  if (shouldCallTools.length > 0) {
-    // Add function calls to the response
-    for (const toolCall of shouldCallTools) {
-      responseContent = addFunctionCall(responseContent, toolCall);
-    }
-  }
-  
-  return responseContent;
-};
-
-// Helper function to determine what tools should be called based on message content
-const shouldCallToolsForMessage = (messageText: string, tools: Tool[]): FunctionCall[] => {
-  const calls: FunctionCall[] = [];
-  const lowerText = messageText.toLowerCase();
-  
-  for (const tool of tools) {
-    let shouldCall = false;
-    let args: Record<string, unknown> = {};
+  try {
+    // Create LLM service instance with environment-based configuration
+    const llmConfig = createAdkLLMConfigFromEnvironment();
+    const llmService = createAdkLLMService(createAdkLLMServiceConfig(llmConfig));
     
-    // Tool-specific logic for determining when to call
-    switch (tool.name) {
-      case 'process_data':
-        if (lowerText.includes('calculate') || lowerText.includes('sum') || lowerText.includes('numbers')) {
-          shouldCall = true;
-          // Extract numbers from message
-          const numbers = extractNumbersFromText(messageText);
-          if (numbers.length > 0) {
-            args = {
-              data: numbers,
-              operation: lowerText.includes('sum') ? 'sum' : 'average'
-            };
-          }
-        }
-        break;
-        
-      case 'greet':
-        if (lowerText.includes('greet') || lowerText.includes('hello')) {
-          shouldCall = true;
-          // Extract name if mentioned
-          const nameMatch = messageText.match(/name is (\w+)/i) || messageText.match(/i'm (\w+)/i);
-          args = {
-            name: nameMatch ? nameMatch[1] : 'User'
-          };
-        }
-        break;
-        
-      case 'calculate':
-        if (lowerText.includes('calculate') || lowerText.includes('math') || /\d+\s*[\+\-\*\/]\s*\d+/.test(messageText)) {
-          shouldCall = true;
-          // Extract mathematical expression
-          const expression = extractMathExpression(messageText);
-          if (expression) {
-            args = { expression };
-          }
-        }
-        break;
-        
-      case 'error_tool':
-        if (lowerText.includes('execute tool')) {
-          shouldCall = true;
-          // Determine if it should fail based on message content
-          const shouldFail = lowerText.includes('failure') || lowerText.includes('fail');
-          args = { shouldFail };
-        }
-        break;
-        
-      case 'get_weather':
-        if (lowerText.includes('weather')) {
-          shouldCall = true;
-          // Extract location
-          const locationMatch = messageText.match(/weather in (\w+)/i) || messageText.match(/(\w+) weather/i);
-          args = {
-            location: locationMatch ? locationMatch[1] : 'Unknown'
-          };
-        }
-        break;
-        
-      case 'analyze_content':
-        if (lowerText.includes('analyze')) {
-          shouldCall = true;
-          // Determine content type and data
-          if (lowerText.includes('json')) {
-            const jsonMatch = messageText.match(/json:\s*(\{.*\})/i);
-            args = {
-              contentType: 'json',
-              data: jsonMatch ? jsonMatch[1] : '{"default": "data"}'
-            };
-          } else if (lowerText.includes('text')) {
-            const textMatch = messageText.match(/text:\s*"([^"]+)"/i);
-            args = {
-              contentType: 'text',
-              data: textMatch ? textMatch[1] : messageText
-            };
-          }
-        }
-        break;
-        
-      default:
-        // Generic logic - if tool name is mentioned, call it
-        if (lowerText.includes(tool.name.toLowerCase())) {
-          shouldCall = true;
-          // Use default args based on parameter types
-          args = generateDefaultArgsForTool(tool);
-        }
-        break;
-    }
+    // Call real LLM
+    const response = await llmService.generateResponse(agent, session, message, {
+      modelOverride: typeof agent.config.model === 'string' ? agent.config.model : undefined,
+      temperature: 0.7,
+      maxTokens: 2000
+    });
     
-    if (shouldCall) {
-      const functionCall = createFunctionCall(
-        generateCallId(),
-        tool.name,
-        args
-      );
-      calls.push(functionCall);
-    }
+    return response.content;
+  } catch (error) {
+    console.error('[ADK:LLM] Real LLM call failed:', error);
+    
+    // Fallback to a simple error response
+    return createModelMessage(`I apologize, but I'm experiencing technical difficulties. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
-  
-  return calls;
 };
 
-// Utility functions for parsing message content
-const extractNumbersFromText = (text: string): number[] => {
-  const matches = text.match(/\d+/g);
-  return matches ? matches.map(Number) : [];
-};
-
-const extractMathExpression = (text: string): string | null => {
-  // Simple extraction - look for basic math patterns
-  const mathMatch = text.match(/(\d+\s*[\+\-\*\/]\s*\d+)/);
-  if (mathMatch) {
-    return mathMatch[1];
-  }
-  
-  // Look for word-based math
-  if (text.includes('plus') || text.includes('+')) {
-    const numbers = extractNumbersFromText(text);
-    if (numbers.length >= 2) {
-      return `${numbers[0]} + ${numbers[1]}`;
-    }
-  }
-  
-  return null;
-};
-
-const generateDefaultArgsForTool = (tool: Tool): Record<string, unknown> => {
-  const args: Record<string, unknown> = {};
-  
-  for (const param of tool.parameters) {
-    switch (param.type) {
-      case 'string':
-        args[param.name] = 'default_string';
-        break;
-      case 'number':
-        args[param.name] = 42;
-        break;
-      case 'boolean':
-        args[param.name] = true;
-        break;
-      case 'array':
-        args[param.name] = [1, 2, 3];
-        break;
-      default:
-        args[param.name] = 'default_value';
-        break;
-    }
-  }
-  
-  return args;
-};
+// ========== Mock Tool Detection Logic Removed ==========
+// This mock logic has been removed since real LLM now handles tool calling decisions
 
 const generateCallId = (): string => {
-  return `call_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  return `call_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 };
 
 // ========== Utility Functions ==========
 
 const generateRequestId = (): string => {
   // Use crypto-based ID generation for pure functional approach
-  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  return `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 };
 
 const createAgentEvent = (

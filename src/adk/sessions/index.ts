@@ -95,7 +95,11 @@ export const createInMemorySessionProvider = (): SessionProvider => {
 
 // ========== Redis Session Provider ==========
 
-export interface RedisConfig {
+// Re-export from the real implementation
+export { createRedisSessionProvider, type RedisConfig } from './redis-provider.js';
+
+// Legacy mock implementation for backward compatibility
+interface MockRedisConfig {
   host: string;
   port: number;
   password?: string;
@@ -103,9 +107,43 @@ export interface RedisConfig {
   keyPrefix?: string;
 }
 
-export const createRedisSessionProvider = (config: RedisConfig): SessionProvider => {
-  // This is a mock implementation - in production you'd use a real Redis client
-  const mockRedis = new Map<string, string>();
+export const createMockRedisSessionProvider = (config: MockRedisConfig): SessionProvider => {
+  let redis: any; // Will be typed properly when ioredis is added
+  let isRealRedis = false;
+  
+  // Try to use real Redis if available
+  try {
+    // Dynamic import to avoid breaking if ioredis not installed
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const Redis = require('ioredis');
+    redis = new Redis({
+      host: config.host,
+      port: config.port,
+      password: config.password,
+      db: config.database || 0,
+      retryStrategy: (times: number) => {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
+      enableOfflineQueue: true,
+      maxRetriesPerRequest: 3,
+      lazyConnect: false
+    });
+    isRealRedis = true;
+    
+    // Handle connection errors
+    redis.on('error', (err: any) => {
+      console.error('[ADK:Sessions] Redis connection error:', err);
+    });
+    
+    redis.on('connect', () => {
+      console.log('[ADK:Sessions] Connected to Redis');
+    });
+  } catch (error) {
+    console.warn('[ADK:Sessions] ioredis not found, falling back to mock implementation');
+    // Fallback to mock Map if ioredis not available
+    redis = new Map<string, string>();
+  }
   const keyPrefix = config.keyPrefix || 'faf_adk_session:';
   
   const getKey = (sessionId: string) => `${keyPrefix}${sessionId}`;
@@ -133,20 +171,20 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
       );
       
       // Store session
-      mockRedis.set(getKey(session.id), JSON.stringify(session));
+      redis.set(getKey(session.id), JSON.stringify(session));
       
       // Add to user's session list
       const userKey = getUserKey(context.userId);
-      const userSessions = mockRedis.get(userKey);
+      const userSessions = redis.get(userKey);
       const sessionIds = userSessions ? JSON.parse(userSessions) : [];
       sessionIds.push(session.id);
-      mockRedis.set(userKey, JSON.stringify(sessionIds));
+      redis.set(userKey, JSON.stringify(sessionIds));
       
       return session;
     },
     
     getSession: async (sessionId: string): Promise<Session | null> => {
-      const sessionData = mockRedis.get(getKey(sessionId));
+      const sessionData = redis.get(getKey(sessionId));
       if (!sessionData) {
         return null;
       }
@@ -156,7 +194,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
         
         // Update last accessed
         session.metadata.lastAccessed = new Date();
-        mockRedis.set(getKey(sessionId), JSON.stringify(session));
+        redis.set(getKey(sessionId), JSON.stringify(session));
         
         return session;
       } catch (error) {
@@ -167,13 +205,13 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
     
     updateSession: async (session: Session): Promise<Session> => {
       session.metadata.lastAccessed = new Date();
-      mockRedis.set(getKey(session.id), JSON.stringify(session));
+      redis.set(getKey(session.id), JSON.stringify(session));
       return session;
     },
     
     listSessions: async (userId: string): Promise<Session[]> => {
       const userKey = getUserKey(userId);
-      const sessionIdsData = mockRedis.get(userKey);
+      const sessionIdsData = redis.get(userKey);
       
       if (!sessionIdsData) {
         return [];
@@ -184,7 +222,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
         const sessions: Session[] = [];
         
         for (const sessionId of sessionIds) {
-          const sessionData = mockRedis.get(getKey(sessionId));
+          const sessionData = redis.get(getKey(sessionId));
           if (sessionData) {
             sessions.push(deserializeSession(sessionData));
           }
@@ -200,7 +238,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
     },
     
     deleteSession: async (sessionId: string): Promise<boolean> => {
-      const sessionData = mockRedis.get(getKey(sessionId));
+      const sessionData = redis.get(getKey(sessionId));
       if (!sessionData) {
         return false;
       }
@@ -209,15 +247,15 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
         const session: Session = JSON.parse(sessionData);
         
         // Remove from Redis
-        mockRedis.delete(getKey(sessionId));
+        redis.delete(getKey(sessionId));
         
         // Remove from user's session list
         const userKey = getUserKey(session.userId);
-        const userSessionsData = mockRedis.get(userKey);
+        const userSessionsData = redis.get(userKey);
         if (userSessionsData) {
           const sessionIds: string[] = JSON.parse(userSessionsData);
           const updatedIds = sessionIds.filter(id => id !== sessionId);
-          mockRedis.set(userKey, JSON.stringify(updatedIds));
+          redis.set(userKey, JSON.stringify(updatedIds));
         }
         
         return true;
@@ -231,53 +269,8 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
 
 // ========== Postgres Session Provider ==========
 
-export interface PostgresConfig {
-  connectionString: string;
-  tableName?: string;
-}
-
-export const createPostgresSessionProvider = (config: PostgresConfig): SessionProvider => {
-  // This is a mock implementation - in production you'd use a real Postgres client
-  const mockDb = new Map<string, Session>();
-  
-  return {
-    createSession: async (context: SessionContext): Promise<Session> => {
-      const session = createSession(
-        context.appName,
-        context.userId,
-        context.sessionId
-      );
-      
-      mockDb.set(session.id, session);
-      return session;
-    },
-    
-    getSession: async (sessionId: string): Promise<Session | null> => {
-      const session = mockDb.get(sessionId);
-      if (session) {
-        session.metadata.lastAccessed = new Date();
-        mockDb.set(sessionId, session);
-      }
-      return session || null;
-    },
-    
-    updateSession: async (session: Session): Promise<Session> => {
-      session.metadata.lastAccessed = new Date();
-      mockDb.set(session.id, session);
-      return session;
-    },
-    
-    listSessions: async (userId: string): Promise<Session[]> => {
-      return Array.from(mockDb.values())
-        .filter(session => session.userId === userId)
-        .sort((a, b) => b.metadata.created.getTime() - a.metadata.created.getTime());
-    },
-    
-    deleteSession: async (sessionId: string): Promise<boolean> => {
-      return mockDb.delete(sessionId);
-    }
-  };
-};
+// Re-export from the real implementation
+export { createPostgresSessionProvider, type PostgresConfig } from './postgres-provider.js';
 
 // ========== Session Operations ==========
 
