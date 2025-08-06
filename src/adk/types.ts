@@ -292,6 +292,23 @@ export interface JsonSchema {
   enum?: unknown[];
   description?: string;
   default?: unknown;
+  // String validations
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  format?: string;
+  // Number validations
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: boolean;
+  exclusiveMaximum?: boolean;
+  multipleOf?: number;
+  // Array validations
+  minItems?: number;
+  maxItems?: number;
+  uniqueItems?: boolean;
+  // Object validations
+  additionalProperties?: boolean | JsonSchema;
 }
 
 // ========== Guardrails ==========

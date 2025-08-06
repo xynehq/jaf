@@ -173,6 +173,29 @@ const validateArray = (
 ): ValidationResult<unknown[]> => {
   const errors: string[] = [];
   
+  // Min items validation
+  if (schema.minItems !== undefined && data.length < schema.minItems) {
+    errors.push(`Array must have at least ${schema.minItems} items`);
+  }
+  
+  // Max items validation
+  if (schema.maxItems !== undefined && data.length > schema.maxItems) {
+    errors.push(`Array must have at most ${schema.maxItems} items`);
+  }
+  
+  // Unique items validation
+  if (schema.uniqueItems) {
+    const seen = new Set<string>();
+    for (const item of data) {
+      const key = JSON.stringify(item);
+      if (seen.has(key)) {
+        errors.push('Array must contain unique items');
+        break;
+      }
+      seen.add(key);
+    }
+  }
+  
   // Validate items
   if (schema.items) {
     for (let i = 0; i < data.length; i++) {
@@ -196,8 +219,61 @@ const validateString = (
 ): ValidationResult<string> => {
   const errors: string[] = [];
   
-  // Add string-specific validations here (length, pattern, etc.)
-  // For now, just basic validation
+  // Min length validation
+  if (schema.minLength !== undefined && data.length < schema.minLength) {
+    errors.push(`String length must be at least ${schema.minLength}`);
+  }
+  
+  // Max length validation
+  if (schema.maxLength !== undefined && data.length > schema.maxLength) {
+    errors.push(`String length must be at most ${schema.maxLength}`);
+  }
+  
+  // Pattern validation
+  if (schema.pattern) {
+    try {
+      const regex = new RegExp(schema.pattern);
+      if (!regex.test(data)) {
+        errors.push(`String does not match pattern: ${schema.pattern}`);
+      }
+    } catch {
+      errors.push(`Invalid regex pattern: ${schema.pattern}`);
+    }
+  }
+  
+  // Format validation (basic common formats)
+  if (schema.format) {
+    switch (schema.format) {
+      case 'email':
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data)) {
+          errors.push('Invalid email format');
+        }
+        break;
+      case 'uri':
+      case 'url':
+        try {
+          new URL(data);
+        } catch {
+          errors.push('Invalid URL format');
+        }
+        break;
+      case 'date':
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+          errors.push('Invalid date format (expected YYYY-MM-DD)');
+        }
+        break;
+      case 'date-time':
+        if (isNaN(Date.parse(data))) {
+          errors.push('Invalid date-time format');
+        }
+        break;
+      case 'uuid':
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data)) {
+          errors.push('Invalid UUID format');
+        }
+        break;
+    }
+  }
   
   if (errors.length > 0) {
     return { success: false, errors };
@@ -212,8 +288,37 @@ const validateNumber = (
 ): ValidationResult<number> => {
   const errors: string[] = [];
   
-  // Add number-specific validations here (min, max, etc.)
-  // For now, just basic validation
+  // Minimum validation
+  if (schema.minimum !== undefined) {
+    if (schema.exclusiveMinimum && data <= schema.minimum) {
+      errors.push(`Number must be greater than ${schema.minimum}`);
+    } else if (!schema.exclusiveMinimum && data < schema.minimum) {
+      errors.push(`Number must be at least ${schema.minimum}`);
+    }
+  }
+  
+  // Maximum validation
+  if (schema.maximum !== undefined) {
+    if (schema.exclusiveMaximum && data >= schema.maximum) {
+      errors.push(`Number must be less than ${schema.maximum}`);
+    } else if (!schema.exclusiveMaximum && data > schema.maximum) {
+      errors.push(`Number must be at most ${schema.maximum}`);
+    }
+  }
+  
+  // Multiple of validation
+  if (schema.multipleOf !== undefined) {
+    const remainder = data % schema.multipleOf;
+    // Handle floating point precision issues
+    if (Math.abs(remainder) > 0.0000001 && Math.abs(remainder - schema.multipleOf) > 0.0000001) {
+      errors.push(`Number must be a multiple of ${schema.multipleOf}`);
+    }
+  }
+  
+  // Integer validation
+  if (schema.type === 'integer' && !Number.isInteger(data)) {
+    errors.push('Number must be an integer');
+  }
   
   if (errors.length > 0) {
     return { success: false, errors };

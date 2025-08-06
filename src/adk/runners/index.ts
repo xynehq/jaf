@@ -11,6 +11,7 @@ import {
   AgentResponse,
   AgentEvent,
   Content,
+  Part,
   Session,
   SessionProvider,
   Tool,
@@ -23,6 +24,7 @@ import {
   ResponseMetadata,
   AgentEventType,
   GuardrailFunction,
+  AgentConfig,
   throwAgentError,
   throwToolError,
   throwSessionError
@@ -331,6 +333,225 @@ const executeAgentStream = async function* (
   }
 };
 
+// ========== Multi-Agent Helper Functions ==========
+
+const mergeParallelResponses = (
+  responses: AgentResponse[],
+  config: MultiAgentConfig
+): AgentResponse => {
+  if (responses.length === 0) {
+    throwAgentError('No responses to merge from parallel execution');
+  }
+  
+  // Merge all response content
+  const mergedParts: Part[] = [];
+  const mergedArtifacts: Record<string, unknown> = {};
+  
+  responses.forEach((response, index) => {
+    // Add agent identifier to each response part
+    const agentName = config.subAgents[index]?.name || `agent_${index}`;
+    
+    response.content.parts.forEach(part => {
+      if (part.type === 'text') {
+        mergedParts.push({
+          type: 'text',
+          text: `[${agentName}]: ${part.text}`
+        });
+      } else {
+        mergedParts.push(part);
+      }
+    });
+    
+    // Merge artifacts
+    Object.entries(response.session.artifacts).forEach(([key, value]) => {
+      mergedArtifacts[`${agentName}_${key}`] = value;
+    });
+    
+    // Merge metrics if available
+    // Note: metrics field is not part of AgentResponse type yet
+  });
+  
+  // Use the first response as base and merge content
+  const baseResponse = responses[0];
+  return {
+    ...baseResponse,
+    content: {
+      role: 'model' as const,
+      parts: mergedParts
+    },
+    session: {
+      ...baseResponse.session,
+      artifacts: mergedArtifacts
+    }
+  };
+};
+
+const selectBestAgent = (
+  subAgents: AgentConfig[],
+  message: Content,
+  context: RunContext
+): AgentConfig => {
+  const messageText = message.parts
+    .filter(p => p.type === 'text')
+    .map(p => p.text)
+    .join(' ')
+    .toLowerCase();
+  
+  // Score each agent based on relevance
+  const scores = subAgents.map((agent: AgentConfig) => {
+    let score = 0;
+    const agentNameLower = agent.name.toLowerCase();
+    const instructionLower = agent.instruction.toLowerCase();
+    
+    // Check for keyword matches in agent name and instruction
+    const keywords = extractKeywords(messageText);
+    keywords.forEach(keyword => {
+      if (agentNameLower.includes(keyword)) score += 3;
+      if (instructionLower.includes(keyword)) score += 2;
+    });
+    
+    // Check for tool relevance
+    agent.tools.forEach((tool: Tool) => {
+      const toolNameLower = tool.name.toLowerCase();
+      const toolDescLower = tool.description.toLowerCase();
+      keywords.forEach(keyword => {
+        if (toolNameLower.includes(keyword)) score += 2;
+        if (toolDescLower.includes(keyword)) score += 1;
+      });
+    });
+    
+    return { agent, score };
+  });
+  
+  // Sort by score and return the best match
+  scores.sort((a, b) => b.score - a.score);
+  
+  // If no clear winner, use the first agent
+  if (scores[0].score === 0) {
+    return subAgents[0];
+  }
+  
+  return scores[0].agent;
+};
+
+const extractKeywords = (text: string): string[] => {
+  // Extract meaningful keywords from the message
+  const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'what', 'how', 'when', 'where', 'why', 'who']);
+  
+  const words = text
+    .split(/\s+/)
+    .map(w => w.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    .filter(w => w.length > 2 && !commonWords.has(w));
+  
+  return [...new Set(words)];
+};
+
+const executeWithCoordinationRules = async (
+  config: RunnerConfig,
+  session: Session,
+  message: Content,
+  context: RunContext,
+  multiConfig: MultiAgentConfig
+): Promise<AgentResponse> => {
+  // Evaluate coordination rules
+  for (const rule of multiConfig.coordinationRules || []) {
+    if (rule.condition(message, context)) {
+      switch (rule.action) {
+        case 'delegate': {
+          // Delegate to specific agent(s)
+          const targetAgent = rule.targetAgents?.[0];
+          if (targetAgent) {
+            const agentConfig = multiConfig.subAgents.find(a => a.name === targetAgent);
+            if (agentConfig) {
+              const subAgent = { ...config.agent, config: agentConfig };
+              const subConfig = { ...config, agent: subAgent };
+              return await executeAgent(subConfig, session, message, context);
+            }
+          }
+          break;
+        }
+        
+        case 'parallel': {
+          // Execute specified agents in parallel
+          const targetConfigs = rule.targetAgents
+            ? multiConfig.subAgents.filter(a => rule.targetAgents?.includes(a.name))
+            : multiConfig.subAgents;
+          
+          const promises = targetConfigs.map(subAgentConfig => {
+            const subAgent = { ...config.agent, config: subAgentConfig };
+            const subConfig = { ...config, agent: subAgent };
+            return executeAgent(subConfig, session, message, context);
+          });
+          
+          const responses = await Promise.all(promises);
+          return mergeParallelResponses(responses, multiConfig);
+        }
+        
+        case 'sequential': {
+          // Execute specified agents sequentially
+          const targetConfigs = rule.targetAgents
+            ? multiConfig.subAgents.filter(a => rule.targetAgents?.includes(a.name))
+            : multiConfig.subAgents;
+          
+          let currentSession = session;
+          let currentMessage = message;
+          let finalResponse: AgentResponse | null = null;
+          
+          for (const subAgentConfig of targetConfigs) {
+            const subAgent = { ...config.agent, config: subAgentConfig };
+            const subConfig = { ...config, agent: subAgent };
+            
+            const response = await executeAgent(subConfig, currentSession, currentMessage, context);
+            
+            currentSession = response.session;
+            currentMessage = response.content;
+            finalResponse = response;
+          }
+          
+          return finalResponse!;
+        }
+      }
+    }
+  }
+  
+  // If no rules match, fall back to intelligent selection
+  const selectedAgent = selectBestAgent(multiConfig.subAgents, message, context);
+  const subAgent = { ...config.agent, config: selectedAgent };
+  const subConfig = { ...config, agent: subAgent };
+  
+  return await executeAgent(subConfig, session, message, context);
+};
+
+const extractDelegationDecision = (response: AgentResponse): { targetAgent?: string } | null => {
+  // Try to extract delegation decision from response
+  const responseText = response.content.parts
+    .filter(p => p.type === 'text')
+    .map(p => p.text)
+    .join(' ');
+  
+  // Look for delegation patterns
+  const delegatePattern = /delegate to (\w+)|transfer to (\w+)|handoff to (\w+)/i;
+  const match = responseText.match(delegatePattern);
+  
+  if (match) {
+    const targetAgent = match[1] || match[2] || match[3];
+    return { targetAgent };
+  }
+  
+  // Check for tool calls that might indicate delegation
+  const toolCalls = response.content.parts.filter(p => p.type === 'function_call');
+  for (const toolCall of toolCalls) {
+    if (toolCall.type === 'function_call' && toolCall.functionCall) {
+      const funcName = toolCall.functionCall.name;
+      if (funcName === 'delegate' || funcName === 'handoff') {
+        return { targetAgent: (toolCall.functionCall.args as any)?.targetAgent };
+      }
+    }
+  }
+  
+  return null;
+};
+
 // ========== Multi-Agent Execution ==========
 
 const executeMultiAgent = async (
@@ -399,8 +620,8 @@ const executeParallelAgents = async (
   
   const responses = await Promise.all(promises);
   
-  // Merge responses (simplified - just use the first one)
-  return responses[0];
+  // Merge parallel responses intelligently
+  return mergeParallelResponses(responses, multiConfig);
 };
 
 const executeConditionalAgents = async (
@@ -411,20 +632,13 @@ const executeConditionalAgents = async (
 ): Promise<AgentResponse> => {
   const multiConfig = config.agent.config as MultiAgentConfig;
   
-  // Simple condition - choose based on message content
-  // In real implementation, this would be more sophisticated
-  const messageText = message.parts
-    .filter(p => p.type === 'text')
-    .map(p => p.text)
-    .join(' ');
-  
-  let selectedAgent = multiConfig.subAgents[0]; // Default
-  
-  if (messageText.toLowerCase().includes('weather')) {
-    selectedAgent = multiConfig.subAgents.find(a => a.name.includes('weather')) || selectedAgent;
-  } else if (messageText.toLowerCase().includes('news')) {
-    selectedAgent = multiConfig.subAgents.find(a => a.name.includes('news')) || selectedAgent;
+  // Use coordination rules if provided
+  if (multiConfig.coordinationRules && multiConfig.coordinationRules.length > 0) {
+    return await executeWithCoordinationRules(config, session, message, context, multiConfig);
   }
+  
+  // Otherwise use intelligent agent selection
+  const selectedAgent = selectBestAgent(multiConfig.subAgents, message, context);
   
   const subAgent = { ...config.agent, config: selectedAgent };
   const subConfig = { ...config, agent: subAgent };
@@ -438,8 +652,39 @@ const executeHierarchicalAgents = async (
   message: Content,
   context: RunContext
 ): Promise<AgentResponse> => {
-  // For now, just delegate to the first sub-agent
-  return await executeConditionalAgents(config, session, message, context);
+  const multiConfig = config.agent.config as MultiAgentConfig;
+  
+  // Execute coordinator agent first
+  const coordinatorAgent = multiConfig.subAgents[0];
+  const coordinatorSubAgent = { ...config.agent, config: coordinatorAgent };
+  const coordinatorConfig = { ...config, agent: coordinatorSubAgent };
+  
+  const coordinatorResponse = await executeAgent(coordinatorConfig, session, message, context);
+  
+  // Extract delegation decision from coordinator response
+  const delegationDecision = extractDelegationDecision(coordinatorResponse);
+  
+  if (delegationDecision && delegationDecision.targetAgent) {
+    // Find and execute the target agent
+    const targetAgentConfig = multiConfig.subAgents.find(
+      a => a.name === delegationDecision.targetAgent
+    );
+    
+    if (targetAgentConfig) {
+      const targetAgent = { ...config.agent, config: targetAgentConfig };
+      const targetConfig = { ...config, agent: targetAgent };
+      
+      return await executeAgent(
+        targetConfig,
+        coordinatorResponse.session,
+        coordinatorResponse.content,
+        context
+      );
+    }
+  }
+  
+  // If no delegation, return coordinator response
+  return coordinatorResponse;
 };
 
 // ========== Tool Context Creation ==========
