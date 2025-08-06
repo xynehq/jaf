@@ -1,0 +1,30 @@
+{
+  "name": "jaf-visualization-demo",
+  "version": "1.0.0",
+  "description": "JAF Visualization Demo - Demonstrates graphviz capabilities",
+  "main": "index.ts",
+  "scripts": {
+    "start": "tsx index.ts",
+    "demo": "tsx index.ts",
+    "interactive": "tsx index.ts --interactive",
+    "build": "tsc --noEmit",
+    "clean": "rm -rf output"
+  },
+  "dependencies": {
+    "@xynehq/jaf": "file:../.."
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "jaf",
+    "visualization",
+    "graphviz",
+    "agents",
+    "ai"
+  ],
+  "author": "",
+  "license": "MIT"
+}

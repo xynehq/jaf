@@ -72,7 +72,6 @@
     "@fastify/cors": "^9.0.1",
     "@modelcontextprotocol/sdk": "^0.4.0",
     "fastify": "^4.29.1",
-    "graphviz": "^0.0.9",
     "mathjs": "^14.6.0",
     "openai": "^4.0.0",
     "uuid": "^9.0.0",
@@ -80,7 +79,6 @@
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
-    "@types/graphviz": "^0.0.39",
     "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",
     "@types/pg": "^8.15.5",

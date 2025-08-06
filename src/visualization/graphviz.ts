@@ -4,7 +4,6 @@
  * Functional visualization system for agents and tools using Graphviz
  */
 
-import { digraph } from 'graphviz';
 import { Agent, Tool, RunnerConfig } from '../adk/types';
 import { writeFileSync } from 'fs';
 import { execSync } from 'child_process';
@@ -89,162 +88,10 @@ export const generateAgentGraph = async (
       colorScheme = 'default'
     } = options;
 
-    // Create digraph
-    const graph = digraph('AgentGraph');
-    
-    // Set graph attributes
-    graph.set('rankdir', rankdir);
-    graph.set('label', title);
-    graph.set('labelloc', 't');
-    graph.set('fontsize', '16');
-    graph.set('fontname', 'Arial Bold');
-    graph.set('bgcolor', 'white');
-    graph.set('pad', '0.5');
-    
-    const styles = COLOR_SCHEMES[colorScheme];
-    
-    // Add nodes for each agent
-    for (const agent of agents) {
-      addAgentNode(graph, agent, styles, showToolDetails, showSubAgents);
-    }
-    
-    // Add edges between agents (handoffs, sub-agents)
-    for (const agent of agents) {
-      addAgentEdges(graph, agent, agents, styles, showSubAgents);
-    }
-    
-    // Generate output
-    const finalOutputPath = `${outputPath}.${outputFormat}`;
-    
-    return new Promise((resolve) => {
-      graph.output(outputFormat as any, finalOutputPath, (code: number) => {
-        if (code === 0) {
-          resolve({
-            success: true,
-            outputPath: finalOutputPath,
-            graphDot: graph.to_dot()
-          });
-        } else {
-          resolve({
-            success: false,
-            error: `Graphviz process exited with code ${code}`
-          });
-        }
-      });
-    });
-    
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
-  }
-};
-
-export const generateToolGraph = async (
-  tools: readonly Tool[],
-  options: GraphOptions = {}
-): Promise<GraphResult> => {
-  try {
-    const {
-      title = 'JAF Tool Graph',
-      layout = 'circo',
-      outputFormat = 'png',
-      outputPath = './tool-graph',
-      colorScheme = 'default'
-    } = options;
-
-    const graph = digraph('ToolGraph');
-    
-    graph.set('layout', layout);
-    graph.set('label', title);
-    graph.set('labelloc', 't');
-    graph.set('fontsize', '16');
-    graph.set('fontname', 'Arial Bold');
-    graph.set('bgcolor', 'white');
-    
-    const styles = COLOR_SCHEMES[colorScheme];
-    
-    // Add tool nodes
-    for (const tool of tools) {
-      addToolNode(graph, tool, styles);
-    }
-    
-    // Generate output
-    const finalOutputPath = `${outputPath}.${outputFormat}`;
-    
-    return new Promise((resolve) => {
-      graph.output(outputFormat as any, finalOutputPath, (code: number) => {
-        if (code === 0) {
-          resolve({
-            success: true,
-            outputPath: finalOutputPath,
-            graphDot: graph.to_dot()
-          });
-        } else {
-          resolve({
-            success: false,
-            error: `Graphviz process exited with code ${code}`
-          });
-        }
-      });
-    });
-    
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
-  }
-};
-
-export const generateRunnerGraph = async (
-  config: RunnerConfig,
-  options: GraphOptions = {}
-): Promise<GraphResult> => {
-  try {
-    const {
-      title = 'JAF Runner Architecture',
-      layout = 'dot',
-      rankdir = 'TB',
-      outputFormat = 'png',
-      outputPath = './runner-graph',
-      showToolDetails = true,
-      showSubAgents = true,
-      colorScheme = 'modern'
-    } = options;
-
-    // Skip the graphviz library and go directly to fallback method
-    // The graphviz npm package has issues with hanging, so we use our own implementation
-    return await generateGraphWithFallback(config, options);
-    
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error occurred'
-    };
-  }
-};
-
-// Fallback method using manual DOT generation and system graphviz
-const generateGraphWithFallback = async (
-  config: RunnerConfig,
-  options: GraphOptions
-): Promise<GraphResult> => {
-  const {
-    title = 'JAF Runner Architecture',
-    rankdir = 'TB',
-    outputFormat = 'png',
-    outputPath = './runner-graph',
-    showToolDetails = true,
-    showSubAgents = true,
-    colorScheme = 'modern'
-  } = options;
-
-  try {
-    // Generate DOT content manually
-    const dotContent = generateRunnerDOT(config, {
+    // Generate DOT content
+    const dotContent = generateAgentsDOT(agents, {
       title,
+      layout,
       rankdir,
       showToolDetails,
       showSubAgents,
@@ -279,9 +126,275 @@ const generateGraphWithFallback = async (
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to generate DOT content'
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
     };
   }
+};
+
+export const generateToolGraph = async (
+  tools: readonly Tool[],
+  options: GraphOptions = {}
+): Promise<GraphResult> => {
+  try {
+    const {
+      title = 'JAF Tool Graph',
+      layout = 'circo',
+      outputFormat = 'png',
+      outputPath = './tool-graph',
+      colorScheme = 'default'
+    } = options;
+
+    // Generate DOT content
+    const dotContent = generateToolsDOT(tools, {
+      title,
+      layout,
+      colorScheme
+    });
+
+    // Write DOT file
+    const dotPath = `${outputPath}.dot`;
+    writeFileSync(dotPath, dotContent);
+
+    // Try to use system graphviz with circo layout
+    const finalOutputPath = `${outputPath}.${outputFormat}`;
+    
+    try {
+      const layoutEngine = layout === 'circo' ? 'circo' : 'dot';
+      execSync(`${layoutEngine} -T${outputFormat} "${dotPath}" -o "${finalOutputPath}"`, { 
+        stdio: 'pipe' 
+      });
+      
+      return {
+        success: true,
+        outputPath: finalOutputPath,
+        graphDot: dotContent
+      };
+    } catch (execError) {
+      return {
+        success: false,
+        error: `Graphviz not installed or failed to execute. Install with: brew install graphviz (macOS) or sudo apt-get install graphviz (Linux)`,
+        graphDot: dotContent
+      };
+    }
+    
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+};
+
+export const generateRunnerGraph = async (
+  config: RunnerConfig,
+  options: GraphOptions = {}
+): Promise<GraphResult> => {
+  try {
+    const {
+      title = 'JAF Runner Architecture',
+      layout = 'dot',
+      rankdir = 'TB',
+      outputFormat = 'png',
+      outputPath = './runner-graph',
+      showToolDetails = true,
+      showSubAgents = true,
+      colorScheme = 'modern'
+    } = options;
+
+    // Generate DOT content
+    const dotContent = generateRunnerDOT(config, {
+      title,
+      rankdir,
+      showToolDetails,
+      showSubAgents,
+      colorScheme
+    });
+
+    // Write DOT file
+    const dotPath = `${outputPath}.dot`;
+    writeFileSync(dotPath, dotContent);
+
+    // Try to use system graphviz
+    const finalOutputPath = `${outputPath}.${outputFormat}`;
+    
+    try {
+      const layoutEngine = layout === 'circo' ? 'circo' : layout === 'neato' ? 'neato' : 'dot';
+      execSync(`${layoutEngine} -T${outputFormat} "${dotPath}" -o "${finalOutputPath}"`, { 
+        stdio: 'pipe' 
+      });
+      
+      return {
+        success: true,
+        outputPath: finalOutputPath,
+        graphDot: dotContent
+      };
+    } catch (execError) {
+      return {
+        success: false,
+        error: `Graphviz not installed or failed to execute. Install with: brew install graphviz (macOS) or sudo apt-get install graphviz (Linux)`,
+        graphDot: dotContent
+      };
+    }
+    
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    };
+  }
+};
+
+// Generate DOT content for multiple agents
+const generateAgentsDOT = (
+  agents: readonly Agent[],
+  options: {
+    title: string;
+    layout: string;
+    rankdir: string;
+    showToolDetails: boolean;
+    showSubAgents: boolean;
+    colorScheme: string;
+  }
+): string => {
+  const { title, layout, rankdir, showToolDetails, showSubAgents, colorScheme } = options;
+  const styles = COLOR_SCHEMES[colorScheme as keyof typeof COLOR_SCHEMES];
+  
+  let dot = `digraph "AgentGraph" {
+    rankdir=${rankdir};
+    layout=${layout};
+    label="${title}";
+    labelloc=t;
+    fontsize=16;
+    fontname="Arial Bold";
+    bgcolor=white;
+    pad=0.5;
+    compound=true;
+`;
+
+  // Add nodes for each agent
+  for (const agent of agents) {
+    dot += generateAgentNodeDOT(agent, styles, showToolDetails);
+    
+    // Add sub-agents if requested
+    if (showSubAgents && agent.config.subAgents) {
+      for (const subAgent of agent.config.subAgents) {
+        const subAgentId = `${agent.id}_sub_${subAgent.name}`;
+        dot += `
+    // Sub-agent: ${subAgent.name}
+    "${subAgentId}" [
+        label="${subAgent.name}",
+        shape=${styles.subAgent.shape},
+        fillcolor="${styles.subAgent.fillcolor}",
+        fontcolor="${styles.subAgent.fontcolor}",
+        style="${styles.subAgent.style}"
+    ];
+
+    "${agent.id}" -> "${subAgentId}" [
+        color="${styles.edge.color}",
+        style=dashed,
+        label="delegates"
+    ];
+`;
+      }
+    }
+  }
+
+  dot += '\n}';
+  return dot;
+};
+
+// Generate DOT content for tools
+const generateToolsDOT = (
+  tools: readonly Tool[],
+  options: {
+    title: string;
+    layout: string;
+    colorScheme: string;
+  }
+): string => {
+  const { title, layout, colorScheme } = options;
+  const styles = COLOR_SCHEMES[colorScheme as keyof typeof COLOR_SCHEMES];
+  
+  let dot = `digraph "ToolGraph" {
+    layout=${layout};
+    label="${title}";
+    labelloc=t;
+    fontsize=16;
+    fontname="Arial Bold";
+    bgcolor=white;
+    pad=0.5;
+`;
+
+  // Add tool nodes
+  for (const tool of tools) {
+    const toolLabel = `${tool.name}\\n${tool.description.substring(0, 30)}${tool.description.length > 30 ? '...' : ''}`;
+    dot += `
+    // Tool: ${tool.name}
+    "${tool.name}" [
+        label="${toolLabel}",
+        shape=${styles.tool.shape},
+        fillcolor="${styles.tool.fillcolor}",
+        fontcolor="${styles.tool.fontcolor}",
+        style="${styles.tool.style}"
+    ];
+`;
+  }
+
+  dot += '\n}';
+  return dot;
+};
+
+// Generate DOT for a single agent node
+const generateAgentNodeDOT = (
+  agent: Agent,
+  styles: any,
+  showToolDetails: boolean
+): string => {
+  let label = `${agent.config.name}\\n(${agent.config.model})`;
+  
+  if (showToolDetails && agent.config.tools.length > 0) {
+    label += `\\n${agent.config.tools.length} tools`;
+  }
+  
+  if (agent.config.subAgents && agent.config.subAgents.length > 0) {
+    label += `\\n${agent.config.subAgents.length} sub-agents`;
+  }
+
+  let dot = `
+    // Agent: ${agent.config.name}
+    "${agent.id}" [
+        label="${label}",
+        shape=${styles.agent.shape},
+        fillcolor="${styles.agent.fillcolor}",
+        fontcolor="${styles.agent.fontcolor}",
+        style="${styles.agent.style}"
+    ];
+`;
+
+  // Add tool nodes and edges if requested
+  if (showToolDetails) {
+    for (const tool of agent.config.tools) {
+      const toolLabel = `${tool.name}\\n${tool.description.substring(0, 30)}${tool.description.length > 30 ? '...' : ''}`;
+      dot += `
+    // Tool: ${tool.name}
+    "${tool.name}" [
+        label="${toolLabel}",
+        shape=${styles.tool.shape},
+        fillcolor="${styles.tool.fillcolor}",
+        fontcolor="${styles.tool.fontcolor}",
+        style="${styles.tool.style}"
+    ];
+
+    "${agent.id}" -> "${tool.name}" [
+        color="${styles.toolEdge.color}",
+        style="${styles.toolEdge.style}",
+        penwidth="${styles.toolEdge.penwidth || '1.0'}"
+    ];
+`;
+    }
+  }
+
+  return dot;
 };
 
 // Manual DOT generation for runner
@@ -418,110 +531,26 @@ const generateRunnerDOT = (
 
 // ========== Helper Functions ==========
 
-const addAgentNode = (
-  graph: any,
-  agent: Agent,
-  styles: any,
-  showToolDetails: boolean,
-  showSubAgents: boolean
-): void => {
-  // Main agent node
-  const agentNode = graph.addNode(agent.id);
-  const agentStyle = styles.agent;
-  
-  agentNode.set('label', createAgentLabel(agent, showToolDetails));
-  agentNode.set('shape', agentStyle.shape);
-  agentNode.set('fillcolor', agentStyle.fillcolor);
-  agentNode.set('fontcolor', agentStyle.fontcolor);
-  agentNode.set('style', agentStyle.style);
-  
-  if (agentStyle.fontname) {
-    agentNode.set('fontname', agentStyle.fontname);
-  }
-  
-  // Add tool nodes
-  if (showToolDetails && agent.config.tools.length > 0) {
-    for (const tool of agent.config.tools) {
-      addToolNode(graph, tool, styles);
-      
-      // Connect agent to tool
-      const edge = graph.addEdge(agent.id, tool.name);
-      edge.set('color', styles.toolEdge.color);
-      edge.set('style', styles.toolEdge.style);
-      edge.set('penwidth', styles.toolEdge.penwidth);
-      
-      if (styles.toolEdge.arrowhead) {
-        edge.set('arrowhead', styles.toolEdge.arrowhead);
-      }
-    }
-  }
-  
-  // Add sub-agent nodes
-  if (showSubAgents && agent.config.subAgents) {
-    for (const subAgentConfig of agent.config.subAgents) {
-      const subAgentId = `${agent.id}_sub_${subAgentConfig.name}`;
-      const subAgentNode = graph.addNode(subAgentId);
-      const subAgentStyle = styles.subAgent;
-      
-      subAgentNode.set('label', subAgentConfig.name);
-      subAgentNode.set('shape', subAgentStyle.shape);
-      subAgentNode.set('fillcolor', subAgentStyle.fillcolor);
-      subAgentNode.set('fontcolor', subAgentStyle.fontcolor);
-      subAgentNode.set('style', subAgentStyle.style);
-      
-      // Connect main agent to sub-agent
-      const edge = graph.addEdge(agent.id, subAgentId);
-      edge.set('color', styles.edge.color);
-      edge.set('style', 'dashed');
-      edge.set('label', 'delegates');
-    }
-  }
-};
+// These functions are currently unused but kept for potential future use
+// when we re-implement the graphviz npm package integration
 
-const addToolNode = (graph: any, tool: Tool, styles: any): void => {
-  const toolNode = graph.addNode(tool.name);
-  const toolStyle = styles.tool;
-  
-  toolNode.set('label', createToolLabel(tool));
-  toolNode.set('shape', toolStyle.shape);
-  toolNode.set('fillcolor', toolStyle.fillcolor);
-  toolNode.set('fontcolor', toolStyle.fontcolor);
-  toolNode.set('style', toolStyle.style);
-  
-  if (toolStyle.fontname) {
-    toolNode.set('fontname', toolStyle.fontname);
-  }
-};
+// const createAgentLabel = (agent: Agent, showToolDetails: boolean): string => {
+//   let label = `${agent.config.name}\\n(${agent.config.model})`;
+//   
+//   if (showToolDetails && agent.config.tools.length > 0) {
+//     label += `\\n${agent.config.tools.length} tools`;
+//   }
+//   
+//   if (agent.config.subAgents && agent.config.subAgents.length > 0) {
+//     label += `\\n${agent.config.subAgents.length} sub-agents`;
+//   }
+//   
+//   return label;
+// };
 
-const addAgentEdges = (
-  graph: any,
-  agent: Agent,
-  allAgents: readonly Agent[],
-  styles: any,
-  showSubAgents: boolean
-): void => {
-  // Add handoff edges (if handoffs are defined in the agent config)
-  // This would need to be implemented based on how handoffs are configured
-  // For now, we'll skip this as it's not clear from the current types
-};
-
-const createAgentLabel = (agent: Agent, showToolDetails: boolean): string => {
-  let label = `${agent.config.name}\\n(${agent.config.model})`;
-  
-  if (showToolDetails && agent.config.tools.length > 0) {
-    label += `\\n${agent.config.tools.length} tools`;
-  }
-  
-  if (agent.config.subAgents && agent.config.subAgents.length > 0) {
-    label += `\\n${agent.config.subAgents.length} sub-agents`;
-  }
-  
-  return label;
-};
-
-const createToolLabel = (tool: Tool): string => {
-  return `${tool.name}\\n${tool.description.substring(0, 30)}${tool.description.length > 30 ? '...' : ''}`;
-};
+// const createToolLabel = (tool: Tool): string => {
+//   return `${tool.name}\\n${tool.description.substring(0, 30)}${tool.description.length > 30 ? '...' : ''}`;
+// };
 
 // ========== Validation Functions ==========
 
@@ -553,18 +582,26 @@ export const getGraphDot = (agents: readonly Agent[], options: GraphOptions = {}
   const {
     title = 'JAF Agent Graph',
     rankdir = 'TB',
+    layout = 'dot',
     colorScheme = 'default'
   } = options;
 
-  const graph = digraph('AgentGraph');
-  graph.set('rankdir', rankdir);
-  graph.set('label', title);
-  
-  const styles = COLOR_SCHEMES[colorScheme];
-  
-  for (const agent of agents) {
-    addAgentNode(graph, agent, styles, true, true);
+  return generateAgentsDOT(agents, {
+    title,
+    layout,
+    rankdir,
+    showToolDetails: true,
+    showSubAgents: true,
+    colorScheme
+  });
+};
+
+// Check if graphviz is installed
+export const isGraphvizInstalled = (): boolean => {
+  try {
+    execSync('dot -V', { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
   }
-  
-  return graph.to_dot();
 };
