@@ -171,7 +171,14 @@ export const createRedisArtifactStorage = (config: {
       host: config.host,
       port: config.port,
       password: config.password,
-      db: config.database || 0
+      db: config.database || 0,
+      connectTimeout: 5000, // 5 second timeout
+      enableOfflineQueue: false, // Fail fast if offline
+      maxRetriesPerRequest: 3,
+      retryStrategy: (times: number) => {
+        if (times > 3) return null; // Stop retrying after 3 attempts
+        return Math.min(times * 100, 3000);
+      }
     });
   } catch (error) {
     throw new Error('Redis artifact storage requires ioredis to be installed');
@@ -285,7 +292,10 @@ export const createPostgresArtifactStorage = (config: {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { Pool } = require('pg');
     pool = new Pool({
-      connectionString: config.connectionString
+      connectionString: config.connectionString,
+      connectionTimeoutMillis: 5000, // 5 second timeout
+      query_timeout: 5000, // 5 second query timeout
+      statement_timeout: 5000 // 5 second statement timeout
     });
   } catch (error) {
     throw new Error('PostgreSQL artifact storage requires pg to be installed');

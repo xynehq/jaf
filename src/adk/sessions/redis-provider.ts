@@ -58,17 +58,20 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
       console.log('[ADK:Sessions] Connected to Redis');
     });
     
-    redis.on('ready', () => {
-      console.log('[ADK:Sessions] Redis ready for commands');
-    });
-    
-    redis.on('close', () => {
-      console.log('[ADK:Sessions] Redis connection closed');
-    });
-    
-    redis.on('reconnecting', (delay: number) => {
-      console.log(`[ADK:Sessions] Reconnecting to Redis in ${delay}ms`);
-    });
+    // Only log Redis events if not in test environment
+    if (process.env.NODE_ENV !== 'test') {
+      redis.on('ready', () => {
+        console.log('[ADK:Sessions] Redis ready for commands');
+      });
+      
+      redis.on('close', () => {
+        console.log('[ADK:Sessions] Redis connection closed');
+      });
+      
+      redis.on('reconnecting', (delay: number) => {
+        console.log(`[ADK:Sessions] Reconnecting to Redis in ${delay}ms`);
+      });
+    }
   } catch (error) {
     throw new Error(
       'Redis session provider requires ioredis to be installed. ' +

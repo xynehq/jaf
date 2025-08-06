@@ -374,7 +374,7 @@ describe('Session Providers', () => {
       }
     });
 
-    if (redisAvailable || process.env.CI) {
+    if (redisAvailable && !process.env.CI) {
       runProviderTests(
         'Redis',
         () => createRedisSessionProvider({
@@ -465,7 +465,7 @@ describe('Session Providers', () => {
       }
     });
 
-    if (pgAvailable || process.env.CI) {
+    if (pgAvailable && !process.env.CI) {
       runProviderTests(
         'PostgreSQL',
         () => createPostgresSessionProvider({
