@@ -1,6 +1,6 @@
 # Model Providers and LLM Integration
 
-The Functional Agent Framework (FAF) provides a flexible and extensible model provider abstraction that enables integration with various Large Language Models (LLMs) through a unified interface. This guide covers everything you need to know about model providers, configuration, and best practices.
+The Juspay Agent Framework (JAF) provides a flexible and extensible model provider abstraction that enables integration with various Large Language Models (LLMs) through a unified interface. This guide covers everything you need to know about model providers, configuration, and best practices.
 
 ## Table of Contents
 
@@ -20,7 +20,7 @@ The Functional Agent Framework (FAF) provides a flexible and extensible model pr
 
 ## Overview
 
-FAF's model provider system abstracts away the complexity of interacting with different LLM APIs while providing:
+JAF's model provider system abstracts away the complexity of interacting with different LLM APIs while providing:
 
 - **Unified Interface**: Single API for all LLM providers
 - **Type Safety**: Full TypeScript support with strict typing
@@ -69,7 +69,7 @@ The provider must return a response object with an optional `message` containing
 
 ## LiteLLM Provider Implementation
 
-FAF includes a built-in LiteLLM provider that supports 100+ LLM providers through a unified interface.
+JAF includes a built-in LiteLLM provider that supports 100+ LLM providers through a unified interface.
 
 ### Creating a LiteLLM Provider
 
@@ -118,7 +118,7 @@ const modelProvider = makeLiteLLMProvider(
 The LiteLLM provider automatically handles:
 
 - **Model Selection**: Uses `modelOverride`, agent `modelConfig.name`, or defaults to `gpt-4o`
-- **Message Conversion**: Converts FAF messages to OpenAI-compatible format
+- **Message Conversion**: Converts JAF messages to OpenAI-compatible format
 - **Tool Schema Conversion**: Transforms Zod schemas to JSON Schema for function calling
 - **Temperature Control**: Applies temperature settings from agent configuration
 - **Token Limits**: Enforces max token limits from agent configuration
@@ -159,7 +159,7 @@ const config: RunConfig<MyContext> = {
 
 ### Model Selection Priority
 
-FAF follows this priority order for model selection:
+JAF follows this priority order for model selection:
 
 1. **Global Override**: `config.modelOverride`
 2. **Agent Config**: `agent.modelConfig.name`
@@ -280,10 +280,10 @@ LiteLLM supports 100+ models from major providers:
 
 ### Built-in Error Types
 
-FAF defines comprehensive error types for model interactions:
+JAF defines comprehensive error types for model interactions:
 
 ```typescript
-export type FAFError =
+export type JAFError =
   | { readonly _tag: "MaxTurnsExceeded"; readonly turns: number }
   | { readonly _tag: "ModelBehaviorError"; readonly detail: string }
   | { readonly _tag: "DecodeError"; readonly errors: z.ZodIssue[] }
@@ -488,7 +488,7 @@ class CustomModelProvider implements ModelProvider<any> {
   async getCompletion(state: RunState<any>, agent: Agent<any, any>, config: RunConfig<any>) {
     const model = config.modelOverride ?? agent.modelConfig?.name ?? 'default-model';
     
-    // Convert FAF messages to your API format
+    // Convert JAF messages to your API format
     const messages = [
       { role: 'system', content: agent.instructions(state) },
       ...state.messages.map(this.convertMessage)
@@ -527,7 +527,7 @@ class CustomModelProvider implements ModelProvider<any> {
   }
 
   private convertMessage(msg: Message) {
-    // Convert FAF message format to your API format
+    // Convert JAF message format to your API format
     return {
       role: msg.role,
       content: msg.content,
@@ -551,7 +551,7 @@ class CustomModelProvider implements ModelProvider<any> {
 
   private zodToJsonSchema(schema: any): any {
     // Implement Zod to JSON Schema conversion
-    // (FAF provides zodSchemaToJsonSchema utility)
+    // (JAF provides zodSchemaToJsonSchema utility)
     return { type: 'object' };
   }
 }
@@ -608,7 +608,7 @@ const config: RunConfig<any> = {
 
 ### Trace Events
 
-FAF emits detailed trace events for model interactions:
+JAF emits detailed trace events for model interactions:
 
 ```typescript
 // LLM call start
@@ -847,4 +847,4 @@ class ProductionModelProvider implements ModelProvider<any> {
 - **Staging environment**: Test with production models in staging
 - **A/B testing**: Compare model performance with real users
 
-Remember that model providers are a critical component of your FAF application, and proper implementation ensures reliable, cost-effective, and performant AI functionality.
+Remember that model providers are a critical component of your JAF application, and proper implementation ensures reliable, cost-effective, and performant AI functionality.

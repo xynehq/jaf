@@ -1,14 +1,14 @@
-# FAF ADK Layer Implementation Plan
+# JAF ADK Layer Implementation Plan
 
 ## Overview
 
-The FAF ADK Layer will provide ADK-style functionality while maintaining FAF's core functional principles. This layer will bridge the gap between ADK's rich feature set and FAF's functional purity, enabling developers to leverage ADK patterns in a functional context.
+The JAF ADK Layer will provide ADK-style functionality while maintaining JAF's core functional principles. This layer will bridge the gap between ADK's rich feature set and JAF's functional purity, enabling developers to leverage ADK patterns in a functional context.
 
 ## Architecture Design
 
 ### Core Principle: Functional ADK
 
-The FAF ADK Layer follows these principles:
+The JAF ADK Layer follows these principles:
 - **No Classes**: All ADK concepts mapped to pure functions
 - **Immutable State**: All state passed explicitly through function parameters
 - **Composition**: ADK-style patterns built through function composition
@@ -29,7 +29,7 @@ src/
 │   └── index.ts         # Main exports
 ```
 
-## Functional Mapping: ADK Concepts → FAF Functions
+## Functional Mapping: ADK Concepts → JAF Functions
 
 ### 1. Agent System
 
@@ -44,7 +44,7 @@ agent = LlmAgent(
 )
 ```
 
-#### FAF Functional Equivalent:
+#### JAF Functional Equivalent:
 ```typescript
 // Agent Configuration Type
 interface AgentConfig {
@@ -85,7 +85,7 @@ runner = Runner(agent=agent, session_service=session_service)
 events = runner.run_async(user_id="123", session_id="456", new_message=content)
 ```
 
-#### FAF Functional Equivalent:
+#### JAF Functional Equivalent:
 ```typescript
 // Runner Configuration
 interface RunnerConfig {
@@ -136,7 +136,7 @@ session_service = InMemorySessionService()
 session = await session_service.create_session(app_name="app", user_id="123")
 ```
 
-#### FAF Functional Equivalent:
+#### JAF Functional Equivalent:
 ```typescript
 // Session Provider Interface
 interface SessionProvider {
@@ -195,7 +195,7 @@ tools = [
 ]
 ```
 
-#### FAF Functional Equivalent:
+#### JAF Functional Equivalent:
 ```typescript
 // Tool Interface
 interface Tool {
@@ -267,7 +267,7 @@ class WeatherQuery(BaseModel):
 agent = LlmAgent(input_schema=WeatherQuery)
 ```
 
-#### FAF Functional Equivalent:
+#### JAF Functional Equivalent:
 ```typescript
 // Schema Definition
 interface WeatherQuery {
@@ -322,7 +322,7 @@ coordinator = LlmAgent(
 )
 ```
 
-#### FAF Functional Equivalent:
+#### JAF Functional Equivalent:
 ```typescript
 // Multi-Agent Configuration
 interface MultiAgentConfig extends AgentConfig {
@@ -447,11 +447,11 @@ export const streamToQueue: (stream: AsyncGenerator<AgentEvent>, queue: LiveRequ
 export const queueToStream: (queue: LiveRequestQueue) => AsyncGenerator<AgentEvent>;
 ```
 
-## Integration with Existing FAF
+## Integration with Existing JAF
 
 ### Memory Provider Bridge
 ```typescript
-// Bridge FAF memory providers to ADK session providers
+// Bridge JAF memory providers to ADK session providers
 const createMemoryProviderBridge = (
   memoryProvider: MemoryProvider
 ): SessionProvider => ({
@@ -477,13 +477,13 @@ const createMemoryProviderBridge = (
 
 ### Tool Compatibility
 ```typescript
-// Bridge FAF tools to ADK tools
-const createFAFToolBridge = (fafTool: FAFTool): Tool => ({
-  name: fafTool.name,
-  description: fafTool.description,
-  parameters: fafTool.parameters,
+// Bridge JAF tools to ADK tools
+const createJAFToolBridge = (jafTool: JAFTool): Tool => ({
+  name: jafTool.name,
+  description: jafTool.description,
+  parameters: jafTool.parameters,
   execute: async (params, context) => {
-    const result = await fafTool.execute(params);
+    const result = await jafTool.execute(params);
     return {
       success: result.success,
       data: result.content,
@@ -493,14 +493,14 @@ const createFAFToolBridge = (fafTool: FAFTool): Tool => ({
 });
 ```
 
-## Benefits of FAF ADK Layer
+## Benefits of JAF ADK Layer
 
 ### For Developers
 - **Familiar Patterns**: ADK-style APIs in functional form
 - **Rich Ecosystem**: Access to ADK's tool integrations
 - **Type Safety**: Full TypeScript support
 - **Functional Purity**: No classes, immutable state
-- **Gradual Adoption**: Can be added incrementally to existing FAF projects
+- **Gradual Adoption**: Can be added incrementally to existing JAF projects
 
 ### For Framework
 - **Enhanced Capabilities**: Multi-agent systems, streaming, guardrails
@@ -514,17 +514,17 @@ const createFAFToolBridge = (fafTool: FAFTool): Tool => ({
 - [ ] 100% functional equivalent of core ADK features
 - [ ] Zero classes in the implementation
 - [ ] Full TypeScript coverage
-- [ ] Performance parity with existing FAF functions
+- [ ] Performance parity with existing JAF functions
 
 ### Developer Adoption
-- [ ] Clear migration path from ADK to FAF ADK Layer
+- [ ] Clear migration path from ADK to JAF ADK Layer
 - [ ] Comprehensive documentation and examples
 - [ ] Positive developer feedback
-- [ ] Active usage in FAF projects
+- [ ] Active usage in JAF projects
 
 ### Ecosystem Integration
 - [ ] Compatibility with major ADK tools (90%+)
-- [ ] Seamless integration with existing FAF memory providers
+- [ ] Seamless integration with existing JAF memory providers
 - [ ] Support for ADK patterns (agents, tools, streaming)
 - [ ] Maintained functional programming principles
 
@@ -534,6 +534,6 @@ const createFAFToolBridge = (fafTool: FAFTool): Tool => ({
 2. **Tool Integration**: Start with most common ADK tools
 3. **Testing Framework**: Ensure compatibility and correctness
 4. **Documentation**: Create comprehensive guides and examples
-5. **Community Feedback**: Gather input from FAF and ADK developers
+5. **Community Feedback**: Gather input from JAF and ADK developers
 
-This FAF ADK Layer will bridge the best of both worlds - ADK's rich feature set and FAF's functional purity - creating a powerful, type-safe, and developer-friendly agent framework.
+This JAF ADK Layer will bridge the best of both worlds - ADK's rich feature set and JAF's functional purity - creating a powerful, type-safe, and developer-friendly agent framework.

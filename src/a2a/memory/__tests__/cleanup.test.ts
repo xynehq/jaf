@@ -170,14 +170,14 @@ describe('A2A Cleanup Service', () => {
     });
 
     it('should create config from environment variables', () => {
-      process.env.FAF_A2A_CLEANUP_ENABLED = 'true';
-      process.env.FAF_A2A_CLEANUP_INTERVAL = '7200000';
-      process.env.FAF_A2A_CLEANUP_MAX_AGE = '1209600000';
-      process.env.FAF_A2A_CLEANUP_MAX_COMPLETED = '2000';
-      process.env.FAF_A2A_CLEANUP_MAX_FAILED = '1000';
-      process.env.FAF_A2A_CLEANUP_RETAIN_STATES = 'working,submitted';
-      process.env.FAF_A2A_CLEANUP_BATCH_SIZE = '200';
-      process.env.FAF_A2A_CLEANUP_DRY_RUN = 'true';
+      process.env.JAF_A2A_CLEANUP_ENABLED = 'true';
+      process.env.JAF_A2A_CLEANUP_INTERVAL = '7200000';
+      process.env.JAF_A2A_CLEANUP_MAX_AGE = '1209600000';
+      process.env.JAF_A2A_CLEANUP_MAX_COMPLETED = '2000';
+      process.env.JAF_A2A_CLEANUP_MAX_FAILED = '1000';
+      process.env.JAF_A2A_CLEANUP_RETAIN_STATES = 'working,submitted';
+      process.env.JAF_A2A_CLEANUP_BATCH_SIZE = '200';
+      process.env.JAF_A2A_CLEANUP_DRY_RUN = 'true';
 
       const config = createCleanupConfigFromEnv();
 
@@ -203,7 +203,7 @@ describe('A2A Cleanup Service', () => {
     });
 
     it('should handle disabled cleanup', () => {
-      process.env.FAF_A2A_CLEANUP_ENABLED = 'false';
+      process.env.JAF_A2A_CLEANUP_ENABLED = 'false';
 
       const config = createCleanupConfigFromEnv();
       expect(config.enabled).toBe(false);

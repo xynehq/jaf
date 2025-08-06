@@ -1,6 +1,6 @@
-# Publishing FAF to npm
+# Publishing JAF to npm
 
-This guide is for maintainers who need to publish new versions of FAF to npm.
+This guide is for maintainers who need to publish new versions of JAF to npm.
 
 ## Prerequisites
 
@@ -13,7 +13,7 @@ This guide is for maintainers who need to publish new versions of FAF to npm.
 ### Option 1: Using GitHub Release (Recommended)
 
 1. Create a new release on GitHub:
-   - Go to https://github.com/xynehq/faf/releases
+   - Go to https://github.com/xynehq/jaf/releases
    - Click "Create a new release"
    - Create a new tag (e.g., `v0.1.0`)
    - Fill in release notes
@@ -69,8 +69,8 @@ This guide is for maintainers who need to publish new versions of FAF to npm.
 
 ## Post-publish Steps
 
-1. Verify the package on npm: https://www.npmjs.com/package/@xynehq/faf
-2. Test installation: `npm install @xynehq/faf@latest`
+1. Verify the package on npm: https://www.npmjs.com/package/@xynehq/jaf
+2. Test installation: `npm install @xynehq/jaf@latest`
 3. Update documentation site if needed
 4. Announce the release (if major version)
 
@@ -90,7 +90,7 @@ npm pack --dry-run
 ### Test locally before publishing
 ```bash
 npm pack
-npm install ./xynehq-faf-0.1.0.tgz  # Use actual filename
+npm install ./xynehq-jaf-0.1.0.tgz  # Use actual filename
 ```
 
 ## Important Notes

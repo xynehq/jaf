@@ -33,7 +33,7 @@ const greetingTool = {
         }),
     },
     execute: async (args, context) => {
-        return `Hello, ${args.name}! Nice to meet you. I'm a helpful AI assistant running on the FAF framework.`;
+        return `Hello, ${args.name}! Nice to meet you. I'm a helpful AI assistant running on the JAF framework.`;
     },
 };
 // Define agents
@@ -53,7 +53,7 @@ const assistantAgent = {
     tools: [calculatorTool, greetingTool],
 };
 async function startServer() {
-    console.log('🚀 Starting FAF Development Server...\n');
+    console.log('🚀 Starting JAF Development Server...\n');
     // Set up model provider (you'll need a LiteLLM server running)
     const modelProvider = (0, functional_agent_framework_1.makeLiteLLMProvider)(process.env.LITELLM_URL || 'http://localhost:4000', process.env.LITELLM_API_KEY); // Type assertion to handle generic constraints
     // Set up tracing

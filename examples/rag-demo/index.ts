@@ -18,9 +18,9 @@ type RAGContext = {
 };
 
 async function runRAGDemo() {
-  console.log('\n🔍 FAF Vertex AI RAG Demo');
+  console.log('\n🔍 JAF Vertex AI RAG Demo');
   console.log('========================');
-  console.log('Showcasing Vertex AI RAG integration with FAF framework\n');
+  console.log('Showcasing Vertex AI RAG integration with JAF framework\n');
 
   // Check for required environment variables
   if (!process.env.GOOGLE_CLOUD_PROJECT) {
@@ -153,7 +153,7 @@ async function runRAGDemo() {
   console.log('- ✅ Comprehensive error handling');
   console.log('- ✅ In-memory conversation persistence');
   console.log('\n🔗 Integration Points:');
-  console.log('- FAF framework orchestration');
+  console.log('- JAF framework orchestration');
   console.log('- Vertex AI RAG corpus querying');
   console.log('- Real-time tracing and observability');
   console.log('- Type-safe tool definitions');
@@ -175,7 +175,7 @@ function checkAuthentication() {
 
 // Main execution
 async function main() {
-  console.log('🚀 Starting FAF Vertex AI RAG Demo...\n');
+  console.log('🚀 Starting JAF Vertex AI RAG Demo...\n');
 
   // Check authentication
   if (!checkAuthentication()) {

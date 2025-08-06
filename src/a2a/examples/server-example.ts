@@ -1,5 +1,5 @@
 /**
- * Complete example of A2A server with FAF integration
+ * Complete example of A2A server with JAF integration
  * Shows how to set up multiple agents with A2A protocol support
  */
 
@@ -165,7 +165,7 @@ const main = async () => {
       description: 'A collection of specialized AI agents providing weather, calculation, and greeting services through the A2A protocol',
       version: '1.0.0',
       provider: {
-        organization: 'FAF Example Service',
+        organization: 'JAF Example Service',
         url: 'https://github.com/functional-agent-framework'
       }
     },
@@ -174,7 +174,7 @@ const main = async () => {
     host: 'localhost'
   };
   
-  console.log('🚀 Starting A2A-enabled FAF server...\n');
+  console.log('🚀 Starting A2A-enabled JAF server...\n');
   
   try {
     // Start the server

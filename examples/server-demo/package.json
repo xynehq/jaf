@@ -1,7 +1,7 @@
 {
-  "name": "faf-server-demo",
+  "name": "jaf-server-demo",
   "version": "1.0.0",
-  "description": "Demonstration of FAF development server",
+  "description": "Demonstration of JAF development server",
   "main": "index.ts",
   "scripts": {
     "dev": "tsx index.ts",

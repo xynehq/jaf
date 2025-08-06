@@ -1,5 +1,5 @@
 /**
- * Example client usage of A2A protocol with FAF agents
+ * Example client usage of A2A protocol with JAF agents
  * Demonstrates all client capabilities in a pure functional way
  */
 

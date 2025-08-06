@@ -1,10 +1,10 @@
-# FAF v0.1.0 - Initial Release 🎉
+# JAF v0.1.0 - Initial Release 🎉
 
-We're excited to announce the first public release of FAF (Functional Agent Framework) - a purely functional framework for building AI agents with TypeScript.
+We're excited to announce the first public release of JAF (Functional Agent Framework) - a purely functional framework for building AI agents with TypeScript.
 
-## 🌟 What is FAF?
+## 🌟 What is JAF?
 
-FAF is a production-ready framework that brings functional programming principles to AI agent development. Built on immutable state, type safety, and composable tools, FAF enables developers to create robust, predictable, and maintainable AI agent systems.
+JAF is a production-ready framework that brings functional programming principles to AI agent development. Built on immutable state, type safety, and composable tools, JAF enables developers to create robust, predictable, and maintainable AI agent systems.
 
 ## ✨ Key Features
 
@@ -51,17 +51,17 @@ FAF is a production-ready framework that brings functional programming principle
 ## 📦 Installation
 
 ```bash
-npm install @xynehq/faf
+npm install @xynehq/jaf
 # or
-yarn add @xynehq/faf
+yarn add @xynehq/jaf
 # or
-pnpm add @xynehq/faf
+pnpm add @xynehq/jaf
 ```
 
 ## 🚀 Quick Example
 
 ```typescript
-import { createAgent, createFunctionTool, run, makeLiteLLMProvider } from '@xynehq/faf';
+import { createAgent, createFunctionTool, run, makeLiteLLMProvider } from '@xynehq/jaf';
 
 // Create a simple calculator tool
 const calculatorTool = createFunctionTool(
@@ -88,10 +88,10 @@ const result = await run(
 
 ## 📚 Documentation
 
-- **[Full Documentation](https://xynehq.github.io/faf/)**: Comprehensive guides and API reference
-- **[Getting Started](https://xynehq.github.io/faf/getting-started/)**: Quick start guide
-- **[ADK Guide](https://xynehq.github.io/faf/adk-layer/)**: Agent Development Kit documentation
-- **[Examples](https://github.com/xynehq/faf/tree/main/examples)**: Sample implementations
+- **[Full Documentation](https://xynehq.github.io/jaf/)**: Comprehensive guides and API reference
+- **[Getting Started](https://xynehq.github.io/jaf/getting-started/)**: Quick start guide
+- **[ADK Guide](https://xynehq.github.io/jaf/adk-layer/)**: Agent Development Kit documentation
+- **[Examples](https://github.com/xynehq/jaf/tree/main/examples)**: Sample implementations
 
 ## 🧪 Testing & Quality
 
@@ -113,7 +113,7 @@ const result = await run(
 
 ## 🙏 Acknowledgments
 
-This framework is built on the principles of functional programming and inspired by the need for more predictable, maintainable AI agent systems. Special thanks to all contributors who helped shape FAF's architecture and implementation.
+This framework is built on the principles of functional programming and inspired by the need for more predictable, maintainable AI agent systems. Special thanks to all contributors who helped shape JAF's architecture and implementation.
 
 ## 🔮 What's Next
 
@@ -125,10 +125,10 @@ This framework is built on the principles of functional programming and inspired
 
 ## 📄 License
 
-FAF is released under the MIT License. See [LICENSE](LICENSE) file for details.
+JAF is released under the MIT License. See [LICENSE](LICENSE) file for details.
 
 ---
 
-**Get Started**: `npm install @xynehq/faf`
-**Documentation**: https://xynehq.github.io/faf/
-**Report Issues**: https://github.com/xynehq/faf/issues
+**Get Started**: `npm install @xynehq/jaf`
+**Documentation**: https://xynehq.github.io/jaf/
+**Report Issues**: https://github.com/xynehq/jaf/issues

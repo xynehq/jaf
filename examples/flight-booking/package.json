@@ -1,17 +1,17 @@
 {
-  "name": "faf-flight-booking-example",
+  "name": "jaf-flight-booking-example",
   "version": "1.0.0",
-  "description": "Flight booking example using FAF ADK",
+  "description": "Flight booking example using JAF ADK",
   "main": "index.ts",
   "scripts": {
     "dev": "tsx index.ts",
     "dev:multi": "tsx multi-agent.ts",
-    "server": "tsx faf-server.ts",
+    "server": "tsx jaf-server.ts",
     "build": "tsc",
-    "start": "node dist/faf-server.js"
+    "start": "node dist/jaf-server.js"
   },
   "dependencies": {
-    "@xynehq/faf": "file:../..",
+    "@xynehq/jaf": "file:../..",
     "tsx": "^4.7.0",
     "zod": "^3.22.4",
     "dotenv": "^16.3.1"

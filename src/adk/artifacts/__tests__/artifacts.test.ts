@@ -185,7 +185,7 @@ describe('Artifact Storage System', () => {
     beforeAll(() => {
       try {
         require('pg');
-        const connectionString = process.env.POSTGRES_URL || 'postgresql://faf_test:faf_test_password@localhost:5432/faf_test_db';
+        const connectionString = process.env.POSTGRES_URL || 'postgresql://jaf_test:jaf_test_password@localhost:5432/jaf_test_db';
         storage = createPostgresArtifactStorage({
           connectionString,
           tableName: 'test_artifacts'

@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Content System
+ * JAF ADK Layer - Content System
  * 
  * Functional content and message handling utilities
  */

@@ -1,7 +1,7 @@
 /**
- * FAF ADK Layer - Main Export
+ * JAF ADK Layer - Main Export
  * 
- * Functional Agent Development Kit for FAF
+ * Functional Agent Development Kit for JAF
  */
 
 // ========== Core Types ==========
@@ -500,24 +500,24 @@ export const ADK_LAYER_VERSION = '1.0.0';
 // ========== Framework Integration ==========
 
 /**
- * Bridge to FAF core types
+ * Bridge to JAF core types
  */
-export const bridgeToFAF = (fafAgent: any) => {
-  // Convert FAF agent to ADK agent
-  // This would need to be implemented based on FAF's actual structure
+export const bridgeToJAF = (jafAgent: any) => {
+  // Convert JAF agent to ADK agent
+  // This would need to be implemented based on JAF's actual structure
   return createAgent({
-    name: fafAgent.name || 'faf_agent',
-    model: fafAgent.model || Model.GEMINI_2_0_FLASH,
-    instruction: fafAgent.instruction || 'FAF agent',
-    tools: fafAgent.tools || []
+    name: jafAgent.name || 'jaf_agent',
+    model: jafAgent.model || Model.GEMINI_2_0_FLASH,
+    instruction: jafAgent.instruction || 'JAF agent',
+    tools: jafAgent.tools || []
   });
 };
 
 /**
- * Bridge from ADK back to FAF
+ * Bridge from ADK back to JAF
  */
 export const bridgeFromADK = (adkAgent: Agent) => {
-  // Convert ADK agent back to FAF format
+  // Convert ADK agent back to JAF format
   return {
     name: adkAgent.config.name,
     model: adkAgent.config.model,

@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Multi-Agent Example
+ * JAF ADK Layer - Multi-Agent Example
  * 
  * Demonstrates multi-agent coordination and delegation
  */
@@ -284,7 +284,7 @@ export const createSequentialAgentPipeline = () => {
 // ========== Example Usage Functions ==========
 
 export async function runMultiAgentExample() {
-  console.log('=== FAF ADK Layer - Multi-Agent Coordinator Example ===\n');
+  console.log('=== JAF ADK Layer - Multi-Agent Coordinator Example ===\n');
 
   const { runnerConfig } = createMultiAgentCoordinator();
 
@@ -340,7 +340,7 @@ export async function runMultiAgentExample() {
 }
 
 export async function runSequentialAgentExample() {
-  console.log('\n=== FAF ADK Layer - Sequential Agent Pipeline Example ===\n');
+  console.log('\n=== JAF ADK Layer - Sequential Agent Pipeline Example ===\n');
 
   const { runnerConfig } = createSequentialAgentPipeline();
 
@@ -358,7 +358,7 @@ export async function runSequentialAgentExample() {
 }
 
 export async function runAgentSpecializationExample() {
-  console.log('\n=== FAF ADK Layer - Agent Specialization Example ===\n');
+  console.log('\n=== JAF ADK Layer - Agent Specialization Example ===\n');
 
   // Test individual specialists
   const weatherConfig = createRunnerConfig(

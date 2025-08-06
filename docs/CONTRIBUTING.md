@@ -1,6 +1,6 @@
-# Contributing to FAF Documentation
+# Contributing to JAF Documentation
 
-This guide explains how to contribute to the FAF documentation and work with MkDocs.
+This guide explains how to contribute to the JAF documentation and work with MkDocs.
 
 ## Prerequisites
 
@@ -12,8 +12,8 @@ This guide explains how to contribute to the FAF documentation and work with MkD
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/xynehq/faf.git
-   cd faf
+   git clone https://github.com/xynehq/jaf.git
+   cd jaf
    ```
 
 2. **Install documentation dependencies**:
@@ -157,4 +157,4 @@ Each page has an automatic table of contents on the right side.
 
 - Check the [MkDocs documentation](https://www.mkdocs.org/)
 - Review [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/)
-- Open an issue in the FAF repository
+- Open an issue in the JAF repository

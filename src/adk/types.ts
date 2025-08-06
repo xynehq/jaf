@@ -1,7 +1,7 @@
 /**
- * FAF ADK Layer - Core Types
+ * JAF ADK Layer - Core Types
  * 
- * Functional equivalents of Google ADK primitives following FAF's no-classes principle
+ * Functional equivalents of Google ADK primitives following JAF's no-classes principle
  */
 
 // Import Model type for use in interfaces

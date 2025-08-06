@@ -20,7 +20,7 @@ export async function makeMCPClient(command: string, args: string[] = []): Promi
   });
 
   const client = new Client({
-    name: "faf-client",
+    name: "jaf-client",
     version: "2.0.0",
   });
 
@@ -73,7 +73,7 @@ export async function makeMCPClient(command: string, args: string[] = []): Promi
   };
 }
 
-export function mcpToolToFAFTool<Ctx>(
+export function mcpToolToJAFTool<Ctx>(
   mcpClient: MCPClient,
   mcpToolDef: { name: string; description?: string; inputSchema?: any }
 ): Tool<any, Ctx> {

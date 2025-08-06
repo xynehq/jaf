@@ -1,6 +1,6 @@
-# FAF Server API Documentation
+# JAF Server API Documentation
 
-The Functional Agent Framework (FAF) provides a production-ready HTTP server that exposes agents through RESTful endpoints. This guide covers the complete server API, configuration options, and best practices for deployment.
+The Juspay Agent Framework (JAF) provides a production-ready HTTP server that exposes agents through RESTful endpoints. This guide covers the complete server API, configuration options, and best practices for deployment.
 
 ## Table of Contents
 
@@ -37,12 +37,12 @@ const server = await runServer(
 );
 ```
 
-### Using createFAFServer for Advanced Configuration
+### Using createJAFServer for Advanced Configuration
 
 ```typescript
-import { createFAFServer } from 'functional-agent-framework/server';
+import { createJAFServer } from 'functional-agent-framework/server';
 
-const server = createFAFServer({
+const server = createJAFServer({
   port: 3000,
   host: '0.0.0.0',
   cors: true,
@@ -333,7 +333,7 @@ const server = await runServer(
 
 ### Authentication
 
-FAF server doesn't provide built-in authentication. Implement authentication using:
+JAF server doesn't provide built-in authentication. Implement authentication using:
 
 1. **Reverse Proxy**: Use nginx, Apache, or cloud load balancers
 2. **Custom Middleware**: Add Fastify hooks for authentication
@@ -342,7 +342,7 @@ FAF server doesn't provide built-in authentication. Implement authentication usi
 Example custom authentication:
 
 ```typescript
-const server = createFAFServer(config);
+const server = createJAFServer(config);
 
 // Add authentication hook before starting
 server.app.addHook('preHandler', async (request, reply) => {
@@ -415,7 +415,7 @@ await redisClient.connect();
 
 const memoryProvider = await createRedisProvider({
   type: 'redis',
-  keyPrefix: 'faf:memory:',
+  keyPrefix: 'jaf:memory:',
   ttl: 3600 // 1 hour
 }, redisClient);
 ```
@@ -426,7 +426,7 @@ import { createPostgresProvider } from 'functional-agent-framework';
 import { Client } from 'pg';
 
 const postgresClient = new Client({
-  connectionString: 'postgresql://user:pass@localhost:5432/faf'
+  connectionString: 'postgresql://user:pass@localhost:5432/jaf'
 });
 await postgresClient.connect();
 
@@ -556,21 +556,21 @@ LITELLM_API_KEY=your_api_key
 LITELLM_MODEL=gpt-4
 
 # Memory Provider
-FAF_MEMORY_TYPE=postgres
-FAF_POSTGRES_CONNECTION_STRING=postgresql://user:pass@localhost:5432/faf
-FAF_POSTGRES_SSL=true
+JAF_MEMORY_TYPE=postgres
+JAF_POSTGRES_CONNECTION_STRING=postgresql://user:pass@localhost:5432/jaf
+JAF_POSTGRES_SSL=true
 
 # Or for Redis
-FAF_MEMORY_TYPE=redis
-FAF_REDIS_URL=redis://localhost:6379
-FAF_REDIS_PASSWORD=your_password
+JAF_MEMORY_TYPE=redis
+JAF_REDIS_URL=redis://localhost:6379
+JAF_REDIS_PASSWORD=your_password
 ```
 
 ## Performance and Scaling
 
 ### Server Performance
 
-The FAF server is built on Fastify for high performance:
+The JAF server is built on Fastify for high performance:
 
 - **Async/Await**: All handlers are fully asynchronous
 - **Schema Validation**: Request validation using JSON Schema/Zod
@@ -607,7 +607,7 @@ The FAF server is built on Fastify for high performance:
        ┌───────────────────┼───────────────────┐
        │                   │                   │
 ┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│ FAF Server  │    │ FAF Server  │    │ FAF Server  │
+│ JAF Server  │    │ JAF Server  │    │ JAF Server  │
 │   Instance  │    │   Instance  │    │   Instance  │
 └─────────────┘    └─────────────┘    └─────────────┘
        │                   │                   │
@@ -623,7 +623,7 @@ The FAF server is built on Fastify for high performance:
 
 #### Built-in Logging
 
-FAF server includes structured logging via Fastify:
+JAF server includes structured logging via Fastify:
 
 ```typescript
 // Logs are automatically generated for:
@@ -724,7 +724,7 @@ async function startProductionServer() {
   
   const memoryProvider = await createRedisProvider({
     type: 'redis',
-    keyPrefix: 'faf:prod:',
+    keyPrefix: 'jaf:prod:',
     ttl: 86400 // 24 hours
   }, redisClient);
 
@@ -764,10 +764,10 @@ startProductionServer().catch(console.error);
 ### Advanced Server with Custom Middleware
 
 ```typescript
-import { createFAFServer } from 'functional-agent-framework/server';
+import { createJAFServer } from 'functional-agent-framework/server';
 
 async function startAdvancedServer() {
-  const server = createFAFServer({
+  const server = createJAFServer({
     port: 3000,
     host: '0.0.0.0',
     cors: true,
@@ -855,4 +855,4 @@ async function testServer() {
 testServer().catch(console.error);
 ```
 
-This comprehensive guide covers all aspects of the FAF server API. The server provides a robust, scalable foundation for deploying FAF agents in production environments with full conversation persistence, error handling, and monitoring capabilities.
+This comprehensive guide covers all aspects of the JAF server API. The server provides a robust, scalable foundation for deploying JAF agents in production environments with full conversation persistence, error handling, and monitoring capabilities.

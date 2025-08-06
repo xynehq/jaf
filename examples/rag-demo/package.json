@@ -1,7 +1,7 @@
 {
-  "name": "faf-rag-demo",
+  "name": "jaf-rag-demo",
   "version": "1.0.0",
-  "description": "FAF Vertex AI RAG Tool Demo with in-memory conversation storage",
+  "description": "JAF Vertex AI RAG Tool Demo with in-memory conversation storage",
   "main": "index.ts",
   "scripts": {
     "dev": "tsx index.ts",

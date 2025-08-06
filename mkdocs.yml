@@ -1,16 +1,16 @@
-# FAF Documentation Configuration
+# JAF Documentation Configuration
 
 # Project information
-site_name: FAF - Functional Agent Framework
+site_name: JAF - Juspay Agent Framework
 site_description: A pure functional framework for building AI agents without classes
-site_author: FAF Contributors
-site_url: https://xynehq.github.io/faf/
-repo_url: https://github.com/xynehq/faf
-repo_name: xynehq/faf
+site_author: JAF Contributors
+site_url: https://xynehq.github.io/jaf/
+repo_url: https://github.com/xynehq/jaf
+repo_name: xynehq/jaf
 edit_uri: edit/main/docs/
 
 # Copyright
-copyright: Copyright &copy; 2024 FAF Contributors
+copyright: Copyright &copy; 2024 JAF Contributors
 
 # Configuration
 theme:
@@ -71,7 +71,7 @@ extra_css:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/xynehq/faf
+      link: https://github.com/xynehq/jaf
   analytics:
     provider: google
     property: !ENV GOOGLE_ANALYTICS_KEY
@@ -107,7 +107,7 @@ markdown_extensions:
       normalize_issue_symbols: true
       repo_url_shorthand: true
       user: xynehq
-      repo: faf
+      repo: jaf
   - pymdownx.mark
   - pymdownx.smartsymbols
   - pymdownx.snippets:
@@ -153,7 +153,7 @@ nav:
   - Development:
     - Contributing: CONTRIBUTING.md
     - ADK Analysis: adk-analysis.md
-    - ADK Layer Plan: faf-adk-layer-plan.md
+    - ADK Layer Plan: jaf-adk-layer-plan.md
 
 # Documentation directory
 docs_dir: docs

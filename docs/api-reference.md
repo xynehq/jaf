@@ -1,8 +1,8 @@
-# Functional Agent Framework (FAF) API Reference
+# Juspay Agent Framework (JAF) API Reference
 
 **Version:** 0.0.1
 
-The Functional Agent Framework (FAF) is a purely functional agent framework with immutable state and composable tools. This document provides a comprehensive reference for all public APIs, types, and interfaces.
+The Juspay Agent Framework (JAF) is a purely functional agent framework with immutable state and composable tools. This document provides a comprehensive reference for all public APIs, types, and interfaces.
 
 ## Table of Contents
 
@@ -173,7 +173,7 @@ type RunResult<Out> = {
   readonly finalState: RunState<any>;
   readonly outcome:
     | { readonly status: 'completed'; readonly output: Out }
-    | { readonly status: 'error'; readonly error: FAFError };
+    | { readonly status: 'error'; readonly error: JAFError };
 };
 ```
 
@@ -479,7 +479,7 @@ const RedisConfigSchema = z.object({
   port: z.number().default(6379),
   password: z.string().optional(),
   db: z.number().default(0),
-  keyPrefix: z.string().default('faf:memory:'),
+  keyPrefix: z.string().default('jaf:memory:'),
   ttl: z.number().optional() // seconds
 });
 
@@ -493,7 +493,7 @@ const PostgresConfigSchema = z.object({
   connectionString: z.string().optional(),
   host: z.string().default('localhost'),
   port: z.number().default(5432),
-  database: z.string().default('faf_memory'),
+  database: z.string().default('jaf_memory'),
   username: z.string().default('postgres'),
   password: z.string().optional(),
   ssl: z.boolean().default(false),
@@ -658,9 +658,9 @@ The server provides the following REST endpoints:
 
 ## Error Handling
 
-### `FAFError` Union Type
+### `JAFError` Union Type
 ```typescript
-type FAFError =
+type JAFError =
   | { readonly _tag: "MaxTurnsExceeded"; readonly turns: number }
   | { readonly _tag: "ModelBehaviorError"; readonly detail: string }
   | { readonly _tag: "DecodeError"; readonly errors: z.ZodIssue[] }
@@ -671,18 +671,18 @@ type FAFError =
   | { readonly _tag: "AgentNotFound"; readonly agentName: string };
 ```
 
-### `FAFErrorHandler` Class
+### `JAFErrorHandler` Class
 ```typescript
-class FAFErrorHandler {
-  static format(error: FAFError): string
-  static isRetryable(error: FAFError): boolean
-  static getSeverity(error: FAFError): 'low' | 'medium' | 'high' | 'critical'
+class JAFErrorHandler {
+  static format(error: JAFError): string
+  static isRetryable(error: JAFError): boolean
+  static getSeverity(error: JAFError): 'low' | 'medium' | 'high' | 'critical'
 }
 ```
 
-### `createFAFError(tag, details)`
+### `createJAFError(tag, details)`
 ```typescript
-function createFAFError(tag: FAFError['_tag'], details: any): FAFError
+function createJAFError(tag: JAFError['_tag'], details: any): JAFError
 ```
 
 ### Memory Error Types
@@ -959,29 +959,29 @@ function isMemoryStorageError(error: any): error is MemoryStorageError
 The framework supports the following environment variables for memory provider configuration:
 
 ### General Memory Configuration
-- `FAF_MEMORY_TYPE` - Type of memory provider (`memory`, `redis`, `postgres`)
+- `JAF_MEMORY_TYPE` - Type of memory provider (`memory`, `redis`, `postgres`)
 
 ### In-Memory Provider
-- `FAF_MEMORY_MAX_CONVERSATIONS` - Maximum conversations to store (default: 1000)
-- `FAF_MEMORY_MAX_MESSAGES` - Maximum messages per conversation (default: 1000)
+- `JAF_MEMORY_MAX_CONVERSATIONS` - Maximum conversations to store (default: 1000)
+- `JAF_MEMORY_MAX_MESSAGES` - Maximum messages per conversation (default: 1000)
 
 ### Redis Provider
-- `FAF_REDIS_HOST` - Redis host (default: localhost)
-- `FAF_REDIS_PORT` - Redis port (default: 6379)
-- `FAF_REDIS_PASSWORD` - Redis password
-- `FAF_REDIS_DB` - Redis database number (default: 0)
-- `FAF_REDIS_PREFIX` - Key prefix (default: faf:memory:)
-- `FAF_REDIS_TTL` - Time-to-live in seconds
+- `JAF_REDIS_HOST` - Redis host (default: localhost)
+- `JAF_REDIS_PORT` - Redis port (default: 6379)
+- `JAF_REDIS_PASSWORD` - Redis password
+- `JAF_REDIS_DB` - Redis database number (default: 0)
+- `JAF_REDIS_PREFIX` - Key prefix (default: jaf:memory:)
+- `JAF_REDIS_TTL` - Time-to-live in seconds
 
 ### PostgreSQL Provider
-- `FAF_POSTGRES_HOST` - PostgreSQL host (default: localhost)
-- `FAF_POSTGRES_PORT` - PostgreSQL port (default: 5432)
-- `FAF_POSTGRES_DB` - Database name (default: faf_memory)
-- `FAF_POSTGRES_USER` - Username (default: postgres)
-- `FAF_POSTGRES_PASSWORD` - Password
-- `FAF_POSTGRES_SSL` - Enable SSL (default: false)
-- `FAF_POSTGRES_TABLE` - Table name (default: conversations)
-- `FAF_POSTGRES_MAX_CONNECTIONS` - Max connections (default: 10)
+- `JAF_POSTGRES_HOST` - PostgreSQL host (default: localhost)
+- `JAF_POSTGRES_PORT` - PostgreSQL port (default: 5432)
+- `JAF_POSTGRES_DB` - Database name (default: jaf_memory)
+- `JAF_POSTGRES_USER` - Username (default: postgres)
+- `JAF_POSTGRES_PASSWORD` - Password
+- `JAF_POSTGRES_SSL` - Enable SSL (default: false)
+- `JAF_POSTGRES_TABLE` - Table name (default: conversations)
+- `JAF_POSTGRES_MAX_CONNECTIONS` - Max connections (default: 10)
 
 ---
 

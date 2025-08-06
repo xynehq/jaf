@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Agent System Tests
+ * JAF ADK Layer - Agent System Tests
  */
 
 import {

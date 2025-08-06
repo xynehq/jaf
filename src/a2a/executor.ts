@@ -149,7 +149,7 @@ const handleAgentResult = (content: any, task: A2ATask) => {
   let updatedTask = task;
   
   try {
-    // Handle error responses (from FAF engine errors)
+    // Handle error responses (from JAF engine errors)
     if (typeof content === 'string' && content.startsWith('Error: ')) {
       const errorMessage = content.substring(7); // Remove "Error: " prefix
       events = [...events, createFailureEvent(errorMessage)];

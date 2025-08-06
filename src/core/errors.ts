@@ -1,7 +1,7 @@
-import { FAFError } from './types.js';
+import { JAFError } from './types.js';
 
-export class FAFErrorHandler {
-  static format(error: FAFError): string {
+export class JAFErrorHandler {
+  static format(error: JAFError): string {
     switch (error._tag) {
       case 'MaxTurnsExceeded':
         return `Maximum turns exceeded: ${error.turns} turns completed`;
@@ -34,7 +34,7 @@ export class FAFErrorHandler {
     }
   }
 
-  static isRetryable(error: FAFError): boolean {
+  static isRetryable(error: JAFError): boolean {
     switch (error._tag) {
       case 'ModelBehaviorError':
       case 'ToolCallError':
@@ -53,7 +53,7 @@ export class FAFErrorHandler {
     }
   }
 
-  static getSeverity(error: FAFError): 'low' | 'medium' | 'high' | 'critical' {
+  static getSeverity(error: JAFError): 'low' | 'medium' | 'high' | 'critical' {
     switch (error._tag) {
       case 'ModelBehaviorError':
       case 'ToolCallError':
@@ -79,7 +79,7 @@ export class FAFErrorHandler {
   }
 }
 
-export function createFAFError(tag: FAFError['_tag'], details: any): FAFError {
+export function createJAFError(tag: JAFError['_tag'], details: any): JAFError {
   switch (tag) {
     case 'MaxTurnsExceeded':
       return { _tag: tag, turns: details.turns };

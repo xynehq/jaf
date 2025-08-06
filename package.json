@@ -1,7 +1,7 @@
 {
-  "name": "@xynehq/faf",
+  "name": "@xynehq/jaf",
   "version": "0.1.2",
-  "description": "A purely functional agent framework with immutable state and composable tools",
+  "description": "Juspay Agent Framework - A purely functional agent framework with immutable state and composable tools",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -54,19 +54,19 @@
     "a2a",
     "agent2agent",
     "protocol",
-    "faf",
+    "jaf",
     "adk",
     "agent-development-kit"
   ],
   "author": "Xyne HQ",
   "license": "MIT",
-  "homepage": "https://xynehq.github.io/faf/",
+  "homepage": "https://xynehq.github.io/jaf/",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xynehq/faf.git"
+    "url": "git+https://github.com/xynehq/jaf.git"
   },
   "bugs": {
-    "url": "https://github.com/xynehq/faf/issues"
+    "url": "https://github.com/xynehq/jaf/issues"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

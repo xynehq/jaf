@@ -1,7 +1,7 @@
 /**
- * FAF ADK Layer - LLM Error Handling
+ * JAF ADK Layer - LLM Error Handling
  * 
- * Comprehensive error handling for LLM API failures following FAF patterns
+ * Comprehensive error handling for LLM API failures following JAF patterns
  */
 
 import { createAdkError, createAgentError, AdkErrorObject } from '../types.js';

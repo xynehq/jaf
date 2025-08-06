@@ -1,4 +1,4 @@
-# FAF ADK (Agent Development Kit) Layer
+# JAF ADK (Agent Development Kit) Layer
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -10,11 +10,11 @@
 
 ## Introduction
 
-The FAF ADK (Agent Development Kit) Layer is a functional programming implementation of Google ADK-style agent development patterns, built on top of FAF's core framework. It provides a comprehensive set of tools for building sophisticated AI agents while maintaining FAF's fundamental principle of avoiding classes and embracing functional programming.
+The JAF ADK (Agent Development Kit) Layer is a functional programming implementation of Google ADK-style agent development patterns, built on top of JAF's core framework. It provides a comprehensive set of tools for building sophisticated AI agents while maintaining JAF's fundamental principle of avoiding classes and embracing functional programming.
 
 ### What is ADK and Why Use It?
 
-The ADK Layer bridges the gap between FAF's minimal functional core and the rich feature set needed for production agent applications. It provides:
+The ADK Layer bridges the gap between JAF's minimal functional core and the rich feature set needed for production agent applications. It provides:
 
 - **Rich Tool Ecosystem**: Seamless integration with OpenAPI, CrewAI, LangChain, and MCP protocols
 - **Advanced Session Management**: Persistent conversation state with pluggable providers
@@ -26,7 +26,7 @@ The ADK Layer bridges the gap between FAF's minimal functional core and the rich
 
 ### Functional Programming Principles
 
-The ADK Layer strictly adheres to FAF's functional programming paradigm:
+The ADK Layer strictly adheres to JAF's functional programming paradigm:
 
 ```typescript
 // ✅ GOOD: Pure functions and immutable data
@@ -63,7 +63,7 @@ The ADK Layer consists of six main functional modules:
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-Each module provides pure functional interfaces that compose naturally with each other and FAF's core systems.
+Each module provides pure functional interfaces that compose naturally with each other and JAF's core systems.
 
 ## Core Components
 
@@ -74,7 +74,7 @@ Agents are the primary unit of intelligence in the ADK Layer. They encapsulate m
 #### Agent Creation
 
 ```typescript
-import { createAgent, createSimpleAgent, createMultiAgent } from 'faf/adk';
+import { createAgent, createSimpleAgent, createMultiAgent } from 'jaf/adk';
 
 // Basic agent creation
 const basicAgent = createAgent({
@@ -166,7 +166,7 @@ Tools extend agent capabilities by providing access to external systems, APIs, a
 #### Tool Creation
 
 ```typescript
-import { createFunctionTool, createAsyncFunctionTool } from 'faf/adk';
+import { createFunctionTool, createAsyncFunctionTool } from 'jaf/adk';
 
 // Synchronous function tool
 const calculatorTool = createFunctionTool(
@@ -282,7 +282,7 @@ import {
   createUserMessage, 
   createModelMessage, 
   createSystemMessage 
-} from 'faf/adk';
+} from 'jaf/adk';
 
 // Basic content creation
 const userMessage = createUserMessage('Hello, how are you?');
@@ -347,7 +347,7 @@ import {
   createInMemorySessionProvider,
   createRedisSessionProvider,
   createPostgresSessionProvider
-} from 'faf/adk';
+} from 'jaf/adk';
 
 // Create session providers
 const inMemoryProvider = createInMemorySessionProvider();
@@ -391,8 +391,8 @@ const artifactKeys = getArtifactKeys(session);
 #### Memory Provider Bridge
 
 ```typescript
-// Bridge to FAF's memory system
-const memoryBridge = createMemoryProviderBridge(fafMemoryProvider);
+// Bridge to JAF's memory system
+const memoryBridge = createMemoryProviderBridge(jafMemoryProvider);
 
 // Use with session management
 const sessionProvider = createInMemorySessionProvider({
@@ -412,7 +412,7 @@ import {
   createMessageStartEvent,
   createMessageDeltaEvent,
   createMessageCompleteEvent
-} from 'faf/adk';
+} from 'jaf/adk';
 
 // Create events
 const startEvent = createMessageStartEvent(content);
@@ -485,7 +485,7 @@ import {
   numberSchema,
   objectSchema,
   arraySchema
-} from 'faf/adk';
+} from 'jaf/adk';
 
 // Basic schema validators
 const nameValidator = createStringValidator({
@@ -556,7 +556,7 @@ Runners execute agents and manage the interaction lifecycle.
 #### Runner Configuration
 
 ```typescript
-import { createRunnerConfig, runAgent, runAgentStream } from 'faf/adk';
+import { createRunnerConfig, runAgent, runAgentStream } from 'jaf/adk';
 
 // Basic runner setup
 const runnerConfig = createRunnerConfig(agent, sessionProvider);
@@ -1228,7 +1228,7 @@ import {
   runAgent,
   createUserMessage,
   quickSetup
-} from 'faf/adk';
+} from 'jaf/adk';
 
 // Step 1: Create a simple tool
 const greetingTool = createFunctionTool(
@@ -1332,7 +1332,7 @@ import {
   createUserMessage,
   isMessageEvent,
   filterEventStream
-} from 'faf/adk';
+} from 'jaf/adk';
 
 // Create a tool that simulates a time-consuming operation
 const researchTool = createFunctionTool(
@@ -1499,7 +1499,7 @@ import {
   runAgent,
   createUserMessage,
   AgentConfig
-} from 'faf/adk';
+} from 'jaf/adk';
 
 // Step 1: Create specialized agents
 
@@ -2419,4 +2419,4 @@ export const createRunnerConfig = (
 };
 ```
 
-This comprehensive documentation provides everything needed to effectively use the FAF ADK Layer for building sophisticated AI agents while maintaining FAF's functional programming principles.
+This comprehensive documentation provides everything needed to effectively use the JAF ADK Layer for building sophisticated AI agents while maintaining JAF's functional programming principles.

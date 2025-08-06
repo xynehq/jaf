@@ -1,16 +1,16 @@
-# A2A Protocol Integration for FAF
+# A2A Protocol Integration for JAF
 
-This document describes the pure functional implementation of Agent2Agent (A2A) protocol support in the Functional Agent Framework (FAF).
+This document describes the pure functional implementation of Agent2Agent (A2A) protocol support in the Juspay Agent Framework (JAF).
 
 ## Overview
 
-The A2A integration allows FAF agents to communicate with other A2A-compatible agents using the standardized A2A protocol while maintaining FAF's core functional programming principles.
+The A2A integration allows JAF agents to communicate with other A2A-compatible agents using the standardized A2A protocol while maintaining JAF's core functional programming principles.
 
 ## Key Features
 
 - **Pure Functional Implementation**: All A2A functionality implemented as pure functions
-- **Zero Breaking Changes**: Existing FAF agents work unchanged
-- **Automatic Protocol Translation**: FAF ↔ A2A message conversion
+- **Zero Breaking Changes**: Existing JAF agents work unchanged
+- **Automatic Protocol Translation**: JAF ↔ A2A message conversion
 - **Agent Discovery**: Automatic Agent Card generation
 - **Multiple Transport Support**: JSON-RPC over HTTP(S) 
 - **Streaming Support**: Server-Sent Events for real-time updates
@@ -134,11 +134,11 @@ const addMessageToState = (state: AgentState, message: any): AgentState => ({
 
 ### Protocol Translation
 
-FAF messages are automatically translated to/from A2A format:
+JAF messages are automatically translated to/from A2A format:
 
 ```typescript
-// FAF Message -> A2A Message
-const fafMessage = { role: 'user', content: 'Hello' };
+// JAF Message -> A2A Message
+const jafMessage = { role: 'user', content: 'Hello' };
 const a2aMessage = {
   role: 'user',
   parts: [{ kind: 'text', text: 'Hello' }],
@@ -146,7 +146,7 @@ const a2aMessage = {
   kind: 'message'
 };
 
-// A2A Message -> FAF Message  
+// A2A Message -> JAF Message  
 const extractedText = a2aMessage.parts
   .filter(part => part.kind === 'text')
   .map(part => part.text)
@@ -398,7 +398,7 @@ npm run a2a:client
 npm run a2a:dev
 ```
 
-## Integration with Existing FAF
+## Integration with Existing JAF
 
 A2A integration is designed to be additive:
 
@@ -407,4 +407,4 @@ A2A integration is designed to be additive:
 3. **New A2A features** are opt-in
 4. **Functional principles** maintained throughout
 
-The integration provides a bridge between FAF's functional agent system and the broader A2A ecosystem while preserving all of FAF's core principles.
+The integration provides a bridge between JAF's functional agent system and the broader A2A ecosystem while preserving all of JAF's core principles.

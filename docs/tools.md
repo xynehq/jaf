@@ -1,4 +1,4 @@
-# Functional Agent Framework (FAF) Tools System
+# Juspay Agent Framework (JAF) Tools System
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@
 
 ## Overview
 
-The FAF tools system provides a robust, type-safe framework for creating AI agent tools that can execute arbitrary functions while maintaining security, observability, and error handling best practices. Tools in FAF are designed to be:
+The JAF tools system provides a robust, type-safe framework for creating AI agent tools that can execute arbitrary functions while maintaining security, observability, and error handling best practices. Tools in JAF are designed to be:
 
 - **Type-safe**: Leveraging TypeScript and Zod for compile-time and runtime type safety
 - **Secure**: Built-in validation, permission checking, and error handling
@@ -28,7 +28,7 @@ The FAF tools system provides a robust, type-safe framework for creating AI agen
 
 ### Basic Tool Interface
 
-Every tool in FAF implements the `Tool<A, Ctx>` interface:
+Every tool in JAF implements the `Tool<A, Ctx>` interface:
 
 ```typescript
 import { z } from 'zod';
@@ -83,7 +83,7 @@ const calculatorSchema = z.object({
 
 ## Parameter Validation with Zod
 
-FAF uses Zod for both compile-time type safety and runtime validation. The framework automatically validates tool arguments before execution.
+JAF uses Zod for both compile-time type safety and runtime validation. The framework automatically validates tool arguments before execution.
 
 ### Advanced Validation Examples
 
@@ -138,7 +138,7 @@ const customValidationSchema = z.object({
 
 ## Tool Execution Lifecycle
 
-The tool execution lifecycle in FAF follows these steps:
+The tool execution lifecycle in JAF follows these steps:
 
 1. **Tool Discovery**: Agent finds tool by name in its tools array
 2. **Parameter Validation**: Zod validates arguments against schema
@@ -157,7 +157,7 @@ The tool execution lifecycle in FAF follows these steps:
 
 ## Error Handling Patterns
 
-FAF provides a comprehensive error handling system with standardized error types and helper functions.
+JAF provides a comprehensive error handling system with standardized error types and helper functions.
 
 ### ToolResult System
 
@@ -754,7 +754,7 @@ const workflowTool: Tool<{ steps: WorkflowStep[] }, MyContext> = {
 
 ### 5. Memory Integration
 
-Tools can integrate with the FAF memory system:
+Tools can integrate with the JAF memory system:
 
 ```typescript
 const memoryAwareTool: Tool<{ query: string }, MyContext> = {
@@ -799,7 +799,7 @@ const memoryAwareTool: Tool<{ query: string }, MyContext> = {
 
 ### 1. Tracing Integration
 
-FAF automatically traces tool execution. You can access trace data:
+JAF automatically traces tool execution. You can access trace data:
 
 ```typescript
 import { ConsoleTraceCollector, createCompositeTraceCollector, FileTraceCollector } from 'functional-agent-framework';
@@ -1193,7 +1193,7 @@ export const apiIntegrationTool: Tool<z.infer<typeof apiRequestSchema>, APIConte
     const requestConfig = {
       method: args.method,
       headers: {
-        'User-Agent': 'FAF-Agent/1.0',
+        'User-Agent': 'JAF-Agent/1.0',
         ...getServiceHeaders(args.service, apiKey),
         ...(args.headers || {})
       },
@@ -1289,4 +1289,4 @@ function getServiceHeaders(service: string, apiKey: string): Record<string, stri
 }
 ```
 
-This comprehensive documentation covers all aspects of the FAF tools system, from basic concepts to advanced patterns and production-ready examples. The tools system is designed to be secure, observable, and maintainable while providing the flexibility needed for complex AI agent interactions.
+This comprehensive documentation covers all aspects of the JAF tools system, from basic concepts to advanced patterns and production-ready examples. The tools system is designed to be secure, observable, and maintainable while providing the flexibility needed for complex AI agent interactions.

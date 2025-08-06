@@ -12,7 +12,7 @@
   "include": [
     "index.ts",
     "multi-agent.ts",
-    "faf-server.ts",
+    "jaf-server.ts",
     "../../src/**/*.ts"
   ],
   "exclude": [

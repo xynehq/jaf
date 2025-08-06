@@ -1,5 +1,5 @@
 /**
- * A2A In-Memory Task Provider for FAF
+ * A2A In-Memory Task Provider for JAF
  * Pure functional in-memory storage for A2A tasks
  */
 

@@ -392,10 +392,10 @@ describe('A2A Memory Factory', () => {
     });
 
     it('should create provider from environment variables', async () => {
-      process.env.FAF_A2A_TASK_PROVIDER_TYPE = 'memory';
-      process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS = '2000';
-      process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX = 'env_test:';
-      process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL = '7200';
+      process.env.JAF_A2A_TASK_PROVIDER_TYPE = 'memory';
+      process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS = '2000';
+      process.env.JAF_A2A_TASK_PROVIDER_KEY_PREFIX = 'env_test:';
+      process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL = '7200';
 
       const provider = await createA2ATaskProviderFromEnv();
       
@@ -409,8 +409,8 @@ describe('A2A Memory Factory', () => {
 
     it('should use default values when environment variables are not set', async () => {
       // Clear relevant environment variables
-      delete process.env.FAF_A2A_TASK_PROVIDER_TYPE;
-      delete process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS;
+      delete process.env.JAF_A2A_TASK_PROVIDER_TYPE;
+      delete process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS;
 
       const provider = await createA2ATaskProviderFromEnv();
       
@@ -423,10 +423,10 @@ describe('A2A Memory Factory', () => {
     });
 
     it('should handle Redis configuration from environment', async () => {
-      process.env.FAF_A2A_TASK_PROVIDER_TYPE = 'redis';
-      process.env.FAF_A2A_TASK_PROVIDER_REDIS_HOST = 'redis.example.com';
-      process.env.FAF_A2A_TASK_PROVIDER_REDIS_PORT = '6380';
-      process.env.FAF_A2A_TASK_PROVIDER_REDIS_PASSWORD = 'secret';
+      process.env.JAF_A2A_TASK_PROVIDER_TYPE = 'redis';
+      process.env.JAF_A2A_TASK_PROVIDER_REDIS_HOST = 'redis.example.com';
+      process.env.JAF_A2A_TASK_PROVIDER_REDIS_PORT = '6380';
+      process.env.JAF_A2A_TASK_PROVIDER_REDIS_PASSWORD = 'secret';
 
       // Should fall back to in-memory since Redis client is not available
       const provider = await createA2ATaskProviderFromEnv();
@@ -436,11 +436,11 @@ describe('A2A Memory Factory', () => {
     });
 
     it('should handle PostgreSQL configuration from environment', async () => {
-      process.env.FAF_A2A_TASK_PROVIDER_TYPE = 'postgres';
-      process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_HOST = 'postgres.example.com';
-      process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_PORT = '5433';
-      process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_DATABASE = 'myapp';
-      process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_USERNAME = 'myuser';
+      process.env.JAF_A2A_TASK_PROVIDER_TYPE = 'postgres';
+      process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_HOST = 'postgres.example.com';
+      process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_PORT = '5433';
+      process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_DATABASE = 'myapp';
+      process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_USERNAME = 'myuser';
 
       // Should fall back to in-memory since PostgreSQL client is not available
       const provider = await createA2ATaskProviderFromEnv();
@@ -450,7 +450,7 @@ describe('A2A Memory Factory', () => {
     });
 
     it('should handle invalid environment configuration gracefully', async () => {
-      process.env.FAF_A2A_TASK_PROVIDER_TYPE = 'invalid_type';
+      process.env.JAF_A2A_TASK_PROVIDER_TYPE = 'invalid_type';
 
       // Should fall back to in-memory provider
       const provider = await createA2ATaskProviderFromEnv();

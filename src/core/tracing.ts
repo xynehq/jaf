@@ -53,7 +53,7 @@ export class ConsoleTraceCollector implements TraceCollector {
     this.inMemory.collect(event);
     
     const timestamp = new Date().toISOString();
-    const prefix = `[${timestamp}] FAF:${event.type}`;
+    const prefix = `[${timestamp}] JAF:${event.type}`;
     
     switch (event.type) {
       case 'run_start':

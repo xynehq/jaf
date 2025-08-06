@@ -43,7 +43,7 @@ const SQL_CREATE_TABLE = `
 
 export const createPostgresSessionProvider = (config: PostgresConfig): SessionProvider => {
   let pool: PgPool;
-  const tableName = config.tableName || 'faf_sessions';
+  const tableName = config.tableName || 'jaf_sessions';
   
   // Require real PostgreSQL - no fallback
   try {

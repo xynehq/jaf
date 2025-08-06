@@ -56,14 +56,14 @@ export async function createMemoryProviderFromEnv(
     postgres?: any;
   }
 ): Promise<MemoryProvider> {
-  const memoryType = process.env.FAF_MEMORY_TYPE || 'memory';
+  const memoryType = process.env.JAF_MEMORY_TYPE || 'memory';
 
   switch (memoryType) {
     case 'memory':
       return createInMemoryProvider({
         type: 'memory',
-        maxConversations: parseInt(process.env.FAF_MEMORY_MAX_CONVERSATIONS || '1000'),
-        maxMessagesPerConversation: parseInt(process.env.FAF_MEMORY_MAX_MESSAGES || '1000')
+        maxConversations: parseInt(process.env.JAF_MEMORY_MAX_CONVERSATIONS || '1000'),
+        maxMessagesPerConversation: parseInt(process.env.JAF_MEMORY_MAX_MESSAGES || '1000')
       });
 
     case 'redis':
@@ -75,12 +75,12 @@ export async function createMemoryProviderFromEnv(
       }
       return await createRedisProvider({
         type: 'redis',
-        host: process.env.FAF_REDIS_HOST || 'localhost',
-        port: parseInt(process.env.FAF_REDIS_PORT || '6379'),
-        password: process.env.FAF_REDIS_PASSWORD,
-        db: parseInt(process.env.FAF_REDIS_DB || '0'),
-        keyPrefix: process.env.FAF_REDIS_PREFIX || 'faf:memory:',
-        ttl: process.env.FAF_REDIS_TTL ? parseInt(process.env.FAF_REDIS_TTL) : undefined
+        host: process.env.JAF_REDIS_HOST || 'localhost',
+        port: parseInt(process.env.JAF_REDIS_PORT || '6379'),
+        password: process.env.JAF_REDIS_PASSWORD,
+        db: parseInt(process.env.JAF_REDIS_DB || '0'),
+        keyPrefix: process.env.JAF_REDIS_PREFIX || 'jaf:memory:',
+        ttl: process.env.JAF_REDIS_TTL ? parseInt(process.env.JAF_REDIS_TTL) : undefined
       }, externalClients.redis);
 
     case 'postgres':
@@ -92,14 +92,14 @@ export async function createMemoryProviderFromEnv(
       }
       return await createPostgresProvider({
         type: 'postgres',
-        host: process.env.FAF_POSTGRES_HOST || 'localhost',
-        port: parseInt(process.env.FAF_POSTGRES_PORT || '5432'),
-        database: process.env.FAF_POSTGRES_DB || 'faf_memory',
-        username: process.env.FAF_POSTGRES_USER || 'postgres',
-        password: process.env.FAF_POSTGRES_PASSWORD,
-        ssl: process.env.FAF_POSTGRES_SSL === 'true',
-        tableName: process.env.FAF_POSTGRES_TABLE || 'conversations',
-        maxConnections: parseInt(process.env.FAF_POSTGRES_MAX_CONNECTIONS || '10')
+        host: process.env.JAF_POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.JAF_POSTGRES_PORT || '5432'),
+        database: process.env.JAF_POSTGRES_DB || 'jaf_memory',
+        username: process.env.JAF_POSTGRES_USER || 'postgres',
+        password: process.env.JAF_POSTGRES_PASSWORD,
+        ssl: process.env.JAF_POSTGRES_SSL === 'true',
+        tableName: process.env.JAF_POSTGRES_TABLE || 'conversations',
+        maxConnections: parseInt(process.env.JAF_POSTGRES_MAX_CONNECTIONS || '10')
       }, externalClients.postgres);
 
     default:

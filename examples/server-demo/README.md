@@ -1,4 +1,4 @@
-# FAF Development Server Demo
+# JAF Development Server Demo
 
 This example demonstrates how to use the `runServer` function to create a local development server for testing your agents via HTTP endpoints.
 
@@ -39,7 +39,7 @@ Required environment variables:
 Optional environment variables:
 - `LITELLM_MODEL`: Model to use (default: `gpt-3.5-turbo`)
 - `PORT`: Server port (default: `3000`)
-- `FAF_MEMORY_TYPE`: Memory provider type (`memory`, `redis`, `postgres`)
+- `JAF_MEMORY_TYPE`: Memory provider type (`memory`, `redis`, `postgres`)
 
 ### 3. Start LiteLLM Proxy (if needed)
 
@@ -63,9 +63,9 @@ The server supports three types of memory providers for conversation persistence
 - **Configuration**: No additional setup required
 
 ```bash
-FAF_MEMORY_TYPE=memory
-FAF_MEMORY_MAX_CONVERSATIONS=1000
-FAF_MEMORY_MAX_MESSAGES=1000
+JAF_MEMORY_TYPE=memory
+JAF_MEMORY_MAX_CONVERSATIONS=1000
+JAF_MEMORY_MAX_MESSAGES=1000
 ```
 
 ### Redis
@@ -78,16 +78,16 @@ FAF_MEMORY_MAX_MESSAGES=1000
 npm install redis
 
 # Environment configuration
-FAF_MEMORY_TYPE=redis
-FAF_REDIS_HOST=localhost
-FAF_REDIS_PORT=6379
-FAF_REDIS_PASSWORD=your-password
-FAF_REDIS_DB=0
-FAF_REDIS_PREFIX=faf:memory:
-FAF_REDIS_TTL=86400
+JAF_MEMORY_TYPE=redis
+JAF_REDIS_HOST=localhost
+JAF_REDIS_PORT=6379
+JAF_REDIS_PASSWORD=your-password
+JAF_REDIS_DB=0
+JAF_REDIS_PREFIX=jaf:memory:
+JAF_REDIS_TTL=86400
 
 # Or use Redis URL
-FAF_REDIS_URL=redis://username:password@localhost:6379/0
+JAF_REDIS_URL=redis://username:password@localhost:6379/0
 ```
 
 Start Redis server:
@@ -114,33 +114,33 @@ sudo systemctl start redis-server
 npm install pg @types/pg
 
 # Environment configuration
-FAF_MEMORY_TYPE=postgres
-FAF_POSTGRES_HOST=localhost
-FAF_POSTGRES_PORT=5432
-FAF_POSTGRES_DB=faf_memory
-FAF_POSTGRES_USER=postgres
-FAF_POSTGRES_PASSWORD=your-password
-FAF_POSTGRES_SSL=false
-FAF_POSTGRES_TABLE=conversations
+JAF_MEMORY_TYPE=postgres
+JAF_POSTGRES_HOST=localhost
+JAF_POSTGRES_PORT=5432
+JAF_POSTGRES_DB=jaf_memory
+JAF_POSTGRES_USER=postgres
+JAF_POSTGRES_PASSWORD=your-password
+JAF_POSTGRES_SSL=false
+JAF_POSTGRES_TABLE=conversations
 
 # Or use connection string
-FAF_POSTGRES_CONNECTION_STRING=postgresql://username:password@localhost:5432/faf_memory
+JAF_POSTGRES_CONNECTION_STRING=postgresql://username:password@localhost:5432/jaf_memory
 ```
 
 Start PostgreSQL server:
 ```bash
 # Using Docker
-docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=password -e POSTGRES_DB=faf_memory postgres:15
+docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=password -e POSTGRES_DB=jaf_memory postgres:15
 
 # Or install locally (macOS)
 brew install postgresql
 brew services start postgresql
-createdb faf_memory
+createdb jaf_memory
 
 # Or install locally (Ubuntu)
 sudo apt install postgresql postgresql-contrib
 sudo systemctl start postgresql
-sudo -u postgres createdb faf_memory
+sudo -u postgres createdb jaf_memory
 ```
 
 ## 🚀 Running the Server
@@ -471,7 +471,7 @@ console.log(result.data.outcome.output);
 ### React Hook
 
 ```tsx
-const useFAFAgent = (agentName: string) => {
+const useJAFAgent = (agentName: string) => {
   const [loading, setLoading] = useState(false);
   
   const chat = async (message: string) => {

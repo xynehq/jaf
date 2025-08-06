@@ -69,16 +69,16 @@ export const createUserMessage = (text: string): Message => ({
   content: text
 });
 
-// Pure function to transform A2A agent to FAF agent
-export const transformA2AAgentToFAF = (a2aAgent: A2AAgent): Agent<any, string> => ({
+// Pure function to transform A2A agent to JAF agent
+export const transformA2AAgentToJAF = (a2aAgent: A2AAgent): Agent<any, string> => ({
   name: a2aAgent.name,
   instructions: () => a2aAgent.instruction,
-  tools: a2aAgent.tools.map(transformA2AToolToFAF),
+  tools: a2aAgent.tools.map(transformA2AToolToJAF),
   outputCodec: z.string()
 });
 
-// Pure function to transform A2A tool to FAF tool
-export const transformA2AToolToFAF = (a2aTool: A2AAgentTool): Tool<any, any> => ({
+// Pure function to transform A2A tool to JAF tool
+export const transformA2AToolToJAF = (a2aTool: A2AAgentTool): Tool<any, any> => ({
   schema: {
     name: a2aTool.name,
     description: a2aTool.description,
@@ -110,10 +110,10 @@ export const createRunConfigForA2AAgent = (
   a2aAgent: A2AAgent,
   modelProvider: any
 ): RunConfig<any> => {
-  const fafAgent = transformA2AAgentToFAF(a2aAgent);
+  const jafAgent = transformA2AAgentToJAF(a2aAgent);
   
   return {
-    agentRegistry: new Map([[a2aAgent.name, fafAgent]]),
+    agentRegistry: new Map([[a2aAgent.name, jafAgent]]),
     modelProvider,
     maxTurns: 10,
     onEvent: (event) => {
@@ -122,7 +122,7 @@ export const createRunConfigForA2AAgent = (
   };
 };
 
-// Pure function to transform agent state to FAF run state
+// Pure function to transform agent state to JAF run state
 export const transformToRunState = (
   state: AgentState, 
   agentName: string,
@@ -143,16 +143,16 @@ export const processAgentQuery = async function* (
   state: AgentState,
   modelProvider: any
 ): AsyncGenerator<StreamEvent, void, unknown> {
-  // Transform query to FAF message format
+  // Transform query to JAF message format
   const userMessage = createUserMessage(query);
   const newState = addMessageToState(state, userMessage);
   
-  // Create FAF configuration
+  // Create JAF configuration
   const runConfig = createRunConfigForA2AAgent(agent, modelProvider);
   const runState = transformToRunState(newState, agent.name);
   
   try {
-    // Execute FAF engine (pure function)
+    // Execute JAF engine (pure function)
     const result = await run(runState, runConfig);
     
     if (result.outcome.status === 'completed') {

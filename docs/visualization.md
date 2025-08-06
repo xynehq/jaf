@@ -1,6 +1,6 @@
-# FAF Graphviz Visualization
+# JAF Graphviz Visualization
 
-The FAF (Functional Agent Framework) visualization module provides powerful graph generation capabilities for visualizing agents, tools, and runner architectures using Graphviz. This comprehensive system enables developers to create clear, professional diagrams of their agent systems.
+The JAF (Juspay Agent Framework) visualization module provides powerful graph generation capabilities for visualizing agents, tools, and runner architectures using Graphviz. This comprehensive system enables developers to create clear, professional diagrams of their agent systems.
 
 ## Table of Contents
 
@@ -16,14 +16,14 @@ The FAF (Functional Agent Framework) visualization module provides powerful grap
 
 ### Purpose and Capabilities
 
-The FAF Graphviz visualization system provides:
+The JAF Graphviz visualization system provides:
 
 - **Agent Architecture Visualization**: Generate comprehensive diagrams showing agent relationships, tool connections, and sub-agent hierarchies
 - **Tool Network Graphs**: Create visual representations of tool ecosystems and dependencies
 - **Runner Architecture Diagrams**: Visualize complete runner configurations including session providers and execution flows
 - **Multiple Output Formats**: Support for PNG, SVG, and PDF output formats
 - **Customizable Styling**: Three built-in color schemes (default, modern, minimal) with full customization options
-- **Functional Design**: Pure functional implementation following FAF's architectural principles
+- **Functional Design**: Pure functional implementation following JAF's architectural principles
 
 ### What Can Be Visualized
 
@@ -39,7 +39,7 @@ The FAF Graphviz visualization system provides:
 
 - Node.js 16+ with TypeScript support
 - Graphviz system installation (for PNG/SVG/PDF generation)
-- FAF framework installed and configured
+- JAF framework installed and configured
 
 ### Graphviz Installation Steps
 
@@ -70,7 +70,7 @@ dot -V
 
 ### npm Package Setup
 
-The visualization module is included with FAF and uses the `graphviz` npm package:
+The visualization module is included with JAF and uses the `graphviz` npm package:
 
 ```json
 {
@@ -99,7 +99,7 @@ Generates a graph visualization of one or more agents and their relationships.
 
 **Example:**
 ```typescript
-import { generateAgentGraph } from 'faf/visualization';
+import { generateAgentGraph } from 'jaf/visualization';
 
 const result = await generateAgentGraph([agent1, agent2], {
   title: 'My Agent System',
@@ -188,7 +188,7 @@ interface GraphResult {
 Agent graphs show the relationships between agents, their tools, and sub-agents:
 
 ```typescript
-import { generateAgentVisualization } from 'faf/adk/runners';
+import { generateAgentVisualization } from 'jaf/adk/runners';
 
 const agents = [mainAgent, helperAgent];
 const result = await generateAgentVisualization(agents, {
@@ -210,7 +210,7 @@ const result = await generateAgentVisualization(agents, {
 Tool graphs visualize tool ecosystems and their relationships:
 
 ```typescript
-import { generateToolVisualization } from 'faf/adk/runners';
+import { generateToolVisualization } from 'jaf/adk/runners';
 
 const tools = [calculatorTool, weatherTool, searchTool];
 const result = await generateToolVisualization(tools, {
@@ -231,7 +231,7 @@ const result = await generateToolVisualization(tools, {
 Runner visualizations show complete system architecture:
 
 ```typescript
-import { generateRunnerGraphPng } from 'faf/adk/runners';
+import { generateRunnerGraphPng } from 'jaf/adk/runners';
 
 const runnerConfig = createRunnerConfig(agent, sessionProvider);
 const result = await generateRunnerGraphPng(runnerConfig, './architecture');
@@ -303,7 +303,7 @@ const customScheme = {
 Generate a basic agent visualization:
 
 ```typescript
-import { quickStartVisualization } from 'faf/visualization';
+import { quickStartVisualization } from 'jaf/visualization';
 
 const agent = createAgent({
   name: 'My Assistant',
@@ -322,7 +322,7 @@ Create a comprehensive system visualization:
 import { 
   generateAgentVisualization, 
   generateRunnerGraphPng 
-} from 'faf/adk/runners';
+} from 'jaf/adk/runners';
 
 // Multi-agent system
 const agents = [
@@ -355,7 +355,7 @@ const runnerResult = await generateRunnerGraphPng(
 Use visualization within runner lifecycle:
 
 ```typescript
-import { createRunner, generateRunnerGraphPng } from 'faf/adk/runners';
+import { createRunner, generateRunnerGraphPng } from 'jaf/adk/runners';
 
 const runner = createRunner(agent, sessionProvider);
 
@@ -375,7 +375,7 @@ if (vizResult.success) {
 Generate multiple visualizations:
 
 ```typescript
-import { runVisualizationExamples } from 'faf/visualization';
+import { runVisualizationExamples } from 'jaf/visualization';
 
 // Generates complete example set:
 // - Agent graphs with different color schemes
@@ -517,7 +517,7 @@ try {
 
 For additional support:
 
-1. Check the [FAF GitHub repository](https://github.com/your-repo/faf) for issues
+1. Check the [JAF GitHub repository](https://github.com/your-repo/jaf) for issues
 2. Review the examples in `/examples/server-demo/test-runner-visualization.ts`
 3. Use the built-in validation: `validateGraphOptions(options)`
 4. Enable debug output in your runner configuration

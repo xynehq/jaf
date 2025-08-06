@@ -1,7 +1,7 @@
 /**
- * Flight Booking FAF Server Integration
+ * Flight Booking JAF Server Integration
  * 
- * Integrates flight booking agents with FAF's built-in server
+ * Integrates flight booking agents with JAF's built-in server
  */
 
 import 'dotenv/config';
@@ -17,7 +17,7 @@ import {
 } from '../../src';
 import { z } from 'zod';
 
-// Import our flight booking tools (converted to FAF format)
+// Import our flight booking tools (converted to JAF format)
 import {
   searchFlightsTool,
   checkSeatAvailabilityTool,
@@ -32,8 +32,8 @@ type FlightBookingContext = {
   customerLevel?: 'standard' | 'premium' | 'vip';
 };
 
-// Convert ADK tools to FAF tools
-const convertADKToolToFAF = <T extends Record<string, any>>(
+// Convert ADK tools to JAF tools
+const convertADKToolToJAF = <T extends Record<string, any>>(
   adkTool: any
 ): Tool<T, FlightBookingContext> => {
   // Build Zod schema from ADK parameters
@@ -84,7 +84,7 @@ const convertADKToolToFAF = <T extends Record<string, any>>(
       try {
         const result = await adkTool.execute(args, { sessionId: context.sessionId });
         
-        // Convert ADK ToolResult to FAF ToolResponse
+        // Convert ADK ToolResult to JAF ToolResponse
         if (result.success) {
           return ToolResponse.success(
             typeof result.data === 'string' ? result.data : JSON.stringify(result.data, null, 2),
@@ -108,7 +108,7 @@ const convertADKToolToFAF = <T extends Record<string, any>>(
 };
 
 // Convert tools
-const fafSearchFlightsTool = convertADKToolToFAF<{
+const jafSearchFlightsTool = convertADKToolToJAF<{
   origin: string;
   destination: string;
   departureDate: string;
@@ -117,25 +117,25 @@ const fafSearchFlightsTool = convertADKToolToFAF<{
   class: string;
 }>(searchFlightsTool);
 
-const fafCheckAvailabilityTool = convertADKToolToFAF<{
+const jafCheckAvailabilityTool = convertADKToolToJAF<{
   flightNumber: string;
   passengers: number;
 }>(checkSeatAvailabilityTool);
 
-const fafCalculatePriceTool = convertADKToolToFAF<{
+const jafCalculatePriceTool = convertADKToolToJAF<{
   basePrice: number;
   passengers: number;
   includeInsurance?: boolean;
   includeBaggage?: boolean;
 }>(calculatePriceTool);
 
-const fafBookFlightTool = convertADKToolToFAF<{
+const jafBookFlightTool = convertADKToolToJAF<{
   flightNumber: string;
   passengers: any[];
   paymentMethod: string;
 }>(bookFlightTool);
 
-// Define FAF agents
+// Define JAF agents
 const flightSearchAgent: Agent<FlightBookingContext, string> = {
   name: 'FlightSearch',
   instructions: (state) => `You are a flight search specialist. Help customers find the best flights.
@@ -144,7 +144,7 @@ Available routes: NYC to LAX, LAX to NYC
 Customer level: ${state.context.customerLevel || 'standard'}
 
 Use the search_flights tool to find available flights and help customers choose the best option.`,
-  tools: [fafSearchFlightsTool]
+  tools: [jafSearchFlightsTool]
 };
 
 const bookingAgent: Agent<FlightBookingContext, string> = {
@@ -155,7 +155,7 @@ Customer level: ${state.context.customerLevel || 'standard'}
 
 Use available tools to check availability, calculate prices, and process bookings.
 Always verify availability before booking.`,
-  tools: [fafCheckAvailabilityTool, fafCalculatePriceTool, fafBookFlightTool]
+  tools: [jafCheckAvailabilityTool, jafCalculatePriceTool, jafBookFlightTool]
 };
 
 const fullServiceAgent: Agent<FlightBookingContext, string> = {
@@ -174,12 +174,12 @@ You can:
 Available routes: NYC to LAX, LAX to NYC
 
 Always be helpful and guide customers through the entire booking process.`,
-  tools: [fafSearchFlightsTool, fafCheckAvailabilityTool, fafCalculatePriceTool, fafBookFlightTool]
+  tools: [jafSearchFlightsTool, jafCheckAvailabilityTool, jafCalculatePriceTool, jafBookFlightTool]
 };
 
 // Start server function
 export async function startFlightBookingServer() {
-  console.log('Starting Flight Booking FAF Server...\n');
+  console.log('Starting Flight Booking JAF Server...\n');
 
   const modelProvider = makeLiteLLMProvider(
     process.env.LITELLM_URL || 'http://localhost:4000',

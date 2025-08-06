@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Schema Validation Tests
+ * JAF ADK Layer - Schema Validation Tests
  */
 
 import {

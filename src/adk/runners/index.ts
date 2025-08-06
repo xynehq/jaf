@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Runner System
+ * JAF ADK Layer - Runner System
  * 
  * Functional agent execution system
  */
@@ -694,7 +694,7 @@ export const generateRunnerGraphPng = async (
   outputPath?: string
 ): Promise<GraphResult> => {
   const options: GraphOptions = {
-    title: `FAF Runner: ${config.agent.config.name}`,
+    title: `JAF Runner: ${config.agent.config.name}`,
     outputFormat: 'png',
     outputPath: outputPath || './runner-visualization',
     showToolDetails: true,

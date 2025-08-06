@@ -1,5 +1,5 @@
 
-# FAF Server Demo Visualization
+# JAF Server Demo Visualization
 
 ## Generated Files
 - graph.dot: Graphviz DOT file defining the agent architecture

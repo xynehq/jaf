@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Agent System
+ * JAF ADK Layer - Agent System
  * 
  * Functional agent creation and management utilities
  */

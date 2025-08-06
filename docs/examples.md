@@ -1,6 +1,6 @@
-# Functional Agent Framework (FAF) Examples Guide
+# Juspay Agent Framework (JAF) Examples Guide
 
-This comprehensive guide covers the example projects in the FAF framework, demonstrating real-world usage patterns and implementation strategies for building production-ready AI agent systems.
+This comprehensive guide covers the example projects in the JAF framework, demonstrating real-world usage patterns and implementation strategies for building production-ready AI agent systems.
 
 ## Table of Contents
 
@@ -14,7 +14,7 @@ This comprehensive guide covers the example projects in the FAF framework, demon
 
 ## Overview
 
-The FAF framework includes two comprehensive example projects that demonstrate different aspects of the framework:
+The JAF framework includes two comprehensive example projects that demonstrate different aspects of the framework:
 
 1. **Server Demo** (`examples/server-demo/`) - A multi-agent HTTP server with memory persistence
 2. **RAG Demo** (`examples/rag-demo/`) - Vertex AI RAG integration with streaming responses
@@ -30,9 +30,9 @@ Both examples showcase the framework's core principles:
 
 ### Overview
 
-The Server Demo showcases how to build a production-ready HTTP API for AI agents using FAF's `runServer` function. It demonstrates multi-agent architectures, memory persistence, and RESTful API design.
+The Server Demo showcases how to build a production-ready HTTP API for AI agents using JAF's `runServer` function. It demonstrates multi-agent architectures, memory persistence, and RESTful API design.
 
-**Location**: `/Users/anurag.sharan/repos/faf/examples/server-demo/`
+**Location**: `/Users/anurag.sharan/repos/jaf/examples/server-demo/`
 
 ### Key Features
 
@@ -73,7 +73,7 @@ const assistantAgent: Agent<MyContext, string> = {
 
 #### Tool Implementation with Error Handling
 
-The server demo showcases advanced tool implementation with the FAF error handling system:
+The server demo showcases advanced tool implementation with the JAF error handling system:
 
 ```typescript
 const calculatorTool: Tool<{ expression: string }, MyContext> = {
@@ -125,7 +125,7 @@ The server supports three memory providers, configured via environment variables
 
 ```typescript
 // Environment-based memory provider setup
-const memoryType = process.env.FAF_MEMORY_TYPE || 'memory';
+const memoryType = process.env.JAF_MEMORY_TYPE || 'memory';
 const memoryProvider = await createMemoryProviderFromEnv(externalClients);
 
 // Memory configuration in runServer
@@ -176,20 +176,20 @@ LITELLM_MODEL=gpt-3.5-turbo
 PORT=3000
 
 # Memory provider selection
-FAF_MEMORY_TYPE=memory  # or 'redis' or 'postgres'
+JAF_MEMORY_TYPE=memory  # or 'redis' or 'postgres'
 
 # Redis configuration (if using Redis)
-FAF_REDIS_HOST=localhost
-FAF_REDIS_PORT=6379
-FAF_REDIS_PASSWORD=your-password
-FAF_REDIS_DB=0
+JAF_REDIS_HOST=localhost
+JAF_REDIS_PORT=6379
+JAF_REDIS_PASSWORD=your-password
+JAF_REDIS_DB=0
 
 # PostgreSQL configuration (if using PostgreSQL)
-FAF_POSTGRES_HOST=localhost
-FAF_POSTGRES_PORT=5432
-FAF_POSTGRES_DB=faf_memory
-FAF_POSTGRES_USER=postgres
-FAF_POSTGRES_PASSWORD=your-password
+JAF_POSTGRES_HOST=localhost
+JAF_POSTGRES_PORT=5432
+JAF_POSTGRES_DB=jaf_memory
+JAF_POSTGRES_USER=postgres
+JAF_POSTGRES_PASSWORD=your-password
 ```
 
 #### Running the Server
@@ -275,7 +275,7 @@ All endpoints return structured JSON responses:
 
 The RAG Demo demonstrates real-world integration with Google's Vertex AI RAG (Retrieval Augmented Generation) system. It showcases streaming responses, source attribution, and performance metrics.
 
-**Location**: `/Users/anurag.sharan/repos/faf/examples/rag-demo/`
+**Location**: `/Users/anurag.sharan/repos/jaf/examples/rag-demo/`
 
 ### Key Features
 
@@ -285,7 +285,7 @@ The RAG Demo demonstrates real-world integration with Google's Vertex AI RAG (Re
 - **Performance Metrics**: Detailed timing and performance tracking
 - **Permission Control**: Role-based access to RAG functionality
 - **Error Handling**: Comprehensive error management
-- **Memory Integration**: Conversation persistence with FAF memory providers
+- **Memory Integration**: Conversation persistence with JAF memory providers
 
 ### Architecture Deep Dive
 
@@ -521,7 +521,7 @@ interface RAGMetrics {
 ### Sample Output
 
 ```
-🔍 FAF Vertex AI RAG Demo
+🔍 JAF Vertex AI RAG Demo
 ========================
 
 📋 Demo Query 1: "What is return URL?"
@@ -773,7 +773,7 @@ class CustomTraceCollector {
 #### Error Handling Strategies
 
 ```typescript
-import { FAFErrorHandler, RunResult } from 'functional-agent-framework';
+import { JAFErrorHandler, RunResult } from 'functional-agent-framework';
 
 async function handleRunResult<T>(result: RunResult<T>): Promise<T> {
   if (result.outcome.status === 'completed') {
@@ -781,9 +781,9 @@ async function handleRunResult<T>(result: RunResult<T>): Promise<T> {
   }
 
   const error = result.outcome.error;
-  const formattedError = FAFErrorHandler.format(error);
-  const isRetryable = FAFErrorHandler.isRetryable(error);
-  const severity = FAFErrorHandler.getSeverity(error);
+  const formattedError = JAFErrorHandler.format(error);
+  const isRetryable = JAFErrorHandler.isRetryable(error);
+  const severity = JAFErrorHandler.getSeverity(error);
   
   console.error(`[${severity}] ${formattedError} (retryable: ${isRetryable})`);
   
@@ -864,7 +864,7 @@ const customGuardrail: Guardrail<string> = async (input: string) => {
 #### Setting Up MCP Tools
 
 ```typescript
-import { makeMCPClient, mcpToolToFAFTool } from 'functional-agent-framework';
+import { makeMCPClient, mcpToolToJAFTool } from 'functional-agent-framework';
 
 // Connect to MCP server
 const mcpClient = await makeMCPClient('python', ['-m', 'mcp_server']);
@@ -872,16 +872,16 @@ const mcpClient = await makeMCPClient('python', ['-m', 'mcp_server']);
 // Get available tools
 const mcpTools = await mcpClient.listTools();
 
-// Convert to FAF tools with validation
-const fafTools = mcpTools.map(tool => 
-  mcpToolToFAFTool(mcpClient, tool, myValidationPolicy)
+// Convert to JAF tools with validation
+const jafTools = mcpTools.map(tool => 
+  mcpToolToJAFTool(mcpClient, tool, myValidationPolicy)
 );
 
 // Use in agent
 const mcpAgent: Agent<MyContext, string> = {
   name: 'MCPAgent',
   instructions: () => 'You have access to external tools via MCP',
-  tools: fafTools,
+  tools: jafTools,
 };
 ```
 
@@ -1302,10 +1302,10 @@ sudo systemctl restart redis # Linux
 **PostgreSQL Solutions**:
 ```bash
 # Check PostgreSQL connection
-psql -h localhost -U postgres -d faf_memory -c "SELECT 1;"
+psql -h localhost -U postgres -d jaf_memory -c "SELECT 1;"
 
 # Create database if missing
-createdb faf_memory
+createdb jaf_memory
 
 # Check PostgreSQL logs
 tail -f /usr/local/var/log/postgresql.log  # macOS
@@ -1557,4 +1557,4 @@ if (stats.success) {
 
 ---
 
-This guide provides comprehensive coverage of the FAF framework examples, from basic usage to advanced patterns and troubleshooting. Each section includes practical code examples and real-world implementation strategies to help developers build robust AI agent systems using the Functional Agent Framework.
+This guide provides comprehensive coverage of the JAF framework examples, from basic usage to advanced patterns and troubleshooting. Each section includes practical code examples and real-world implementation strategies to help developers build robust AI agent systems using the Juspay Agent Framework.

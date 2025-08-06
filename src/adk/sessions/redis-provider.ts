@@ -76,7 +76,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
     );
   }
   
-  const keyPrefix = config.keyPrefix || 'faf_adk_session:';
+  const keyPrefix = config.keyPrefix || 'jaf_adk_session:';
   const sessionTTL = config.ttl || 86400; // Default 24 hours
   
   const getKey = (sessionId: string) => `${keyPrefix}${sessionId}`;

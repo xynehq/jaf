@@ -1,8 +1,8 @@
-# FAF Vertex AI RAG Demo - Implementation Summary
+# JAF Vertex AI RAG Demo - Implementation Summary
 
 ## 🎯 Overview
 
-Successfully implemented a **real Vertex AI RAG integration** with the FAF framework, demonstrating production-ready knowledge retrieval capabilities.
+Successfully implemented a **real Vertex AI RAG integration** with the JAF framework, demonstrating production-ready knowledge retrieval capabilities.
 
 ## ✅ Implementation Details
 
@@ -111,7 +111,7 @@ const result = await client.models.generateContent({
 
 ## 🔗 Integration Points
 
-### FAF Framework
+### JAF Framework
 - Pure functional orchestration
 - Immutable state management
 - Composable tool definitions
@@ -173,7 +173,7 @@ npm run dev
 - ✅ Permission system enforced
 - ✅ Error handling comprehensive
 - ✅ Authentication verification working
-- ✅ FAF framework orchestration complete
+- ✅ JAF framework orchestration complete
 - ✅ Type safety maintained throughout
 - ✅ Production deployment ready
 

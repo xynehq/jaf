@@ -1,5 +1,5 @@
 /**
- * A2A Memory Module for FAF
+ * A2A Memory Module for JAF
  * Exports all A2A task memory functionality
  */
 

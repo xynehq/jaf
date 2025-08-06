@@ -17,7 +17,7 @@ done
 
 echo "Waiting for PostgreSQL to be ready..."
 for i in {1..30}; do
-  if docker-compose -f docker-compose.test.yml exec -T postgres pg_isready -U faf_test > /dev/null 2>&1; then
+  if docker-compose -f docker-compose.test.yml exec -T postgres pg_isready -U jaf_test > /dev/null 2>&1; then
     echo "PostgreSQL is ready!"
     break
   fi
@@ -29,6 +29,6 @@ echo "Test databases are ready!"
 echo ""
 echo "Connection details:"
 echo "  Redis: redis://localhost:6379"
-echo "  PostgreSQL: postgresql://faf_test:faf_test_password@localhost:5432/faf_test_db"
+echo "  PostgreSQL: postgresql://jaf_test:jaf_test_password@localhost:5432/jaf_test_db"
 echo ""
 echo "To stop the databases, run: npm run test:db:stop"

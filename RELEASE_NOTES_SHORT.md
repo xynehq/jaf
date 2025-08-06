@@ -1,6 +1,6 @@
-# FAF v0.1.0 - Initial Release 🎉
+# JAF v0.1.0 - Initial Release 🎉
 
-The first public release of FAF (Functional Agent Framework) - a purely functional framework for building AI agents with TypeScript.
+The first public release of JAF (Functional Agent Framework) - a purely functional framework for building AI agents with TypeScript.
 
 ## ✨ Highlights
 
@@ -14,13 +14,13 @@ The first public release of FAF (Functional Agent Framework) - a purely function
 ## 📦 Installation
 
 ```bash
-npm install @xynehq/faf
+npm install @xynehq/jaf
 ```
 
 ## 🚀 Quick Start
 
 ```typescript
-import { createAgent, createFunctionTool, run } from '@xynehq/faf';
+import { createAgent, createFunctionTool, run } from '@xynehq/jaf';
 
 const mathAgent = createAgent({
   name: 'MathTutor',
@@ -32,8 +32,8 @@ const mathAgent = createAgent({
 
 ## 📚 Resources
 
-- **Documentation**: https://xynehq.github.io/faf/
-- **npm Package**: https://www.npmjs.com/package/@xynehq/faf
+- **Documentation**: https://xynehq.github.io/jaf/
+- **npm Package**: https://www.npmjs.com/package/@xynehq/jaf
 - **Examples**: See the `examples/` directory
 
 ## What's Included

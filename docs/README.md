@@ -1,13 +1,13 @@
-# Functional Agent Framework (FAF) Documentation
+# Juspay Agent Framework (JAF) Documentation
 
-Welcome to the comprehensive documentation for the Functional Agent Framework (FAF) - a purely functional agent framework built on immutable state, type safety, and composable policies.
+Welcome to the comprehensive documentation for the Juspay Agent Framework (JAF) - a purely functional agent framework built on immutable state, type safety, and composable policies.
 
 ## 🚀 Quick Start
 
-New to FAF? Start here:
+New to JAF? Start here:
 
 1. **[Getting Started](./getting-started.md)** - Installation, basic concepts, and your first agent
-2. **[Core Concepts](./core-concepts.md)** - Understanding FAF's functional architecture
+2. **[Core Concepts](./core-concepts.md)** - Understanding JAF's functional architecture
 3. **[Examples](./examples.md)** - Working examples and tutorials
 
 ## 📚 Documentation Structure
@@ -58,7 +58,7 @@ New to FAF? Start here:
 
 ## 🔧 Framework Philosophy
 
-FAF is built on functional programming principles:
+JAF is built on functional programming principles:
 
 - **Immutability**: All core data structures are deeply `readonly`
 - **Pure Functions**: Core logic expressed as pure, predictable functions  
@@ -117,12 +117,12 @@ const server = await runServer(agents, { modelProvider }, { port: 3000 });
 
 ## Testing Guidelines and CI/CD
 
-FAF follows functional programming principles throughout its testing infrastructure, ensuring robust, reliable code with comprehensive coverage.
+JAF follows functional programming principles throughout its testing infrastructure, ensuring robust, reliable code with comprehensive coverage.
 
 ### 🧪 Testing Infrastructure
 
 #### Jest Configuration
-FAF uses Jest with TypeScript for comprehensive testing:
+JAF uses Jest with TypeScript for comprehensive testing:
 
 ```javascript
 module.exports = {
@@ -219,7 +219,7 @@ jobs:
 ### 📝 Testing Patterns
 
 #### Functional Testing Patterns
-FAF tests follow functional programming principles:
+JAF tests follow functional programming principles:
 
 ```typescript
 // ✅ Pure function testing
@@ -573,4 +573,4 @@ npm test -- --updateSnapshot
 
 ---
 
-**Ready to build with FAF?** Start with the [Getting Started Guide](./getting-started.md) and explore the [examples](./examples.md)!
+**Ready to build with JAF?** Start with the [Getting Started Guide](./getting-started.md) and explore the [examples](./examples.md)!

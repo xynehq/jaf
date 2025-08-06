@@ -231,7 +231,7 @@ describe('A2A Executor', () => {
 
     it('should handle form tool responses', async () => {
       // For this test, let's just verify the streaming works with regular content
-      // The form tool logic would require full FAF engine integration
+      // The form tool logic would require full JAF engine integration
       const context: A2AExecutionContext = {
         message: createA2ATextMessage('Show form', 'session_123'),
         sessionId: 'session_123',

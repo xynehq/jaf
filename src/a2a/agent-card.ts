@@ -1,6 +1,6 @@
 /**
  * Pure functional Agent Card generation
- * Transforms FAF agents into A2A Agent Cards
+ * Transforms JAF agents into A2A Agent Cards
  */
 
 import type { AgentCard, AgentSkill, A2AAgent, A2AServerConfig } from './types.js';
@@ -130,7 +130,7 @@ export const generateAgentCardForAgent = (
     description: config.description || agent.description,
     version: config.version || '1.0.0',
     provider: config.provider || {
-      organization: 'FAF Agent',
+      organization: 'JAF Agent',
       url: 'https://functional-agent-framework.com'
     }
   };
@@ -302,7 +302,7 @@ export const createAgentCardFromConfig = (config: {
     preferredTransport: 'JSONRPC',
     version: config.version || '1.0.0',
     provider: config.provider || {
-      organization: 'FAF Framework',
+      organization: 'JAF Framework',
       url: 'https://functional-agent-framework.com'
     },
     capabilities: {

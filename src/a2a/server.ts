@@ -1,6 +1,6 @@
 /**
- * Pure functional A2A server integration with FAF
- * Extends FAF server with A2A protocol support
+ * Pure functional A2A server integration with JAF
+ * Extends JAF server with A2A protocol support
  */
 
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
@@ -333,7 +333,7 @@ const startA2AServerInternal = async (
     const host = config.host || 'localhost';
     const port = config.port;
     
-    console.log(`🔧 Starting A2A-enabled FAF server on ${host}:${port}...`);
+    console.log(`🔧 Starting A2A-enabled JAF server on ${host}:${port}...`);
     await app.listen({ port, host });
     
     console.log(`🚀 A2A Server running on http://${host}:${port}`);

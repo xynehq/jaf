@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Integration Tests (Updated for Real LLM Integration)
+ * JAF ADK Layer - Integration Tests (Updated for Real LLM Integration)
  */
 
 import { jest } from '@jest/globals';
@@ -132,7 +132,7 @@ describe('ADK Layer Integration', () => {
         description: 'Generate a greeting',
         execute: (params) => {
           const typedParams = params as { name: string };
-          return `Hello, ${typedParams.name}! Welcome to FAF ADK!`;
+          return `Hello, ${typedParams.name}! Welcome to JAF ADK!`;
         },
         parameters: [
           {
@@ -698,7 +698,7 @@ describe('ADK Layer Integration', () => {
       const runnerConfig = createRunnerConfig(agent, sessionProvider);
 
       // Test text analysis
-      const textMessage = createUserMessage('Analyze this text: "Hello world from FAF ADK"');
+      const textMessage = createUserMessage('Analyze this text: "Hello world from JAF ADK"');
       const textResponse = await runAgent(
         runnerConfig,
         { userId: 'user_123' },

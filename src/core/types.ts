@@ -62,7 +62,7 @@ export type RunState<Ctx> = {
   readonly turnCount: number;
 };
 
-export type FAFError =
+export type JAFError =
   | { readonly _tag: "MaxTurnsExceeded"; readonly turns: number }
   | { readonly _tag: "ModelBehaviorError"; readonly detail: string }
   | { readonly _tag: "DecodeError"; readonly errors: z.ZodIssue[] }
@@ -76,7 +76,7 @@ export type RunResult<Out> = {
   readonly finalState: RunState<any>;
   readonly outcome:
     | { readonly status: 'completed'; readonly output: Out }
-    | { readonly status: 'error'; readonly error: FAFError };
+    | { readonly status: 'error'; readonly error: JAFError };
 };
 
 export type TraceEvent =

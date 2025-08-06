@@ -1,10 +1,10 @@
-# FAF ADK Session Providers
+# JAF ADK Session Providers
 
-Production-ready session providers for the FAF ADK (Agent Development Kit) layer.
+Production-ready session providers for the JAF ADK (Agent Development Kit) layer.
 
 ## Overview
 
-Session providers handle persistent storage of agent conversations and artifacts. FAF includes three implementations:
+Session providers handle persistent storage of agent conversations and artifacts. JAF includes three implementations:
 
 1. **In-Memory Provider** - For development and testing
 2. **Redis Provider** - For distributed, high-performance scenarios
@@ -31,7 +31,7 @@ npm install pg
 Always available, no dependencies required:
 
 ```typescript
-import { createInMemorySessionProvider } from '@xynehq/faf/adk';
+import { createInMemorySessionProvider } from '@xynehq/jaf/adk';
 
 const provider = createInMemorySessionProvider();
 ```
@@ -41,7 +41,7 @@ const provider = createInMemorySessionProvider();
 Requires `ioredis` to be installed. Will throw an error if the library is not available:
 
 ```typescript
-import { createRedisSessionProvider } from '@xynehq/faf/adk';
+import { createRedisSessionProvider } from '@xynehq/jaf/adk';
 
 const provider = createRedisSessionProvider({
   host: 'localhost',
@@ -58,11 +58,11 @@ const provider = createRedisSessionProvider({
 Requires `pg` to be installed. Will throw an error if the library is not available:
 
 ```typescript
-import { createPostgresSessionProvider } from '@xynehq/faf/adk';
+import { createPostgresSessionProvider } from '@xynehq/jaf/adk';
 
 const provider = createPostgresSessionProvider({
   connectionString: 'postgresql://user:password@localhost/dbname',
-  tableName: 'sessions', // optional, defaults to 'faf_sessions'
+  tableName: 'sessions', // optional, defaults to 'jaf_sessions'
   poolSize: 10,         // optional, defaults to 10
   idleTimeoutMillis: 30000,     // optional
   connectionTimeoutMillis: 2000  // optional
@@ -138,7 +138,7 @@ import {
   createRedisSessionProvider,
   createPostgresSessionProvider,
   migrateFromRedisToPostgres 
-} from '@xynehq/faf/adk';
+} from '@xynehq/jaf/adk';
 
 const redisProvider = createRedisSessionProvider({ ... });
 const pgProvider = createPostgresSessionProvider({ ... });
@@ -177,7 +177,7 @@ if (errors.length > 0) {
 
 ## Architecture Notes
 
-All session providers follow FAF's functional programming principles:
+All session providers follow JAF's functional programming principles:
 - No classes - pure functions only
 - Immutable state management
 - Type-safe interfaces

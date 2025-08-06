@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Runner System Tests
+ * JAF ADK Layer - Runner System Tests
  */
 
 import {

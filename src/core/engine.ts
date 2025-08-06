@@ -3,7 +3,7 @@ import {
   RunState,
   RunConfig,
   RunResult,
-  FAFError,
+  JAFError,
   Message,
   TraceEvent,
   Agent,
@@ -23,20 +23,20 @@ export async function run<Ctx, Out>(
     // Load conversation history from memory if configured
     let stateWithMemory = initialState;
     if (config.memory?.autoStore && config.conversationId) {
-      console.log(`[FAF:ENGINE] Loading conversation history for ${config.conversationId}`);
+      console.log(`[JAF:ENGINE] Loading conversation history for ${config.conversationId}`);
       stateWithMemory = await loadConversationHistory(initialState, config);
     } else {
-      console.log(`[FAF:ENGINE] Skipping memory load - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}`);
+      console.log(`[JAF:ENGINE] Skipping memory load - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}`);
     }
 
     const result = await runInternal<Ctx, Out>(stateWithMemory, config);
     
     // Store conversation history to memory if configured
     if (config.memory?.autoStore && config.conversationId && result.finalState.messages.length > initialState.messages.length) {
-      console.log(`[FAF:ENGINE] Storing conversation history for ${config.conversationId}`);
+      console.log(`[JAF:ENGINE] Storing conversation history for ${config.conversationId}`);
       await storeConversationHistory(result.finalState, config);
     } else {
-      console.log(`[FAF:ENGINE] Skipping memory store - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}, messageChange: ${result.finalState.messages.length > initialState.messages.length}`);
+      console.log(`[JAF:ENGINE] Skipping memory store - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}, messageChange: ${result.finalState.messages.length > initialState.messages.length}`);
     }
 
     config.onEvent?.({
@@ -119,10 +119,10 @@ async function runInternal<Ctx, Out>(
     };
   }
 
-  console.log(`[FAF:ENGINE] Using agent: ${currentAgent.name}`);
-  console.log(`[FAF:ENGINE] Agent has ${currentAgent.tools?.length || 0} tools available`);
+  console.log(`[JAF:ENGINE] Using agent: ${currentAgent.name}`);
+  console.log(`[JAF:ENGINE] Agent has ${currentAgent.tools?.length || 0} tools available`);
   if (currentAgent.tools) {
-    console.log(`[FAF:ENGINE] Available tools:`, currentAgent.tools.map(t => t.schema.name));
+    console.log(`[JAF:ENGINE] Available tools:`, currentAgent.tools.map(t => t.schema.name));
   }
 
   const model = config.modelOverride ?? currentAgent.modelConfig?.name ?? "gpt-4o";
@@ -161,8 +161,8 @@ async function runInternal<Ctx, Out>(
   const newMessages = [...state.messages, assistantMessage];
 
   if (llmResponse.message.tool_calls && llmResponse.message.tool_calls.length > 0) {
-    console.log(`[FAF:ENGINE] Processing ${llmResponse.message.tool_calls.length} tool calls`);
-    console.log(`[FAF:ENGINE] Tool calls:`, llmResponse.message.tool_calls);
+    console.log(`[JAF:ENGINE] Processing ${llmResponse.message.tool_calls.length} tool calls`);
+    console.log(`[JAF:ENGINE] Tool calls:`, llmResponse.message.tool_calls);
     
     const toolResults = await executeToolCalls(
       llmResponse.message.tool_calls,
@@ -171,7 +171,7 @@ async function runInternal<Ctx, Out>(
       config
     );
     
-    console.log(`[FAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
+    console.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
 
     if (toolResults.some(r => r.isHandoff)) {
       const handoffResult = toolResults.find(r => r.isHandoff);
@@ -379,9 +379,9 @@ async function executeToolCalls<Ctx>(
           };
         }
 
-        console.log(`[FAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
-        console.log(`[FAF:ENGINE] Tool args:`, parseResult.data);
-        console.log(`[FAF:ENGINE] Tool context:`, state.context);
+        console.log(`[JAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
+        console.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
+        console.log(`[JAF:ENGINE] Tool context:`, state.context);
         
         const toolResult = await tool.execute(parseResult.data, state.context);
         
@@ -391,14 +391,14 @@ async function executeToolCalls<Ctx>(
         
         if (typeof toolResult === 'string') {
           resultString = toolResult;
-          console.log(`[FAF:ENGINE] Tool ${toolCall.function.name} returned string:`, resultString);
+          console.log(`[JAF:ENGINE] Tool ${toolCall.function.name} returned string:`, resultString);
         } else {
           // It's a ToolResult object
           toolResultObj = toolResult;
           const { toolResultToString } = await import('./tool-results');
           resultString = toolResultToString(toolResult);
-          console.log(`[FAF:ENGINE] Tool ${toolCall.function.name} returned ToolResult:`, toolResult);
-          console.log(`[FAF:ENGINE] Converted to string:`, resultString);
+          console.log(`[JAF:ENGINE] Tool ${toolCall.function.name} returned ToolResult:`, toolResult);
+          console.log(`[JAF:ENGINE] Converted to string:`, resultString);
         }
 
         config.onEvent?.({
@@ -479,12 +479,12 @@ async function loadConversationHistory<Ctx>(
 
   const result = await config.memory.provider.getConversation(config.conversationId);
   if (!result.success) {
-    console.warn(`[FAF:MEMORY] Failed to load conversation history: ${result.error.message}`);
+    console.warn(`[JAF:MEMORY] Failed to load conversation history: ${result.error.message}`);
     return initialState;
   }
 
   if (!result.data) {
-    console.log(`[FAF:MEMORY] No existing conversation found for ${config.conversationId}`);
+    console.log(`[JAF:MEMORY] No existing conversation found for ${config.conversationId}`);
     return initialState;
   }
 
@@ -495,10 +495,10 @@ async function loadConversationHistory<Ctx>(
   // Merge existing messages with new messages, avoiding duplicates
   const combinedMessages = [...memoryMessages, ...initialState.messages];
   
-  console.log(`[FAF:MEMORY] Loaded ${memoryMessages.length} messages from memory for conversation ${config.conversationId}`);
-  console.log(`[FAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
-  console.log(`[FAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
-  console.log(`[FAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
+  console.log(`[JAF:MEMORY] Loaded ${memoryMessages.length} messages from memory for conversation ${config.conversationId}`);
+  console.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
+  console.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
+  console.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
   
   return {
     ...initialState,
@@ -529,7 +529,7 @@ async function storeConversationHistory<Ctx>(
       ...messagesToStore.slice(-keepRecent)
     ];
     
-    console.log(`[FAF:MEMORY] Compressed conversation from ${finalState.messages.length} to ${messagesToStore.length} messages`);
+    console.log(`[JAF:MEMORY] Compressed conversation from ${finalState.messages.length} to ${messagesToStore.length} messages`);
   }
 
   const metadata = {
@@ -542,9 +542,9 @@ async function storeConversationHistory<Ctx>(
 
   const result = await config.memory.provider.storeMessages(config.conversationId, messagesToStore, metadata);
   if (!result.success) {
-    console.warn(`[FAF:MEMORY] Failed to store conversation history: ${result.error.message}`);
+    console.warn(`[JAF:MEMORY] Failed to store conversation history: ${result.error.message}`);
     return;
   }
   
-  console.log(`[FAF:MEMORY] Stored ${messagesToStore.length} messages for conversation ${config.conversationId}`);
+  console.log(`[JAF:MEMORY] Stored ${messagesToStore.length} messages for conversation ${config.conversationId}`);
 }

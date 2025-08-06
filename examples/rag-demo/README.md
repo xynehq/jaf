@@ -1,6 +1,6 @@
-# FAF Vertex AI RAG Demo
+# JAF Vertex AI RAG Demo
 
-This demo showcases the integration of **Vertex AI RAG (Retrieval Augmented Generation)** with the **Functional Agent Framework (FAF)**. It demonstrates how to build AI agents that can query knowledge bases and provide grounded, source-cited responses.
+This demo showcases the integration of **Vertex AI RAG (Retrieval Augmented Generation)** with the **Functional Agent Framework (JAF)**. It demonstrates how to build AI agents that can query knowledge bases and provide grounded, source-cited responses.
 
 ## 🎯 Features Demonstrated
 
@@ -10,7 +10,7 @@ This demo showcases the integration of **Vertex AI RAG (Retrieval Augmented Gene
 - **Performance Metrics**: Detailed timing and performance tracking
 - **Permission Control**: Role-based access to RAG functionality
 - **Error Handling**: Comprehensive error management
-- **FAF Integration**: Full framework orchestration
+- **JAF Integration**: Full framework orchestration
 
 ## 🛠️ Setup Requirements
 
@@ -135,7 +135,7 @@ Each query demonstrates:
 ## 📊 Sample Output
 
 ```
-🔍 FAF Vertex AI RAG Demo
+🔍 JAF Vertex AI RAG Demo
 ========================
 
 📋 Demo Query 1: "What are the latest developments in artificial intelligence?"
@@ -238,7 +238,7 @@ node --version
 
 ## 🎯 Integration Points
 
-This demo shows how FAF integrates with external services:
+This demo shows how JAF integrates with external services:
 
 1. **Tool Definition**: Type-safe tool schemas with Zod
 2. **Permission System**: Role-based access control
@@ -257,7 +257,7 @@ This demo shows how FAF integrates with external services:
 
 ## 📚 Related Documentation
 
-- [FAF Framework Documentation](../../README.md)
+- [JAF Framework Documentation](../../README.md)
 - [Google GenAI SDK](https://github.com/google/genai-js)
 - [Vertex AI RAG Documentation](https://cloud.google.com/vertex-ai/docs/rag)
 - [Google Cloud Authentication](https://cloud.google.com/docs/authentication)

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The FAF ADK now supports real streaming from LLM providers, replacing the previous simulated chunking approach. This provides a better user experience with faster time-to-first-token and real-time response display.
+The JAF ADK now supports real streaming from LLM providers, replacing the previous simulated chunking approach. This provides a better user experience with faster time-to-first-token and real-time response display.
 
 ## Supported Providers
 
@@ -29,7 +29,7 @@ The FAF ADK now supports real streaming from LLM providers, replacing the previo
 ### Basic Streaming
 
 ```typescript
-import { createAdkLLMService, createAgent } from '@xynehq/faf/adk';
+import { createAdkLLMService, createAgent } from '@xynehq/jaf/adk';
 
 // Create service with provider
 const service = createAdkLLMService({

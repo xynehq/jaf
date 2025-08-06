@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Advanced Features Example
+ * JAF ADK Layer - Advanced Features Example
  * 
  * Demonstrates schema validation, guardrails, streaming, and other advanced features
  */
@@ -298,7 +298,7 @@ export const createStreamingAgent = () => {
 // ========== Example Usage Functions ==========
 
 export async function runSchemaValidationExample() {
-  console.log('=== FAF ADK Layer - Schema Validation Example ===\n');
+  console.log('=== JAF ADK Layer - Schema Validation Example ===\n');
 
   const { runnerConfig } = createBookingAgent();
 
@@ -340,7 +340,7 @@ export async function runSchemaValidationExample() {
 }
 
 export async function runStreamingWithMonitoringExample() {
-  console.log('\n=== FAF ADK Layer - Streaming with Monitoring Example ===\n');
+  console.log('\n=== JAF ADK Layer - Streaming with Monitoring Example ===\n');
 
   const { runnerConfig } = createStreamingAgent();
 
@@ -390,7 +390,7 @@ export async function runStreamingWithMonitoringExample() {
 }
 
 export async function runAdvancedStreamingExample() {
-  console.log('\n=== FAF ADK Layer - Advanced Streaming Features ===\n');
+  console.log('\n=== JAF ADK Layer - Advanced Streaming Features ===\n');
 
   // Create a live request queue
   const queue = createLiveRequestQueue();
@@ -427,7 +427,7 @@ export async function runAdvancedStreamingExample() {
 }
 
 export async function runLiveStreamingExample() {
-  console.log('\n=== FAF ADK Layer - Live Streaming Simulation ===\n');
+  console.log('\n=== JAF ADK Layer - Live Streaming Simulation ===\n');
 
   // Simulate a live streaming scenario
   async function* mockAgentStream() {

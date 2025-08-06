@@ -14,7 +14,7 @@ import {
   createA2ATask,
   updateA2ATaskStatus,
   extractTextFromA2AMessage,
-  transformA2AAgentToFAF,
+  transformA2AAgentToJAF,
   processAgentQuery,
   type A2AToolResult,
   type ToolContext,
@@ -290,8 +290,8 @@ describe('A2A Agent', () => {
     });
   });
 
-  describe('A2A to FAF Transformation', () => {
-    it('should transform A2A agent to FAF agent', () => {
+  describe('A2A to JAF Transformation', () => {
+    it('should transform A2A agent to JAF agent', () => {
       const testTool = createA2ATool({
         name: 'test_tool',
         description: 'Test tool',
@@ -306,15 +306,15 @@ describe('A2A Agent', () => {
         tools: [testTool]
       });
 
-      const fafAgent = transformA2AAgentToFAF(a2aAgent);
+      const jafAgent = transformA2AAgentToJAF(a2aAgent);
 
-      expect(fafAgent.name).toBe('TestAgent');
-      expect(typeof fafAgent.instructions).toBe('function');
-      expect(fafAgent.tools).toHaveLength(1);
-      expect(fafAgent.tools?.[0]?.schema.name).toBe('test_tool');
+      expect(jafAgent.name).toBe('TestAgent');
+      expect(typeof jafAgent.instructions).toBe('function');
+      expect(jafAgent.tools).toHaveLength(1);
+      expect(jafAgent.tools?.[0]?.schema.name).toBe('test_tool');
     });
 
-    it('should create FAF instructions function', () => {
+    it('should create JAF instructions function', () => {
       const a2aAgent = createA2AAgent({
         name: 'TestAgent',
         description: 'Test agent',
@@ -322,7 +322,7 @@ describe('A2A Agent', () => {
         tools: []
       });
 
-      const fafAgent = transformA2AAgentToFAF(a2aAgent);
+      const jafAgent = transformA2AAgentToJAF(a2aAgent);
       const mockRunState = {
         runId: { _brand: 'RunId' } as any,
         traceId: { _brand: 'TraceId' } as any,
@@ -331,7 +331,7 @@ describe('A2A Agent', () => {
         context: {},
         turnCount: 0
       };
-      const instructions = fafAgent.instructions(mockRunState);
+      const instructions = jafAgent.instructions(mockRunState);
 
       expect(instructions).toBe('You are a helpful assistant');
     });

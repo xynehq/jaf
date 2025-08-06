@@ -19,13 +19,13 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: faf_test
-      POSTGRES_PASSWORD: faf_test_password
-      POSTGRES_DB: faf_test_db
+      POSTGRES_USER: jaf_test
+      POSTGRES_PASSWORD: jaf_test_password
+      POSTGRES_DB: jaf_test_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U faf_test"]
+      test: ["CMD-SHELL", "pg_isready -U jaf_test"]
       interval: 5s
       timeout: 3s
       retries: 5

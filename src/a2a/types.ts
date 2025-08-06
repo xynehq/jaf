@@ -1,5 +1,5 @@
 /**
- * Pure functional A2A types for FAF
+ * Pure functional A2A types for JAF
  * Maintains immutability and type safety
  */
 
@@ -195,7 +195,7 @@ export type A2AToolResult = {
   readonly context?: ToolContext;
 };
 
-// FAF Agent Types for A2A
+// JAF Agent Types for A2A
 export type A2AAgentTool = {
   readonly name: string;
   readonly description: string;

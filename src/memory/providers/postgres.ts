@@ -36,7 +36,7 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
     type: 'postgres' as const,
     host: config.host ?? 'localhost',
     port: config.port ?? 5432,
-    database: config.database ?? 'faf_memory',
+    database: config.database ?? 'jaf_memory',
     username: config.username ?? 'postgres',
     ssl: config.ssl ?? false,
     tableName: config.tableName ?? 'conversations',

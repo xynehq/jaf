@@ -2,7 +2,7 @@
 
 ## Overview
 
-The A2A (Agent-to-Agent) protocol in FAF provides a standardized communication layer that allows agents to interact with each other across different systems and implementations. Built on JSON-RPC 2.0, the protocol maintains FAF's functional programming principles while enabling seamless agent interoperability.
+The A2A (Agent-to-Agent) protocol in JAF provides a standardized communication layer that allows agents to interact with each other across different systems and implementations. Built on JSON-RPC 2.0, the protocol maintains JAF's functional programming principles while enabling seamless agent interoperability.
 
 ### Key Features
 
@@ -16,7 +16,7 @@ The A2A (Agent-to-Agent) protocol in FAF provides a standardized communication l
 
 ### Protocol Compliance
 
-FAF's A2A implementation follows the [Agent-to-Agent Protocol Specification](https://a2a-protocol.org) version 0.3.0, ensuring compatibility with other A2A-enabled systems.
+JAF's A2A implementation follows the [Agent-to-Agent Protocol Specification](https://a2a-protocol.org) version 0.3.0, ensuring compatibility with other A2A-enabled systems.
 
 ## Task Management System
 
@@ -112,7 +112,7 @@ export const sanitizeTask = (task: A2ATask): A2ATask;
 
 ### Storage Providers
 
-FAF supports multiple storage backends for A2A tasks:
+JAF supports multiple storage backends for A2A tasks:
 
 #### In-Memory Provider
 
@@ -121,7 +121,7 @@ Best for development and testing:
 ```typescript
 const config: A2AInMemoryTaskConfig = {
   type: 'memory',
-  keyPrefix: 'faf:a2a:tasks:',
+  keyPrefix: 'jaf:a2a:tasks:',
   maxTasks: 10000,                    // Maximum total tasks
   maxTasksPerContext: 1000,           // Maximum tasks per context
   defaultTtl: 3600,                   // Default TTL in seconds
@@ -138,7 +138,7 @@ Recommended for production single-instance deployments:
 ```typescript
 const config: A2ARedisTaskConfig = {
   type: 'redis',
-  keyPrefix: 'faf:a2a:tasks:',
+  keyPrefix: 'jaf:a2a:tasks:',
   host: 'localhost',
   port: 6379,
   password: 'optional-password',
@@ -158,10 +158,10 @@ Recommended for production multi-instance deployments:
 ```typescript
 const config: A2APostgresTaskConfig = {
   type: 'postgres',
-  keyPrefix: 'faf:a2a:tasks:',
+  keyPrefix: 'jaf:a2a:tasks:',
   host: 'localhost',
   port: 5432,
-  database: 'faf_a2a',
+  database: 'jaf_a2a',
   username: 'postgres',
   password: 'password',
   ssl: false,
@@ -333,31 +333,31 @@ All providers support configuration via environment variables:
 
 ```bash
 # Provider type (memory, redis, postgres)
-FAF_A2A_TASK_PROVIDER_TYPE=redis
+JAF_A2A_TASK_PROVIDER_TYPE=redis
 
 # Common settings
-FAF_A2A_TASK_PROVIDER_KEY_PREFIX=myapp:a2a:tasks:
-FAF_A2A_TASK_PROVIDER_DEFAULT_TTL=86400
-FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL=3600
-FAF_A2A_TASK_PROVIDER_MAX_TASKS=100000
-FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY=true
-FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS=true
+JAF_A2A_TASK_PROVIDER_KEY_PREFIX=myapp:a2a:tasks:
+JAF_A2A_TASK_PROVIDER_DEFAULT_TTL=86400
+JAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL=3600
+JAF_A2A_TASK_PROVIDER_MAX_TASKS=100000
+JAF_A2A_TASK_PROVIDER_ENABLE_HISTORY=true
+JAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS=true
 
 # Redis-specific
-FAF_A2A_TASK_PROVIDER_REDIS_HOST=localhost
-FAF_A2A_TASK_PROVIDER_REDIS_PORT=6379
-FAF_A2A_TASK_PROVIDER_REDIS_PASSWORD=secret
-FAF_A2A_TASK_PROVIDER_REDIS_DB=0
+JAF_A2A_TASK_PROVIDER_REDIS_HOST=localhost
+JAF_A2A_TASK_PROVIDER_REDIS_PORT=6379
+JAF_A2A_TASK_PROVIDER_REDIS_PASSWORD=secret
+JAF_A2A_TASK_PROVIDER_REDIS_DB=0
 
 # PostgreSQL-specific
-FAF_A2A_TASK_PROVIDER_POSTGRES_HOST=localhost
-FAF_A2A_TASK_PROVIDER_POSTGRES_PORT=5432
-FAF_A2A_TASK_PROVIDER_POSTGRES_DATABASE=faf_a2a
-FAF_A2A_TASK_PROVIDER_POSTGRES_USERNAME=postgres
-FAF_A2A_TASK_PROVIDER_POSTGRES_PASSWORD=secret
-FAF_A2A_TASK_PROVIDER_POSTGRES_SSL=false
-FAF_A2A_TASK_PROVIDER_POSTGRES_TABLE=a2a_tasks
-FAF_A2A_TASK_PROVIDER_POSTGRES_MAX_CONNECTIONS=10
+JAF_A2A_TASK_PROVIDER_POSTGRES_HOST=localhost
+JAF_A2A_TASK_PROVIDER_POSTGRES_PORT=5432
+JAF_A2A_TASK_PROVIDER_POSTGRES_DATABASE=jaf_a2a
+JAF_A2A_TASK_PROVIDER_POSTGRES_USERNAME=postgres
+JAF_A2A_TASK_PROVIDER_POSTGRES_PASSWORD=secret
+JAF_A2A_TASK_PROVIDER_POSTGRES_SSL=false
+JAF_A2A_TASK_PROVIDER_POSTGRES_TABLE=a2a_tasks
+JAF_A2A_TASK_PROVIDER_POSTGRES_MAX_CONNECTIONS=10
 ```
 
 #### Environment-Based Setup
@@ -394,7 +394,7 @@ const config: A2ARedisTaskConfig = {
   type: 'redis',
   defaultTtl: 43200,            // 12 hours for faster cleanup
   cleanupInterval: 900,         // 15-minute cleanup cycles
-  keyPrefix: 'faf:a2a:',       // Shorter prefix saves space
+  keyPrefix: 'jaf:a2a:',       // Shorter prefix saves space
   enableHistory: true,          // Redis handles this efficiently
   enableArtifacts: true
 };
@@ -813,4 +813,4 @@ const validateMigration = async (
 4. **Monitor memory usage** with in-memory provider
 5. **Use connection pooling** for database providers
 
-The A2A protocol implementation in FAF provides a robust, scalable foundation for agent-to-agent communication while maintaining the framework's functional programming principles and type safety guarantees.
+The A2A protocol implementation in JAF provides a robust, scalable foundation for agent-to-agent communication while maintaining the framework's functional programming principles and type safety guarantees.

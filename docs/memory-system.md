@@ -1,6 +1,6 @@
-# FAF Memory System Documentation
+# JAF Memory System Documentation
 
-The Functional Agent Framework (FAF) provides a comprehensive memory system for persisting and managing conversation history across agent interactions. This document covers the memory provider architecture, configuration options, and best practices.
+The Juspay Agent Framework (JAF) provides a comprehensive memory system for persisting and managing conversation history across agent interactions. This document covers the memory provider architecture, configuration options, and best practices.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ The Functional Agent Framework (FAF) provides a comprehensive memory system for 
 
 ## Overview
 
-The FAF memory system enables agents to maintain conversation context across multiple interactions. It supports three storage backends:
+The JAF memory system enables agents to maintain conversation context across multiple interactions. It supports three storage backends:
 
 - **In-Memory**: Fast, non-persistent storage for development and testing
 - **Redis**: High-performance caching for production environments
@@ -123,9 +123,9 @@ const provider = createInMemoryProvider({
 #### Environment Variables
 
 ```bash
-FAF_MEMORY_TYPE=memory
-FAF_MEMORY_MAX_CONVERSATIONS=1000
-FAF_MEMORY_MAX_MESSAGES=1000
+JAF_MEMORY_TYPE=memory
+JAF_MEMORY_MAX_CONVERSATIONS=1000
+JAF_MEMORY_MAX_MESSAGES=1000
 ```
 
 #### Memory Management
@@ -151,7 +151,7 @@ The in-memory provider automatically manages memory limits:
 
 ```bash
 # Using Docker (recommended)
-docker run -d --name faf-redis -p 6379:6379 redis:alpine
+docker run -d --name jaf-redis -p 6379:6379 redis:alpine
 
 # Or local installation
 brew install redis && brew services start redis  # macOS
@@ -179,7 +179,7 @@ const provider = await createRedisProvider({
   port: 6379,
   password: 'your-password',
   db: 0,
-  keyPrefix: 'faf:memory:',
+  keyPrefix: 'jaf:memory:',
   ttl: 7200  // 2 hours TTL (optional)
 }, redisClient);
 ```
@@ -187,13 +187,13 @@ const provider = await createRedisProvider({
 #### Environment Variables
 
 ```bash
-FAF_MEMORY_TYPE=redis
-FAF_REDIS_HOST=localhost
-FAF_REDIS_PORT=6379
-FAF_REDIS_PASSWORD=your-password
-FAF_REDIS_DB=0
-FAF_REDIS_PREFIX=faf:memory:
-FAF_REDIS_TTL=7200  # Optional TTL in seconds
+JAF_MEMORY_TYPE=redis
+JAF_REDIS_HOST=localhost
+JAF_REDIS_PORT=6379
+JAF_REDIS_PASSWORD=your-password
+JAF_REDIS_DB=0
+JAF_REDIS_PREFIX=jaf:memory:
+JAF_REDIS_TTL=7200  # Optional TTL in seconds
 ```
 
 #### Key Management
@@ -234,19 +234,19 @@ await client.connect();
 
 ```bash
 # Using Docker (recommended)
-docker run -d --name faf-postgres \
+docker run -d --name jaf-postgres \
   -e POSTGRES_PASSWORD=testpass \
-  -e POSTGRES_DB=faf_memory \
+  -e POSTGRES_DB=jaf_memory \
   -p 5432:5432 \
   postgres:15
 
 # Or local installation
 brew install postgresql && brew services start postgresql  # macOS
-createdb faf_memory  # macOS
+createdb jaf_memory  # macOS
 
 sudo apt install postgresql postgresql-contrib  # Ubuntu
 sudo systemctl start postgresql  # Ubuntu
-sudo -u postgres createdb faf_memory  # Ubuntu
+sudo -u postgres createdb jaf_memory  # Ubuntu
 ```
 
 #### Configuration
@@ -259,7 +259,7 @@ import { Client } from 'pg';
 const postgresClient = new Client({
   host: 'localhost',
   port: 5432,
-  database: 'faf_memory',
+  database: 'jaf_memory',
   user: 'postgres',
   password: 'testpass',
   ssl: false
@@ -271,7 +271,7 @@ const provider = await createPostgresProvider({
   type: 'postgres',
   host: 'localhost',
   port: 5432,
-  database: 'faf_memory',
+  database: 'jaf_memory',
   username: 'postgres',
   password: 'testpass',
   ssl: false,
@@ -283,15 +283,15 @@ const provider = await createPostgresProvider({
 #### Environment Variables
 
 ```bash
-FAF_MEMORY_TYPE=postgres
-FAF_POSTGRES_HOST=localhost
-FAF_POSTGRES_PORT=5432
-FAF_POSTGRES_DB=faf_memory
-FAF_POSTGRES_USER=postgres
-FAF_POSTGRES_PASSWORD=testpass
-FAF_POSTGRES_SSL=false
-FAF_POSTGRES_TABLE=conversations
-FAF_POSTGRES_MAX_CONNECTIONS=10
+JAF_MEMORY_TYPE=postgres
+JAF_POSTGRES_HOST=localhost
+JAF_POSTGRES_PORT=5432
+JAF_POSTGRES_DB=jaf_memory
+JAF_POSTGRES_USER=postgres
+JAF_POSTGRES_PASSWORD=testpass
+JAF_POSTGRES_SSL=false
+JAF_POSTGRES_TABLE=conversations
+JAF_POSTGRES_MAX_CONNECTIONS=10
 ```
 
 #### Database Schema
@@ -359,8 +359,8 @@ const provider = await createMemoryProvider(
 import { createMemoryProviderFromEnv } from 'functional-agent-framework';
 
 const provider = await createMemoryProviderFromEnv({
-  redis: redisClient,  // Only needed if FAF_MEMORY_TYPE=redis
-  postgres: postgresClient  // Only needed if FAF_MEMORY_TYPE=postgres
+  redis: redisClient,  // Only needed if JAF_MEMORY_TYPE=redis
+  postgres: postgresClient  // Only needed if JAF_MEMORY_TYPE=postgres
 });
 ```
 
@@ -491,7 +491,7 @@ const userDeleted = await provider.clearUserConversations('user-456');
 
 ## Auto-Store Functionality
 
-The FAF engine can automatically manage conversation persistence when `autoStore` is enabled:
+The JAF engine can automatically manage conversation persistence when `autoStore` is enabled:
 
 ```typescript
 const runConfig = {
@@ -631,7 +631,7 @@ const provider = await createRedisProvider({
   type: 'redis',
   host: 'redis-cluster.internal',
   port: 6379,
-  keyPrefix: 'prod:faf:memory:',
+  keyPrefix: 'prod:jaf:memory:',
   ttl: 86400  // 24 hour TTL to prevent memory bloat
 }, redisClient);
 
@@ -652,8 +652,8 @@ const provider = await createPostgresProvider({
   type: 'postgres',
   host: 'postgres-primary.internal',
   port: 5432,
-  database: 'faf_memory_prod',
-  username: 'faf_user',
+  database: 'jaf_memory_prod',
+  username: 'jaf_user',
   ssl: true,
   tableName: 'conversations',
   maxConnections: 20  // Connection pooling
@@ -769,7 +769,7 @@ redis-cli -h localhost -p 6379 ping
 redis-cli -h localhost -p 6379 info memory
 
 # Monitor Redis logs
-docker logs faf-redis -f
+docker logs jaf-redis -f
 ```
 
 **Issue**: Authentication failures
@@ -793,7 +793,7 @@ const { Pool } = require('pg');
 const pool = new Pool({
   host: 'localhost',
   port: 5432,
-  database: 'faf_memory',
+  database: 'jaf_memory',
   user: 'postgres',
   password: 'testpass',
   max: 20,  // Maximum connections
@@ -866,13 +866,13 @@ async function diagnoseMemoryProvider(provider: MemoryProvider): Promise<void> {
 #### Environment Validation
 ```typescript
 function validateMemoryEnvironment(): void {
-  const memoryType = process.env.FAF_MEMORY_TYPE || 'memory';
+  const memoryType = process.env.JAF_MEMORY_TYPE || 'memory';
   
   console.log(`Memory type: ${memoryType}`);
   
   switch (memoryType) {
     case 'redis':
-      const requiredRedisVars = ['FAF_REDIS_HOST', 'FAF_REDIS_PORT'];
+      const requiredRedisVars = ['JAF_REDIS_HOST', 'JAF_REDIS_PORT'];
       requiredRedisVars.forEach(varName => {
         if (!process.env[varName]) {
           console.warn(`Missing environment variable: ${varName}`);
@@ -881,7 +881,7 @@ function validateMemoryEnvironment(): void {
       break;
       
     case 'postgres':
-      const requiredPgVars = ['FAF_POSTGRES_HOST', 'FAF_POSTGRES_DB', 'FAF_POSTGRES_USER'];
+      const requiredPgVars = ['JAF_POSTGRES_HOST', 'JAF_POSTGRES_DB', 'JAF_POSTGRES_USER'];
       requiredPgVars.forEach(varName => {
         if (!process.env[varName]) {
           console.warn(`Missing environment variable: ${varName}`);

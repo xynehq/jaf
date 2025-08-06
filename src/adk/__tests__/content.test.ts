@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Content System Tests
+ * JAF ADK Layer - Content System Tests
  */
 
 import {

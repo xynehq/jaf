@@ -1,16 +1,16 @@
-# Functional Agent Framework (FAF)
+# Juspay Agent Framework (JAF)
 
-[![CI](https://github.com/xynehq/faf/workflows/CI/badge.svg)](https://github.com/xynehq/faf/actions)
-[![Documentation](https://img.shields.io/badge/docs-mkdocs-blue)](https://xynehq.github.io/faf/)
-[![npm version](https://img.shields.io/npm/v/@xynehq/faf.svg)](https://www.npmjs.com/package/@xynehq/faf)
-[![npm downloads](https://img.shields.io/npm/dm/@xynehq/faf.svg)](https://www.npmjs.com/package/@xynehq/faf)
+[![CI](https://github.com/xynehq/jaf/workflows/CI/badge.svg)](https://github.com/xynehq/jaf/actions)
+[![Documentation](https://img.shields.io/badge/docs-mkdocs-blue)](https://xynehq.github.io/jaf/)
+[![npm version](https://img.shields.io/npm/v/@xynehq/jaf.svg)](https://www.npmjs.com/package/@xynehq/jaf)
+[![npm downloads](https://img.shields.io/npm/dm/@xynehq/jaf.svg)](https://www.npmjs.com/package/@xynehq/jaf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-![Functional Agent Framework](/docs/cover.png?raw=true "Functional Agent Framework")
+![Juspay Agent Framework](/docs/cover.png?raw=true "Juspay Agent Framework")
 
-A purely functional agent framework built on immutable state, type safety, and composable policies. FAF enables building production-ready AI agent systems with built-in security, observability, and error handling.
+A purely functional agent framework built on immutable state, type safety, and composable policies. JAF enables building production-ready AI agent systems with built-in security, observability, and error handling.
 
-📚 **[Read the Documentation](https://xynehq.github.io/faf/)**
+📚 **[Read the Documentation](https://xynehq.github.io/jaf/)**
 
 ## 🎯 Core Philosophy
 
@@ -27,21 +27,21 @@ A purely functional agent framework built on immutable state, type safety, and c
 
 ```bash
 # Install from npm
-npm install @xynehq/faf
+npm install @xynehq/jaf
 
 # Or using yarn
-yarn add @xynehq/faf
+yarn add @xynehq/jaf
 
 # Or using pnpm
-pnpm add @xynehq/faf
+pnpm add @xynehq/jaf
 ```
 
 ### Development Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/xynehq/faf.git
-cd faf
+git clone https://github.com/xynehq/jaf.git
+cd jaf
 
 # Install dependencies
 npm install
@@ -110,7 +110,7 @@ docs/               # Documentation
 
 ```typescript
 import { z } from 'zod';
-import { Agent, Tool, RunState, run } from '@xynehq/faf';
+import { Agent, Tool, RunState, run } from '@xynehq/jaf';
 
 // Define your context type
 type MyContext = {
@@ -144,7 +144,7 @@ const mathAgent: Agent<MyContext, string> = {
 ### Running the Framework
 
 ```typescript
-import { run, makeLiteLLMProvider } from '@xynehq/faf';
+import { run, makeLiteLLMProvider } from '@xynehq/jaf';
 
 const modelProvider = makeLiteLLMProvider('http://localhost:4000');
 const agentRegistry = new Map([['MathTutor', mathAgent]]);
@@ -170,12 +170,12 @@ const result = await run(initialState, config);
 
 ## 🔄 Function Composition
 
-FAF emphasizes function composition to build complex behaviors from simple, reusable functions:
+JAF emphasizes function composition to build complex behaviors from simple, reusable functions:
 
 ### Composing Tools
 
 ```typescript
-import { createFunctionTool, composeTool, withRetry, withCache } from '@xynehq/faf';
+import { createFunctionTool, composeTool, withRetry, withCache } from '@xynehq/jaf';
 
 // Simple base tools
 const fetchWeatherTool = createFunctionTool({
@@ -212,7 +212,7 @@ const weatherReportTool = composeTool([
 ### Composing Validators
 
 ```typescript
-import { compose, createValidator } from '@xynehq/faf';
+import { compose, createValidator } from '@xynehq/jaf';
 
 // Base validators
 const isPositive = createValidator<number>(
@@ -254,7 +254,7 @@ const ageTool = createFunctionTool({
 ### Composing Agent Behaviors
 
 ```typescript
-import { createAgent, withMiddleware, withFallback } from '@xynehq/faf';
+import { createAgent, withMiddleware, withFallback } from '@xynehq/jaf';
 
 // Base agents
 const primaryAgent = createAgent({
@@ -312,7 +312,7 @@ const productionAgent = compose(
 ### Composing Memory Providers
 
 ```typescript
-import { composeMemoryProviders, createCacheLayer } from '@xynehq/faf';
+import { composeMemoryProviders, createCacheLayer } from '@xynehq/jaf';
 
 // Layer memory providers for performance and reliability
 const memoryProvider = composeMemoryProviders([
@@ -332,7 +332,7 @@ const memoryProvider = composeMemoryProviders([
 ### Composable Validation Policies
 
 ```typescript
-import { createPathValidator, createPermissionValidator, composeValidations } from '@xynehq/faf';
+import { createPathValidator, createPermissionValidator, composeValidations } from '@xynehq/jaf';
 
 // Create individual validators
 const pathValidator = createPathValidator(['/shared', '/public']);
@@ -348,7 +348,7 @@ const secureFileTool = withValidation(baseFileTool, combinedValidator);
 ### Guardrails
 
 ```typescript
-import { createContentFilter, createRateLimiter } from '@xynehq/faf';
+import { createContentFilter, createRateLimiter } from '@xynehq/jaf';
 
 const config = {
   // ... other config
@@ -365,7 +365,7 @@ const config = {
 ## 🔗 Agent Handoffs
 
 ```typescript
-import { handoffTool } from '@xynehq/faf';
+import { handoffTool } from '@xynehq/jaf';
 
 const triageAgent: Agent<Context, { agentName: string }> = {
   name: 'TriageAgent',
@@ -383,7 +383,7 @@ const triageAgent: Agent<Context, { agentName: string }> = {
 ### Real-time Tracing
 
 ```typescript
-import { ConsoleTraceCollector, FileTraceCollector } from '@xynehq/faf';
+import { ConsoleTraceCollector, FileTraceCollector } from '@xynehq/jaf';
 
 // Console logging
 const consoleTracer = new ConsoleTraceCollector();
@@ -403,12 +403,12 @@ const config = {
 ### Error Handling
 
 ```typescript
-import { FAFErrorHandler } from '@xynehq/faf';
+import { JAFErrorHandler } from '@xynehq/jaf';
 
 if (result.outcome.status === 'error') {
-  const formattedError = FAFErrorHandler.format(result.outcome.error);
-  const isRetryable = FAFErrorHandler.isRetryable(result.outcome.error);
-  const severity = FAFErrorHandler.getSeverity(result.outcome.error);
+  const formattedError = JAFErrorHandler.format(result.outcome.error);
+  const isRetryable = JAFErrorHandler.isRetryable(result.outcome.error);
+  const severity = JAFErrorHandler.getSeverity(result.outcome.error);
   
   console.error(`[${severity}] ${formattedError} (retryable: ${isRetryable})`);
 }
@@ -419,7 +419,7 @@ if (result.outcome.status === 'error') {
 ### LiteLLM Provider
 
 ```typescript
-import { makeLiteLLMProvider } from '@xynehq/faf';
+import { makeLiteLLMProvider } from '@xynehq/jaf';
 
 // Connect to LiteLLM proxy for 100+ model support
 const modelProvider = makeLiteLLMProvider(
@@ -431,7 +431,7 @@ const modelProvider = makeLiteLLMProvider(
 ### MCP (Model Context Protocol) Tools
 
 ```typescript
-import { makeMCPClient, mcpToolToFAFTool } from '@xynehq/faf';
+import { makeMCPClient, mcpToolToJAFTool } from '@xynehq/jaf';
 
 // Connect to MCP server
 const mcpClient = await makeMCPClient('python', ['-m', 'mcp_server']);
@@ -439,18 +439,18 @@ const mcpClient = await makeMCPClient('python', ['-m', 'mcp_server']);
 // Get available tools
 const mcpTools = await mcpClient.listTools();
 
-// Convert to FAF tools with validation
-const fafTools = mcpTools.map(tool => 
-  mcpToolToFAFTool(mcpClient, tool, myValidationPolicy)
+// Convert to JAF tools with validation
+const jafTools = mcpTools.map(tool => 
+  mcpToolToJAFTool(mcpClient, tool, myValidationPolicy)
 );
 ```
 
 ## 🚀 Development Server
 
-FAF includes a built-in development server for testing agents locally via HTTP endpoints:
+JAF includes a built-in development server for testing agents locally via HTTP endpoints:
 
 ```typescript
-import { runServer, makeLiteLLMProvider, createInMemoryProvider } from '@xynehq/faf';
+import { runServer, makeLiteLLMProvider, createInMemoryProvider } from '@xynehq/jaf';
 
 const myAgent = {
   name: 'MyAgent',
@@ -480,7 +480,7 @@ Server provides RESTful endpoints:
 Comprehensive documentation is available in the [`/docs`](./docs) folder:
 
 - **[Getting Started](./docs/getting-started.md)** - Installation, basic concepts, and first agent
-- **[Core Concepts](./docs/core-concepts.md)** - FAF's functional architecture and principles  
+- **[Core Concepts](./docs/core-concepts.md)** - JAF's functional architecture and principles  
 - **[API Reference](./docs/api-reference.md)** - Complete TypeScript API documentation
 - **[ADK Layer](./docs/adk-layer.md)** - Agent Development Kit for simplified agent creation
 - **[A2A Protocol](./docs/a2a-protocol.md)** - Agent-to-Agent communication and task management
@@ -495,7 +495,7 @@ Comprehensive documentation is available in the [`/docs`](./docs) folder:
 
 ### 📖 Documentation Website
 
-Browse the full documentation online at **[https://xynehq.github.io/faf/](https://xynehq.github.io/faf/)**
+Browse the full documentation online at **[https://xynehq.github.io/jaf/](https://xynehq.github.io/jaf/)**
 
 The documentation site features:
 - 🔍 Full-text search
@@ -550,7 +550,7 @@ The RAG demo showcases:
 - ✅ Permission-based access control
 - ✅ Real-time streaming responses with source attribution
 - ✅ Performance metrics and comprehensive error handling
-- ✅ FAF framework orchestration with type-safe tools
+- ✅ JAF framework orchestration with type-safe tools
 - ✅ Multi-turn conversations with observability
 
 ## 🧪 Testing
@@ -593,4 +593,4 @@ npm run typecheck # Type checking
 
 ---
 
-**FAF** - Building the future of functional AI agent systems 🚀
+**JAF** - Building the future of functional AI agent systems 🚀

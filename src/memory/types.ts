@@ -7,7 +7,7 @@ export type Result<T, E = MemoryErrorUnion> =
   | { readonly success: false; readonly error: E };
 
 /**
- * Memory management types for the FAF framework
+ * Memory management types for the JAF framework
  */
 
 export interface ConversationMemory {
@@ -123,7 +123,7 @@ export const RedisConfigSchema = z.object({
   port: z.number().default(6379),
   password: z.string().optional(),
   db: z.number().default(0),
-  keyPrefix: z.string().default('faf:memory:'),
+  keyPrefix: z.string().default('jaf:memory:'),
   ttl: z.number().optional() // seconds
 });
 
@@ -132,7 +132,7 @@ export const PostgresConfigSchema = z.object({
   connectionString: z.string().optional(),
   host: z.string().default('localhost'),
   port: z.number().default(5432),
-  database: z.string().default('faf_memory'),
+  database: z.string().default('jaf_memory'),
   username: z.string().default('postgres'),
   password: z.string().optional(),
   ssl: z.boolean().default(false),

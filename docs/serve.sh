@@ -1,7 +1,7 @@
 #!/bin/bash
 # Local documentation development server
 
-echo "Starting FAF documentation server..."
+echo "Starting JAF documentation server..."
 echo "Installing/updating dependencies..."
 pip install -r requirements.txt
 

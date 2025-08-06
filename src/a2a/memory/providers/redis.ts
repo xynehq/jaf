@@ -1,5 +1,5 @@
 /**
- * A2A Redis Task Provider for FAF
+ * A2A Redis Task Provider for JAF
  * Pure functional Redis-based storage for A2A tasks
  */
 
@@ -28,7 +28,7 @@ export const createA2ARedisTaskProvider = async (
   config: A2ARedisTaskConfig,
   redisClient: any
 ): Promise<A2ATaskProvider> => {
-  const keyPrefix = config.keyPrefix || 'faf:a2a:tasks:';
+  const keyPrefix = config.keyPrefix || 'jaf:a2a:tasks:';
   
   // Pure functions for key generation
   const getTaskKey = (taskId: string): string => `${keyPrefix}task:${taskId}`;

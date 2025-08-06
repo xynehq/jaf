@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Tool System
+ * JAF ADK Layer - Tool System
  * 
  * Functional tool creation, execution, and integration utilities
  */

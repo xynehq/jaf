@@ -86,7 +86,7 @@ const greetingTool: Tool<{ name: string }, MyContext> = {
       });
     }
     
-    const greeting = `Hello, ${args.name.trim()}! Nice to meet you. I'm a helpful AI assistant running on the FAF framework.`;
+    const greeting = `Hello, ${args.name.trim()}! Nice to meet you. I'm a helpful AI assistant running on the JAF framework.`;
     
     return ToolResponse.success(greeting, {
       greetedName: args.name.trim(),
@@ -115,7 +115,7 @@ const assistantAgent: Agent<MyContext, string> = {
 };
 
 async function startServer() {
-  console.log('🚀 Starting FAF Development Server (Functional)...\n');
+  console.log('🚀 Starting JAF Development Server (Functional)...\n');
 
   // Check if LiteLLM configuration is provided
   const litellmUrl = process.env.LITELLM_URL || 'http://localhost:4000';
@@ -133,7 +133,7 @@ async function startServer() {
 
   // Set up memory provider based on environment configuration
   console.log('🔧 Setting up memory provider...');
-  const memoryType = process.env.FAF_MEMORY_TYPE || 'memory';
+  const memoryType = process.env.JAF_MEMORY_TYPE || 'memory';
   console.log(`💾 Memory provider type: ${memoryType}`);
 
   let externalClients: { redis?: any; postgres?: any } = {};
@@ -144,9 +144,9 @@ async function startServer() {
     try {
       const { createClient } = await import('redis');
       const redisClient = createClient({
-        url: process.env.FAF_REDIS_URL || `redis://${process.env.FAF_REDIS_HOST || 'localhost'}:${process.env.FAF_REDIS_PORT || '6379'}`,
-        password: process.env.FAF_REDIS_PASSWORD,
-        database: parseInt(process.env.FAF_REDIS_DB || '0')
+        url: process.env.JAF_REDIS_URL || `redis://${process.env.JAF_REDIS_HOST || 'localhost'}:${process.env.JAF_REDIS_PORT || '6379'}`,
+        password: process.env.JAF_REDIS_PASSWORD,
+        database: parseInt(process.env.JAF_REDIS_DB || '0')
       });
       await redisClient.connect();
       externalClients.redis = redisClient;
@@ -162,13 +162,13 @@ async function startServer() {
     try {
       const { Client } = await import('pg');
       const postgresClient = new Client({
-        connectionString: process.env.FAF_POSTGRES_CONNECTION_STRING,
-        host: process.env.FAF_POSTGRES_HOST || 'localhost',
-        port: parseInt(process.env.FAF_POSTGRES_PORT || '5432'),
-        database: process.env.FAF_POSTGRES_DB || 'faf_memory',
-        user: process.env.FAF_POSTGRES_USER || 'postgres',
-        password: process.env.FAF_POSTGRES_PASSWORD,
-        ssl: process.env.FAF_POSTGRES_SSL === 'true'
+        connectionString: process.env.JAF_POSTGRES_CONNECTION_STRING,
+        host: process.env.JAF_POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.JAF_POSTGRES_PORT || '5432'),
+        database: process.env.JAF_POSTGRES_DB || 'jaf_memory',
+        user: process.env.JAF_POSTGRES_USER || 'postgres',
+        password: process.env.JAF_POSTGRES_PASSWORD,
+        ssl: process.env.JAF_POSTGRES_SSL === 'true'
       });
       await postgresClient.connect();
       externalClients.postgres = postgresClient;
@@ -251,12 +251,12 @@ async function startServer() {
     console.log('🔧 Memory Provider Configuration:');
     console.log(`   Current provider: ${memoryType}`);
     console.log('   Available providers:');
-    console.log('   - memory (default): FAF_MEMORY_TYPE=memory');
-    console.log('   - Redis: FAF_MEMORY_TYPE=redis');
-    console.log('     • FAF_REDIS_HOST, FAF_REDIS_PORT, FAF_REDIS_PASSWORD, FAF_REDIS_DB');
-    console.log('   - PostgreSQL: FAF_MEMORY_TYPE=postgres');
-    console.log('     • FAF_POSTGRES_HOST, FAF_POSTGRES_PORT, FAF_POSTGRES_DB');
-    console.log('     • FAF_POSTGRES_USER, FAF_POSTGRES_PASSWORD, FAF_POSTGRES_SSL');
+    console.log('   - memory (default): JAF_MEMORY_TYPE=memory');
+    console.log('   - Redis: JAF_MEMORY_TYPE=redis');
+    console.log('     • JAF_REDIS_HOST, JAF_REDIS_PORT, JAF_REDIS_PASSWORD, JAF_REDIS_DB');
+    console.log('   - PostgreSQL: JAF_MEMORY_TYPE=postgres');
+    console.log('     • JAF_POSTGRES_HOST, JAF_POSTGRES_PORT, JAF_POSTGRES_DB');
+    console.log('     • JAF_POSTGRES_USER, JAF_POSTGRES_PASSWORD, JAF_POSTGRES_SSL');
     console.log('');
 
     // Handle graceful shutdown

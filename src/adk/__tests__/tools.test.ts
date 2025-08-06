@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Tool System Tests
+ * JAF ADK Layer - Tool System Tests
  */
 
 import {

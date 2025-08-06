@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Model Definitions
+ * JAF ADK Layer - Model Definitions
  * 
  * Comprehensive list of all supported models across providers
  * Generated from model_prices.json

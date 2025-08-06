@@ -1,5 +1,5 @@
 /**
- * A2A Task Cleanup Service for FAF
+ * A2A Task Cleanup Service for JAF
  * Pure functional cleanup and expiration policies for A2A tasks
  */
 
@@ -322,13 +322,13 @@ export const validateCleanupConfig = (config: Partial<A2ATaskCleanupConfig>): { 
  */
 export const createCleanupConfigFromEnv = (): A2ATaskCleanupConfig => {
   return {
-    enabled: process.env.FAF_A2A_CLEANUP_ENABLED !== 'false',
-    interval: parseInt(process.env.FAF_A2A_CLEANUP_INTERVAL || '3600000'),
-    maxAge: parseInt(process.env.FAF_A2A_CLEANUP_MAX_AGE || '604800000'), // 7 days
-    maxCompletedTasks: parseInt(process.env.FAF_A2A_CLEANUP_MAX_COMPLETED || '1000'),
-    maxFailedTasks: parseInt(process.env.FAF_A2A_CLEANUP_MAX_FAILED || '500'),
-    retainStates: (process.env.FAF_A2A_CLEANUP_RETAIN_STATES || 'working,input-required,submitted').split(','),
-    batchSize: parseInt(process.env.FAF_A2A_CLEANUP_BATCH_SIZE || '100'),
-    dryRun: process.env.FAF_A2A_CLEANUP_DRY_RUN === 'true'
+    enabled: process.env.JAF_A2A_CLEANUP_ENABLED !== 'false',
+    interval: parseInt(process.env.JAF_A2A_CLEANUP_INTERVAL || '3600000'),
+    maxAge: parseInt(process.env.JAF_A2A_CLEANUP_MAX_AGE || '604800000'), // 7 days
+    maxCompletedTasks: parseInt(process.env.JAF_A2A_CLEANUP_MAX_COMPLETED || '1000'),
+    maxFailedTasks: parseInt(process.env.JAF_A2A_CLEANUP_MAX_FAILED || '500'),
+    retainStates: (process.env.JAF_A2A_CLEANUP_RETAIN_STATES || 'working,input-required,submitted').split(','),
+    batchSize: parseInt(process.env.JAF_A2A_CLEANUP_BATCH_SIZE || '100'),
+    dryRun: process.env.JAF_A2A_CLEANUP_DRY_RUN === 'true'
   };
 };

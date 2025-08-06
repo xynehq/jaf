@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Basic Agent Example
+ * JAF ADK Layer - Basic Agent Example
  * 
  * Demonstrates basic agent creation and usage
  */
@@ -155,7 +155,7 @@ export const createQuickAgent = () => {
 // ========== Example Usage Functions ==========
 
 export async function runBasicExample() {
-  console.log('=== FAF ADK Layer - Basic Agent Example ===\n');
+  console.log('=== JAF ADK Layer - Basic Agent Example ===\n');
 
   const { runnerConfig } = createBasicChatAgent();
 
@@ -173,7 +173,7 @@ export async function runBasicExample() {
 }
 
 export async function runToolExample() {
-  console.log('\n=== FAF ADK Layer - Agent with Tools Example ===\n');
+  console.log('\n=== JAF ADK Layer - Agent with Tools Example ===\n');
 
   const { runnerConfig } = createAgentWithTools();
 
@@ -201,7 +201,7 @@ export async function runToolExample() {
 }
 
 export async function runStreamingExample() {
-  console.log('\n=== FAF ADK Layer - Streaming Example ===\n');
+  console.log('\n=== JAF ADK Layer - Streaming Example ===\n');
 
   const { runnerConfig } = createBasicChatAgent();
 
@@ -229,7 +229,7 @@ export async function runStreamingExample() {
 }
 
 export async function runQuickSetupExample() {
-  console.log('\n=== FAF ADK Layer - Quick Setup Example ===\n');
+  console.log('\n=== JAF ADK Layer - Quick Setup Example ===\n');
 
   const { run } = createQuickAgent();
 

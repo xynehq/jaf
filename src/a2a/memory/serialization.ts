@@ -1,5 +1,5 @@
 /**
- * A2A Task Serialization Functions for FAF
+ * A2A Task Serialization Functions for JAF
  * Pure functions for serializing/deserializing A2A tasks for storage
  */
 

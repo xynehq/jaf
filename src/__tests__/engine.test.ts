@@ -1,6 +1,6 @@
 import { run, RunConfig, RunState, generateTraceId, generateRunId } from '../index';
 
-describe('FAF Engine', () => {
+describe('JAF Engine', () => {
   const mockContext = { userId: 'test' };
   
   const mockAgent = {

@@ -1,10 +1,10 @@
-# FAF ADK Layer
+# JAF ADK Layer
 
-The **Functional Agent Development Kit (ADK) Layer** brings Google ADK-style functionality to FAF while maintaining FAF's core principles of functional purity and simplicity.
+The **Functional Agent Development Kit (ADK) Layer** brings Google ADK-style functionality to JAF while maintaining JAF's core principles of functional purity and simplicity.
 
 ## Overview
 
-The FAF ADK Layer provides:
+The JAF ADK Layer provides:
 
 - **Functional Agent System**: Create and manage agents using pure functions
 - **Rich Tool Ecosystem**: Support for OpenAPI, CrewAI, LangChain, and custom tools
@@ -13,14 +13,14 @@ The FAF ADK Layer provides:
 - **Streaming Support**: Real-time bidirectional communication
 - **Session Management**: Pluggable persistence with multiple providers
 - **Guardrails**: Content moderation and safety mechanisms
-- **No Classes**: 100% functional implementation following FAF principles
+- **No Classes**: 100% functional implementation following JAF principles
 
 ## Quick Start
 
 ### Simple Agent
 
 ```typescript
-import { quickSetup, createUserMessage } from 'faf/adk';
+import { quickSetup, createUserMessage } from 'jaf/adk';
 
 // Create a simple agent with tools
 const { run } = quickSetup(
@@ -48,7 +48,7 @@ import {
   createInMemorySessionProvider,
   createRunnerConfig,
   runAgent 
-} from 'faf/adk';
+} from 'jaf/adk';
 
 // Create a tool
 const weatherTool = createFunctionTool(
@@ -92,7 +92,7 @@ const response = await runAgent(
 ### Streaming
 
 ```typescript
-import { runAgentStream } from 'faf/adk';
+import { runAgentStream } from 'jaf/adk';
 
 const events = runAgentStream(
   runnerConfig,
@@ -110,7 +110,7 @@ for await (const event of events) {
 ### Multi-Agent System
 
 ```typescript
-import { createMultiAgent } from 'faf/adk';
+import { createMultiAgent } from 'jaf/adk';
 
 const coordinator = createMultiAgent(
   'coordinator',
@@ -215,7 +215,7 @@ const contentGuardrail: GuardrailFunction = async (message, context) => {
 
 ### Functional Design
 
-The ADK Layer follows FAF's functional principles:
+The ADK Layer follows JAF's functional principles:
 
 - **No Classes**: All functionality is implemented as pure functions
 - **Immutable State**: State is passed explicitly through function parameters
@@ -264,7 +264,7 @@ npx ts-node src/adk/examples/advanced-features.ts
 ### OpenAPI Integration
 
 ```typescript
-import { createOpenAPIToolset } from 'faf/adk';
+import { createOpenAPIToolset } from 'jaf/adk';
 
 const tools = await createOpenAPIToolset(openApiSpec);
 const agent = createAgent({
@@ -278,7 +278,7 @@ const agent = createAgent({
 ### CrewAI Integration
 
 ```typescript
-import { createCrewAIAdapter } from 'faf/adk';
+import { createCrewAIAdapter } from 'jaf/adk';
 import { SomeCrewAITool } from 'crewai-tools';
 
 const crewAITool = new SomeCrewAITool();
@@ -288,7 +288,7 @@ const adkTool = createCrewAIAdapter(crewAITool);
 ### LangChain Integration
 
 ```typescript
-import { createLangChainAdapter } from 'faf/adk';
+import { createLangChainAdapter } from 'jaf/adk';
 import { SomeLangChainTool } from 'langchain/tools';
 
 const langChainTool = new SomeLangChainTool();
@@ -300,7 +300,7 @@ const adkTool = createLangChainAdapter(langChainTool);
 ### Monitoring and Metrics
 
 ```typescript
-import { monitorStream, metricsMonitor } from 'faf/adk';
+import { monitorStream, metricsMonitor } from 'jaf/adk';
 
 const metrics = metricsMonitor();
 const monitoredStream = monitorStream(eventStream, metrics.monitor);
@@ -316,7 +316,7 @@ import {
   filterEventStream, 
   combineStreams, 
   createBufferedStream 
-} from 'faf/adk';
+} from 'jaf/adk';
 
 // Filter events
 const messageEvents = filterEventStream(stream, isMessageEvent);
@@ -331,7 +331,7 @@ const buffered = createBufferedStream(stream, 10);
 ### Bidirectional Communication
 
 ```typescript
-import { createBidirectionalStream } from 'faf/adk';
+import { createBidirectionalStream } from 'jaf/adk';
 
 const biStream = createBidirectionalStream();
 
@@ -354,7 +354,7 @@ import {
   ToolError, 
   SessionError, 
   ValidationError 
-} from 'faf/adk';
+} from 'jaf/adk';
 
 try {
   const response = await runAgent(config, context, message);
@@ -389,9 +389,9 @@ try {
 
 ## Migration from Google ADK
 
-The FAF ADK Layer provides functional equivalents for all major Google ADK concepts:
+The JAF ADK Layer provides functional equivalents for all major Google ADK concepts:
 
-| Google ADK | FAF ADK Layer |
+| Google ADK | JAF ADK Layer |
 |------------|---------------|
 | `LlmAgent()` | `createAgent()` |
 | `Runner()` | `createRunnerConfig()` + `runAgent()` |
@@ -430,7 +430,7 @@ The FAF ADK Layer provides functional equivalents for all major Google ADK conce
 
 ## Contributing
 
-The FAF ADK Layer follows FAF's contribution guidelines. Key principles:
+The JAF ADK Layer follows JAF's contribution guidelines. Key principles:
 
 - Maintain functional purity (no classes)
 - Comprehensive TypeScript typing
@@ -440,4 +440,4 @@ The FAF ADK Layer follows FAF's contribution guidelines. Key principles:
 
 ## License
 
-Licensed under the same terms as the FAF framework.
+Licensed under the same terms as the JAF framework.

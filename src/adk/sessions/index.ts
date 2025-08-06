@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Session Management
+ * JAF ADK Layer - Session Management
  * 
  * Functional session management with pluggable providers
  */
@@ -144,7 +144,7 @@ export const createMockRedisSessionProvider = (config: MockRedisConfig): Session
     // Fallback to mock Map if ioredis not available
     redis = new Map<string, string>();
   }
-  const keyPrefix = config.keyPrefix || 'faf_adk_session:';
+  const keyPrefix = config.keyPrefix || 'jaf_adk_session:';
   
   const getKey = (sessionId: string) => `${keyPrefix}${sessionId}`;
   const getUserKey = (userId: string) => `${keyPrefix}user:${userId}`;
@@ -530,7 +530,7 @@ export const withSessionErrorHandling = <T extends unknown[], R>(
 
 // ========== Session Provider Bridge ==========
 
-// Bridge FAF memory providers to ADK session providers
+// Bridge JAF memory providers to ADK session providers
 export const createMemoryProviderBridge = (memoryProvider: any): SessionProvider => {
   return {
     createSession: async (context: SessionContext): Promise<Session> => {

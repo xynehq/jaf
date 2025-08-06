@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Artifact Storage System
+ * JAF ADK Layer - Artifact Storage System
  * 
  * Provides persistent key-value storage for agent conversations
  * with support for multiple storage backends
@@ -160,7 +160,7 @@ export const createRedisArtifactStorage = (config: {
   ttl?: number;
 }): ArtifactStorage => {
   let redis: any;
-  const keyPrefix = config.keyPrefix || 'faf:artifacts:';
+  const keyPrefix = config.keyPrefix || 'jaf:artifacts:';
   const maxSize = config.maxSize || 10 * 1024 * 1024; // 10MB default
   const ttl = config.ttl; // Optional TTL in seconds
   
@@ -277,7 +277,7 @@ export const createPostgresArtifactStorage = (config: {
   ttl?: number;
 }): ArtifactStorage => {
   let pool: any;
-  const tableName = config.tableName || 'faf_artifacts';
+  const tableName = config.tableName || 'jaf_artifacts';
   // const maxSize = config.maxSize || 10 * 1024 * 1024; // TODO: Implement size limit checking
   const ttl = config.ttl;
   

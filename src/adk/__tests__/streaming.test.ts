@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Streaming System Tests
+ * JAF ADK Layer - Streaming System Tests
  */
 
 import {

@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - LLM Service Bridge
+ * JAF ADK Layer - LLM Service Bridge
  * 
  * Bridges ADK types to Core ModelProvider interface following functional patterns
  */

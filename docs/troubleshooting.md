@@ -1,4 +1,4 @@
-# Troubleshooting Guide - Functional Agent Framework (FAF)
+# Troubleshooting Guide - Juspay Agent Framework (JAF)
 
 ## Table of Contents
 
@@ -262,7 +262,7 @@ const handoffTool: Tool<HandoffArgs, Ctx> = {
 ### 1. Enable Comprehensive Logging
 
 ```typescript
-import { ConsoleTraceCollector, FileTraceCollector, createCompositeTraceCollector } from 'faf';
+import { ConsoleTraceCollector, FileTraceCollector, createCompositeTraceCollector } from 'jaf';
 
 // Console + File logging
 const traceCollector = createCompositeTraceCollector(
@@ -280,11 +280,11 @@ const runConfig: RunConfig<Ctx> = {
 
 ```typescript
 // Environment variable for debug mode
-const DEBUG_MODE = process.env.FAF_DEBUG === 'true';
+const DEBUG_MODE = process.env.JAF_DEBUG === 'true';
 
 const debugLog = (message: string, data?: any) => {
   if (DEBUG_MODE) {
-    console.log(`[FAF:DEBUG] ${message}`, data || '');
+    console.log(`[JAF:DEBUG] ${message}`, data || '');
   }
 };
 
@@ -735,7 +735,7 @@ const robustCalculatorTool: Tool<CalculatorArgs, Ctx> = {
 
 **Standardized Tool Responses:**
 ```typescript
-import { ToolResult } from 'faf';
+import { ToolResult } from 'jaf';
 
 // Success response
 const successTool: Tool<any, Ctx> = {
@@ -834,13 +834,13 @@ Error: listen EADDRINUSE: address already in use :::3000
 }
 
 // Missing environment variables
-Error: Missing required environment variable: FAF_API_KEY
+Error: Missing required environment variable: JAF_API_KEY
 ```
 
 **Startup Diagnostics:**
 ```typescript
 const diagnosticServer = (config: ServerConfig<Ctx>) => {
-  console.log('=== FAF Server Diagnostics ===');
+  console.log('=== JAF Server Diagnostics ===');
   
   // Check port availability
   const net = require('net');
@@ -1106,14 +1106,14 @@ const createOptimizedPostgresProvider = (config: PostgresConfig) => {
 ```typescript
 const validateEnvironment = () => {
   const required = [
-    'FAF_MODEL_PROVIDER_URL',
-    'FAF_MEMORY_TYPE'
+    'JAF_MODEL_PROVIDER_URL',
+    'JAF_MEMORY_TYPE'
   ];
   
   const optional = [
-    'FAF_API_KEY',
-    'FAF_DEBUG',
-    'FAF_LOG_LEVEL'
+    'JAF_API_KEY',
+    'JAF_DEBUG',
+    'JAF_LOG_LEVEL'
   ];
   
   console.log('=== Environment Configuration ===');
@@ -1268,17 +1268,17 @@ echo "{ \"type\": \"module\" }" > package.json  # For ESM
 ```bash
 # Check Docker services
 docker-compose ps
-docker-compose logs faf-redis
-docker-compose logs faf-postgres
+docker-compose logs jaf-redis
+docker-compose logs jaf-postgres
 
 # Network connectivity
 docker network ls
-docker exec faf-redis redis-cli ping
-docker exec faf-postgres pg_isready
+docker exec jaf-redis redis-cli ping
+docker exec jaf-postgres pg_isready
 
 # Volume mounts
 docker volume ls
-docker exec -it faf-postgres ls -la /var/lib/postgresql/data
+docker exec -it jaf-postgres ls -la /var/lib/postgresql/data
 ```
 
 ### 3. Development vs Production
@@ -1348,10 +1348,10 @@ const logger = pino({
   }
 });
 
-// Structured logging for FAF events
-const logFAFEvent = (event: TraceEvent, context?: any) => {
+// Structured logging for JAF events
+const logJAFEvent = (event: TraceEvent, context?: any) => {
   const logData = {
-    faf_event: event.type,
+    jaf_event: event.type,
     timestamp: new Date().toISOString(),
     ...event.data,
     ...context
@@ -1359,13 +1359,13 @@ const logFAFEvent = (event: TraceEvent, context?: any) => {
   
   switch (event.type) {
     case 'run_start':
-      logger.info(logData, 'FAF run started');
+      logger.info(logData, 'JAF run started');
       break;
     case 'run_end':
       if (event.data.outcome.status === 'error') {
-        logger.error(logData, 'FAF run failed');
+        logger.error(logData, 'JAF run failed');
       } else {
-        logger.info(logData, 'FAF run completed');
+        logger.info(logData, 'JAF run completed');
       }
       break;
     case 'tool_call_start':
@@ -1375,7 +1375,7 @@ const logFAFEvent = (event: TraceEvent, context?: any) => {
       logger.debug(logData, 'Tool execution completed');
       break;
     default:
-      logger.debug(logData, 'FAF event');
+      logger.debug(logData, 'JAF event');
   }
 };
 ```
@@ -1384,7 +1384,7 @@ const logFAFEvent = (event: TraceEvent, context?: any) => {
 
 **Custom Metrics:**
 ```typescript
-class FAFMetrics {
+class JAFMetrics {
   private counters = new Map<string, number>();
   private histograms = new Map<string, number[]>();
   
@@ -1423,18 +1423,18 @@ class FAFMetrics {
   }
 }
 
-const metrics = new FAFMetrics();
+const metrics = new JAFMetrics();
 
 // Use in trace collector
 const metricsTraceCollector: TraceCollector = {
   collect(event: TraceEvent): void {
-    metrics.increment(`faf_event_${event.type}`);
+    metrics.increment(`jaf_event_${event.type}`);
     
     if (event.type === 'run_end') {
       if (event.data.outcome.status === 'error') {
-        metrics.increment('faf_runs_failed');
+        metrics.increment('jaf_runs_failed');
       } else {
-        metrics.increment('faf_runs_completed');
+        metrics.increment('jaf_runs_completed');
       }
     }
   },
@@ -1605,10 +1605,10 @@ const debugConfig: RunConfig<Ctx> = {
 **A:** Use structured error handling:
 
 ```typescript
-const handleFAFError = (error: FAFError): ErrorResponse => {
-  const severity = FAFErrorHandler.getSeverity(error);
-  const isRetryable = FAFErrorHandler.isRetryable(error);
-  const message = FAFErrorHandler.format(error);
+const handleJAFError = (error: JAFError): ErrorResponse => {
+  const severity = JAFErrorHandler.getSeverity(error);
+  const isRetryable = JAFErrorHandler.isRetryable(error);
+  const message = JAFErrorHandler.format(error);
   
   // Log based on severity
   if (severity === 'critical') {
@@ -1674,15 +1674,15 @@ const batchedModelProvider = (baseProvider: ModelProvider<Ctx>) => {
 
 ```typescript
 // Application metrics
-const alertOnError = (error: FAFError) => {
-  const severity = FAFErrorHandler.getSeverity(error);
+const alertOnError = (error: JAFError) => {
+  const severity = JAFErrorHandler.getSeverity(error);
   
   if (severity === 'critical') {
     // Send to alerting system (PagerDuty, Slack, etc.)
     sendAlert({
       severity: 'critical',
-      message: FAFErrorHandler.format(error),
-      service: 'faf-agent',
+      message: JAFErrorHandler.format(error),
+      service: 'jaf-agent',
       timestamp: new Date().toISOString()
     });
   }
@@ -1695,7 +1695,7 @@ setInterval(async () => {
   if (health.status === 'unhealthy') {
     sendAlert({
       severity: 'warning',
-      message: 'FAF system health check failed',
+      message: 'JAF system health check failed',
       details: health.checks
     });
   }
@@ -1706,7 +1706,7 @@ setInterval(async () => {
 
 ## Conclusion
 
-This troubleshooting guide covers the most common issues you'll encounter when working with the Functional Agent Framework. Remember to:
+This troubleshooting guide covers the most common issues you'll encounter when working with the Juspay Agent Framework. Remember to:
 
 1. **Start with basics**: Check connections, configurations, and environment setup first
 2. **Use debugging tools**: Enable comprehensive logging and tracing
@@ -1720,4 +1720,4 @@ For additional help:
 - Use the built-in diagnostic tools and health checks
 - Enable debug mode during development
 
-The FAF framework is designed to be observable and debuggable - use the built-in tools to understand what's happening in your system.
+The JAF framework is designed to be observable and debuggable - use the built-in tools to understand what's happening in your system.

@@ -1,5 +1,5 @@
 /**
- * A2A Integration for FAF - Main Export
+ * A2A Integration for JAF - Main Export
  * Pure functional A2A protocol support for Functional Agent Framework
  */
 
@@ -51,8 +51,8 @@ export {
   addMessageToState,
   updateStateFromRunResult,
   createUserMessage,
-  transformA2AAgentToFAF,
-  transformA2AToolToFAF,
+  transformA2AAgentToJAF,
+  transformA2AToolToJAF,
   createRunConfigForA2AAgent,
   transformToRunState,
   processAgentQuery,

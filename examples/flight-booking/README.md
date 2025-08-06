@@ -1,6 +1,6 @@
 # Flight Booking Example
 
-This example demonstrates how to use the FAF ADK (Agent Development Kit) to create a flight booking system with multiple agents and tools, integrated with FAF's built-in server.
+This example demonstrates how to use the JAF ADK (Agent Development Kit) to create a flight booking system with multiple agents and tools, integrated with JAF's built-in server.
 
 ## Overview
 
@@ -8,7 +8,7 @@ The example includes:
 - Basic flight booking tools (search, availability, pricing, booking)
 - Single agent implementation with all tools (`index.ts`)
 - Multi-agent implementation with specialized agents (`multi-agent.ts`)
-- FAF server integration with HTTP endpoints (`faf-server.ts`)
+- JAF server integration with HTTP endpoints (`jaf-server.ts`)
 
 ## Running the Example
 
@@ -26,7 +26,7 @@ The example includes:
    # At minimum, ensure LITELLM_URL points to your LiteLLM server
    ```
 
-3. **Run the FAF server**:
+3. **Run the JAF server**:
    ```bash
    npm run server
    ```
@@ -76,10 +76,10 @@ curl -X POST http://localhost:3001/chat \
 
 The example shows how to:
 - Create tools using the ADK's `createFunctionTool` with object-based configuration
-- Convert ADK tools to FAF format using Zod schemas
+- Convert ADK tools to JAF format using Zod schemas
 - Build agents that use multiple tools
 - Coordinate between specialized agents
-- Integrate with FAF's server infrastructure
+- Integrate with JAF's server infrastructure
 - Handle different customer levels (standard, premium, VIP)
 
 ## Available Agents
@@ -92,7 +92,7 @@ The example shows how to:
 
 - `index.ts`: Core flight booking tools and single agent implementation
 - `multi-agent.ts`: Multi-agent coordination example with specialized agents
-- `faf-server.ts`: FAF server integration with HTTP endpoints
+- `jaf-server.ts`: JAF server integration with HTTP endpoints
 
 ## Features
 
@@ -100,7 +100,7 @@ The example shows how to:
 - **Seat Availability**: Real-time seat availability checking
 - **Price Calculation**: Calculate total price including taxes, fees, and extras
 - **Flight Booking**: Complete booking with passenger information
-- **Validation**: Input validation using FAF's schema validators
+- **Validation**: Input validation using JAF's schema validators
 - **Type Safety**: Full TypeScript support with enums and structured types
 
 ## Example Flight Data

@@ -1,5 +1,5 @@
 /**
- * A2A PostgreSQL Task Provider for FAF
+ * A2A PostgreSQL Task Provider for JAF
  * Pure functional PostgreSQL-based storage for A2A tasks
  */
 

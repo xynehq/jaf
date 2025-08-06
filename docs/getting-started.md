@@ -1,6 +1,6 @@
-# Getting Started with Functional Agent Framework (FAF)
+# Getting Started with Juspay Agent Framework (JAF)
 
-Welcome to the Functional Agent Framework (FAF) - a purely functional agent framework built on immutable state, type safety, and composable policies. This guide will help you get up and running quickly with building production-ready AI agent systems.
+Welcome to the Juspay Agent Framework (JAF) - a purely functional agent framework built on immutable state, type safety, and composable policies. This guide will help you get up and running quickly with building production-ready AI agent systems.
 
 ## Table of Contents
 
@@ -32,7 +32,7 @@ npm install functional-agent-framework
 
 ### Setting up LiteLLM
 
-FAF uses LiteLLM as the model provider, which gives you access to 100+ AI models:
+JAF uses LiteLLM as the model provider, which gives you access to 100+ AI models:
 
 ```bash
 # Install LiteLLM
@@ -55,7 +55,7 @@ litellm --config config.yaml --port 4000
 
 ## Core Concepts
 
-FAF is built around several key concepts:
+JAF is built around several key concepts:
 
 ### 1. Agents
 Agents are the core entities that process user inputs and coordinate responses. They have:
@@ -84,7 +84,7 @@ Immutable state that tracks:
 
 ## Hello World Example
 
-Let's start with the simplest possible FAF application:
+Let's start with the simplest possible JAF application:
 
 ```typescript
 import { z } from 'zod';
@@ -113,7 +113,7 @@ const greetingTool: Tool<{ name: string }, MyContext> = {
     }),
   },
   execute: async (args, context) => {
-    return `Hello, ${args.name}! I'm running on FAF. Your user ID is ${context.userId}.`;
+    return `Hello, ${args.name}! I'm running on JAF. Your user ID is ${context.userId}.`;
   },
 };
 
@@ -274,7 +274,7 @@ const assistantAgent: Agent<MyContext, string> = {
 
 ## Building Tools
 
-Tools are the core of FAF's extensibility. Here are the key patterns:
+Tools are the core of JAF's extensibility. Here are the key patterns:
 
 ### Basic Tool Structure
 
@@ -425,7 +425,7 @@ const config = {
 
 ## Memory System
 
-FAF provides a powerful memory system for conversation persistence:
+JAF provides a powerful memory system for conversation persistence:
 
 ### Basic Memory Setup
 
@@ -457,9 +457,9 @@ npm install redis
 import { createMemoryProviderFromEnv } from 'functional-agent-framework';
 
 // Set environment variables
-process.env.FAF_MEMORY_TYPE = 'redis';
-process.env.FAF_REDIS_HOST = 'localhost';
-process.env.FAF_REDIS_PORT = '6379';
+process.env.JAF_MEMORY_TYPE = 'redis';
+process.env.JAF_REDIS_HOST = 'localhost';
+process.env.JAF_REDIS_PORT = '6379';
 
 // Create Redis client
 const { createClient } = await import('redis');
@@ -481,15 +481,15 @@ npm install pg @types/pg
 
 ```typescript
 // Set environment variables
-process.env.FAF_MEMORY_TYPE = 'postgres';
-process.env.FAF_POSTGRES_HOST = 'localhost';
-process.env.FAF_POSTGRES_DB = 'faf_memory';
+process.env.JAF_MEMORY_TYPE = 'postgres';
+process.env.JAF_POSTGRES_HOST = 'localhost';
+process.env.JAF_POSTGRES_DB = 'jaf_memory';
 
 // Create PostgreSQL client
 const { Client } = await import('pg');
 const postgresClient = new Client({
   host: 'localhost',
-  database: 'faf_memory',
+  database: 'jaf_memory',
   user: 'postgres',
   password: 'your_password'
 });
@@ -501,7 +501,7 @@ const memoryProvider = await createMemoryProviderFromEnv({ postgres: postgresCli
 
 ## Development Server
 
-FAF includes a built-in development server for testing agents via HTTP:
+JAF includes a built-in development server for testing agents via HTTP:
 
 ```typescript
 import { runServer } from 'functional-agent-framework';
@@ -557,12 +557,12 @@ curl -X POST http://localhost:3000/chat \
 
 ## Error Handling
 
-FAF provides comprehensive error handling:
+JAF provides comprehensive error handling:
 
 ### Runtime Error Types
 
 ```typescript
-import { FAFErrorHandler } from 'functional-agent-framework';
+import { JAFErrorHandler } from 'functional-agent-framework';
 
 if (result.outcome.status === 'error') {
   const error = result.outcome.error;
@@ -687,7 +687,7 @@ const factualAgent: Agent<MyContext, string> = {
 
 Now that you understand the basics, explore these advanced topics:
 
-1. **[Core Concepts](./core-concepts.md)** - Deep dive into FAF's architecture
+1. **[Core Concepts](./core-concepts.md)** - Deep dive into JAF's architecture
 2. **[Memory System](./memory-system.md)** - Advanced memory management
 3. **[Model Providers](./model-providers.md)** - Using different AI models
 4. **[Server API](./server-api.md)** - Building production servers
@@ -707,16 +707,16 @@ Check out the example projects in the repository:
 - **Memory Management**: Use appropriate memory providers for your scale
 - **Observability**: Implement comprehensive tracing in production
 - **Security**: Always validate inputs and check permissions
-- **Testing**: FAF's functional design makes unit testing straightforward
+- **Testing**: JAF's functional design makes unit testing straightforward
 
 ### Community & Support
 
-- GitHub Repository: [FAF on GitHub](https://github.com/your-repo/faf)
+- GitHub Repository: [JAF on GitHub](https://github.com/your-repo/jaf)
 - Issues & Discussions: Use GitHub Issues for bugs and feature requests
 - Examples: Check the `examples/` directory for working code
 
 ---
 
-**Happy building with FAF!** 🚀
+**Happy building with JAF!** 🚀
 
-Remember: FAF's functional approach makes agent systems more predictable, testable, and maintainable. Start simple and gradually add complexity as your needs grow.
+Remember: JAF's functional approach makes agent systems more predictable, testable, and maintainable. Start simple and gradually add complexity as your needs grow.

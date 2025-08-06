@@ -1,5 +1,5 @@
 /**
- * FAF Visualization - Graphviz Integration
+ * JAF Visualization - Graphviz Integration
  * 
  * Functional visualization system for agents and tools using Graphviz
  */
@@ -79,7 +79,7 @@ export const generateAgentGraph = async (
 ): Promise<GraphResult> => {
   try {
     const {
-      title = 'FAF Agent Graph',
+      title = 'JAF Agent Graph',
       layout = 'dot',
       rankdir = 'TB',
       outputFormat = 'png',
@@ -147,7 +147,7 @@ export const generateToolGraph = async (
 ): Promise<GraphResult> => {
   try {
     const {
-      title = 'FAF Tool Graph',
+      title = 'JAF Tool Graph',
       layout = 'circo',
       outputFormat = 'png',
       outputPath = './tool-graph',
@@ -204,7 +204,7 @@ export const generateRunnerGraph = async (
 ): Promise<GraphResult> => {
   try {
     const {
-      title = 'FAF Runner Architecture',
+      title = 'JAF Runner Architecture',
       layout = 'dot',
       rankdir = 'TB',
       outputFormat = 'png',
@@ -232,7 +232,7 @@ const generateGraphWithFallback = async (
   options: GraphOptions
 ): Promise<GraphResult> => {
   const {
-    title = 'FAF Runner Architecture',
+    title = 'JAF Runner Architecture',
     rankdir = 'TB',
     outputFormat = 'png',
     outputPath = './runner-graph',
@@ -551,7 +551,7 @@ export const validateGraphOptions = (options: GraphOptions): string[] => {
 
 export const getGraphDot = (agents: readonly Agent[], options: GraphOptions = {}): string => {
   const {
-    title = 'FAF Agent Graph',
+    title = 'JAF Agent Graph',
     rankdir = 'TB',
     colorScheme = 'default'
   } = options;

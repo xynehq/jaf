@@ -1,5 +1,5 @@
 /**
- * FAF Visualization - Main Export
+ * JAF Visualization - Main Export
  * 
  * Centralized exports for the visualization module
  */

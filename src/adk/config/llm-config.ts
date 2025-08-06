@@ -1,7 +1,7 @@
 /**
- * FAF ADK Layer - LLM Configuration Bridge
+ * JAF ADK Layer - LLM Configuration Bridge
  * 
- * Functional configuration system for LLM providers following FAF patterns
+ * Functional configuration system for LLM providers following JAF patterns
  */
 
 import { Model } from '../types.js';

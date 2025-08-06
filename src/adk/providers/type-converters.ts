@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Type Converters
+ * JAF ADK Layer - Type Converters
  * 
  * Functional type conversion between ADK and Core formats
  */

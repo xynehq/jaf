@@ -1,5 +1,5 @@
 /**
- * A2A Task Provider Factory for FAF
+ * A2A Task Provider Factory for JAF
  * Pure functional factory for creating A2A task providers
  */
 
@@ -77,19 +77,19 @@ export const createA2ATaskProviderFromEnv = async (
     postgres?: any;
   }
 ): Promise<A2ATaskProvider> => {
-  const taskMemoryType = process.env.FAF_A2A_TASK_PROVIDER_TYPE || 'memory';
+  const taskMemoryType = process.env.JAF_A2A_TASK_PROVIDER_TYPE || 'memory';
 
   switch (taskMemoryType) {
     case 'memory':
       return createA2AInMemoryTaskProvider({
         type: 'memory',
-        keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
-        defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
-        cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
-        maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
-        maxTasksPerContext: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
-        enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
-        enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
+        keyPrefix: process.env.JAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'jaf:a2a:tasks:',
+        defaultTtl: process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+        cleanupInterval: parseInt(process.env.JAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+        maxTasks: parseInt(process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+        maxTasksPerContext: parseInt(process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
+        enableHistory: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+        enableArtifacts: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
       });
 
     case 'redis':
@@ -98,27 +98,27 @@ export const createA2ATaskProviderFromEnv = async (
         console.warn('Redis client not provided, falling back to in-memory A2A task provider');
         return createA2AInMemoryTaskProvider({
           type: 'memory',
-          keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
-          defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
-          cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
-          maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
-          maxTasksPerContext: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
-          enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
-          enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
+          keyPrefix: process.env.JAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'jaf:a2a:tasks:',
+          defaultTtl: process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+          cleanupInterval: parseInt(process.env.JAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+          maxTasks: parseInt(process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+          maxTasksPerContext: parseInt(process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
+          enableHistory: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+          enableArtifacts: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
         });
       }
       return await createA2ARedisTaskProvider({
         type: 'redis',
-        keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
-        defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
-        cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
-        maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
-        enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
-        enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false',
-        host: process.env.FAF_A2A_TASK_PROVIDER_REDIS_HOST || 'localhost',
-        port: parseInt(process.env.FAF_A2A_TASK_PROVIDER_REDIS_PORT || '6379'),
-        password: process.env.FAF_A2A_TASK_PROVIDER_REDIS_PASSWORD,
-        db: parseInt(process.env.FAF_A2A_TASK_PROVIDER_REDIS_DB || '0')
+        keyPrefix: process.env.JAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'jaf:a2a:tasks:',
+        defaultTtl: process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+        cleanupInterval: parseInt(process.env.JAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+        maxTasks: parseInt(process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+        enableHistory: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+        enableArtifacts: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false',
+        host: process.env.JAF_A2A_TASK_PROVIDER_REDIS_HOST || 'localhost',
+        port: parseInt(process.env.JAF_A2A_TASK_PROVIDER_REDIS_PORT || '6379'),
+        password: process.env.JAF_A2A_TASK_PROVIDER_REDIS_PASSWORD,
+        db: parseInt(process.env.JAF_A2A_TASK_PROVIDER_REDIS_DB || '0')
       }, externalClients.redis);
 
     case 'postgres':
@@ -127,31 +127,31 @@ export const createA2ATaskProviderFromEnv = async (
         console.warn('PostgreSQL client not provided, falling back to in-memory A2A task provider');
         return createA2AInMemoryTaskProvider({
           type: 'memory',
-          keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
-          defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
-          cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
-          maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
-          maxTasksPerContext: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
-          enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
-          enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
+          keyPrefix: process.env.JAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'jaf:a2a:tasks:',
+          defaultTtl: process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+          cleanupInterval: parseInt(process.env.JAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+          maxTasks: parseInt(process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+          maxTasksPerContext: parseInt(process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
+          enableHistory: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+          enableArtifacts: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
         });
       }
       return await createA2APostgresTaskProvider({
         type: 'postgres',
-        keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
-        defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
-        cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
-        maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
-        enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
-        enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false',
-        host: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_HOST || 'localhost',
-        port: parseInt(process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_PORT || '5432'),
-        database: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_DATABASE || 'faf_a2a',
-        username: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_USERNAME || 'postgres',
-        password: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_PASSWORD,
-        ssl: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_SSL === 'true',
-        tableName: process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_TABLE || 'a2a_tasks',
-        maxConnections: parseInt(process.env.FAF_A2A_TASK_PROVIDER_POSTGRES_MAX_CONNECTIONS || '10')
+        keyPrefix: process.env.JAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'jaf:a2a:tasks:',
+        defaultTtl: process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+        cleanupInterval: parseInt(process.env.JAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+        maxTasks: parseInt(process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+        enableHistory: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+        enableArtifacts: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false',
+        host: process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_HOST || 'localhost',
+        port: parseInt(process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_PORT || '5432'),
+        database: process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_DATABASE || 'jaf_a2a',
+        username: process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_USERNAME || 'postgres',
+        password: process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_PASSWORD,
+        ssl: process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_SSL === 'true',
+        tableName: process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_TABLE || 'a2a_tasks',
+        maxConnections: parseInt(process.env.JAF_A2A_TASK_PROVIDER_POSTGRES_MAX_CONNECTIONS || '10')
       }, externalClients.postgres);
 
     default:
@@ -159,13 +159,13 @@ export const createA2ATaskProviderFromEnv = async (
       console.warn(`Unknown A2A task provider type "${taskMemoryType}", falling back to in-memory provider`);
       return createA2AInMemoryTaskProvider({
         type: 'memory',
-        keyPrefix: process.env.FAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'faf:a2a:tasks:',
-        defaultTtl: process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.FAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
-        cleanupInterval: parseInt(process.env.FAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
-        maxTasks: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
-        maxTasksPerContext: parseInt(process.env.FAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
-        enableHistory: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
-        enableArtifacts: process.env.FAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
+        keyPrefix: process.env.JAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'jaf:a2a:tasks:',
+        defaultTtl: process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL ? parseInt(process.env.JAF_A2A_TASK_PROVIDER_DEFAULT_TTL) : undefined,
+        cleanupInterval: parseInt(process.env.JAF_A2A_TASK_PROVIDER_CLEANUP_INTERVAL || '3600'),
+        maxTasks: parseInt(process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS || '10000'),
+        maxTasksPerContext: parseInt(process.env.JAF_A2A_TASK_PROVIDER_MAX_TASKS_PER_CONTEXT || '1000'),
+        enableHistory: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_HISTORY !== 'false',
+        enableArtifacts: process.env.JAF_A2A_TASK_PROVIDER_ENABLE_ARTIFACTS !== 'false'
       });
   }
 };
@@ -195,7 +195,7 @@ export async function createSimpleA2ATaskProvider(
     case 'memory':
       return createA2AInMemoryTaskProvider({ 
         type: 'memory',
-        keyPrefix: 'faf:a2a:tasks:',
+        keyPrefix: 'jaf:a2a:tasks:',
         defaultTtl: undefined,
         cleanupInterval: 3600,
         maxTasks: 10000,
@@ -211,7 +211,7 @@ export async function createSimpleA2ATaskProvider(
       }
       return await createA2ARedisTaskProvider({ 
         type: 'redis',
-        keyPrefix: 'faf:a2a:tasks:',
+        keyPrefix: 'jaf:a2a:tasks:',
         defaultTtl: undefined,
         cleanupInterval: 3600,
         maxTasks: 10000,
@@ -230,7 +230,7 @@ export async function createSimpleA2ATaskProvider(
       }
       return await createA2APostgresTaskProvider({ 
         type: 'postgres',
-        keyPrefix: 'faf:a2a:tasks:',
+        keyPrefix: 'jaf:a2a:tasks:',
         defaultTtl: undefined,
         cleanupInterval: 3600,
         maxTasks: 10000,
@@ -238,7 +238,7 @@ export async function createSimpleA2ATaskProvider(
         enableArtifacts: true,
         host: 'localhost',
         port: 5432,
-        database: 'faf_a2a',
+        database: 'jaf_a2a',
         username: 'postgres',
         password: undefined,
         ssl: false,

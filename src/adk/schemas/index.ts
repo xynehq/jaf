@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Schema Validation
+ * JAF ADK Layer - Schema Validation
  * 
  * Functional schema validation system
  */

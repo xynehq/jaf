@@ -35,7 +35,7 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
     host: config.host ?? 'localhost',
     port: config.port ?? 6379,
     db: config.db ?? 0,
-    keyPrefix: config.keyPrefix ?? 'faf:memory:'
+    keyPrefix: config.keyPrefix ?? 'jaf:memory:'
   };
   
   try {

@@ -220,7 +220,7 @@ async function compareStreamingExample() {
 
 // Main function
 async function main() {
-  console.log('🎯 FAF ADK Real Streaming Examples\n');
+  console.log('🎯 JAF ADK Real Streaming Examples\n');
   console.log('This demonstrates real LLM streaming, not simulated chunking.\n');
   
   try {

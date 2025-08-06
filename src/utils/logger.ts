@@ -1,5 +1,5 @@
 /**
- * FAF Logging System
+ * JAF Logging System
  * 
  * Provides structured logging with different levels and output targets
  */

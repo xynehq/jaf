@@ -1,5 +1,5 @@
 /**
- * FAF Visualization - Example Usage
+ * JAF Visualization - Example Usage
  * 
  * Example demonstrating how to use the Graphviz visualization functionality
  */
@@ -150,7 +150,7 @@ const exampleSpecializedAgent: Agent = {
 // ========== Example Functions ==========
 
 export const runVisualizationExamples = async (): Promise<void> => {
-  console.log('🎨 Running FAF Visualization Examples...\n');
+  console.log('🎨 Running JAF Visualization Examples...\n');
 
   try {
     // 1. Generate Agent Graph
@@ -158,7 +158,7 @@ export const runVisualizationExamples = async (): Promise<void> => {
     const agentResult = await generateAgentVisualization(
       [exampleAgent, exampleSpecializedAgent],
       {
-        title: 'FAF Agent System',
+        title: 'JAF Agent System',
         outputPath: './examples/agent-graph',
         outputFormat: 'png',
         showToolDetails: true,
@@ -177,7 +177,7 @@ export const runVisualizationExamples = async (): Promise<void> => {
     console.log('\n🔧 Generating tool visualization...');
     const allTools = [exampleCalculatorTool, exampleWeatherTool, exampleSearchTool];
     const toolResult = await generateToolVisualization(allTools, {
-      title: 'FAF Tool Ecosystem',
+      title: 'JAF Tool Ecosystem',
       outputPath: './examples/tool-graph',
       outputFormat: 'png',
       layout: 'circo',
@@ -213,7 +213,7 @@ export const runVisualizationExamples = async (): Promise<void> => {
       const schemeResult = await generateAgentVisualization(
         [exampleAgent],
         {
-          title: `FAF Agent (${scheme} theme)`,
+          title: `JAF Agent (${scheme} theme)`,
           outputPath: `./examples/agent-${scheme}`,
           outputFormat: 'png',
           colorScheme: scheme,

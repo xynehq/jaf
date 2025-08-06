@@ -1,4 +1,4 @@
-import { createFAFServer } from './server';
+import { createJAFServer } from './server';
 import { ServerConfig } from './types';
 import { Agent, RunConfig } from '../core/types';
 
@@ -34,7 +34,7 @@ export async function runServer<Ctx>(
   agents: Map<string, Agent<Ctx, any>> | Agent<Ctx, any>[],
   runConfig: Omit<RunConfig<Ctx>, 'agentRegistry'>,
   options: Partial<Omit<ServerConfig<Ctx>, 'runConfig' | 'agentRegistry'>> = {}
-): Promise<ReturnType<typeof createFAFServer<Ctx>>> {
+): Promise<ReturnType<typeof createJAFServer<Ctx>>> {
   // Convert agents array to Map if needed
   let agentRegistry: Map<string, Agent<Ctx, any>>;
   
@@ -69,14 +69,14 @@ export async function runServer<Ctx>(
   };
 
   // Create and start functional server
-  const server = createFAFServer(serverConfig);
+  const server = createJAFServer(serverConfig);
   await server.start();
   
   return server;
 }
 
 
-export { createFAFServer } from './server';
+export { createJAFServer } from './server';
 // runServer is exported above
 export type { 
   ServerConfig, 

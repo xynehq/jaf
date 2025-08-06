@@ -1,4 +1,4 @@
-# Functional Agent Framework (FAF) Production Deployment Guide
+# Juspay Agent Framework (JAF) Production Deployment Guide
 
 ## Table of Contents
 
@@ -16,7 +16,7 @@
 
 ## Architecture Overview
 
-FAF is a purely functional agent framework built with TypeScript, featuring:
+JAF is a purely functional agent framework built with TypeScript, featuring:
 
 - **Core Engine**: Stateless, immutable execution engine
 - **Memory Providers**: Pluggable conversation storage (In-Memory, Redis, PostgreSQL)
@@ -64,7 +64,7 @@ LITELLM_API_KEY=your-api-key
 LITELLM_MODEL=gpt-4o-mini
 
 # Memory Provider Configuration
-FAF_MEMORY_TYPE=postgres  # options: memory, redis, postgres
+JAF_MEMORY_TYPE=postgres  # options: memory, redis, postgres
 ```
 
 ### Memory Provider Configuration
@@ -72,41 +72,41 @@ FAF_MEMORY_TYPE=postgres  # options: memory, redis, postgres
 #### PostgreSQL Configuration
 ```bash
 # PostgreSQL Memory Provider
-FAF_MEMORY_TYPE=postgres
-FAF_POSTGRES_HOST=postgres
-FAF_POSTGRES_PORT=5432
-FAF_POSTGRES_DB=faf_memory
-FAF_POSTGRES_USER=faf_user
-FAF_POSTGRES_PASSWORD=secure_password
-FAF_POSTGRES_SSL=true
-FAF_POSTGRES_TABLE=conversations
-FAF_POSTGRES_MAX_CONNECTIONS=10
+JAF_MEMORY_TYPE=postgres
+JAF_POSTGRES_HOST=postgres
+JAF_POSTGRES_PORT=5432
+JAF_POSTGRES_DB=jaf_memory
+JAF_POSTGRES_USER=jaf_user
+JAF_POSTGRES_PASSWORD=secure_password
+JAF_POSTGRES_SSL=true
+JAF_POSTGRES_TABLE=conversations
+JAF_POSTGRES_MAX_CONNECTIONS=10
 
 # Alternative: Connection String
-FAF_POSTGRES_CONNECTION_STRING=postgresql://faf_user:secure_password@postgres:5432/faf_memory?sslmode=require
+JAF_POSTGRES_CONNECTION_STRING=postgresql://jaf_user:secure_password@postgres:5432/jaf_memory?sslmode=require
 ```
 
 #### Redis Configuration
 ```bash
 # Redis Memory Provider
-FAF_MEMORY_TYPE=redis
-FAF_REDIS_HOST=redis
-FAF_REDIS_PORT=6379
-FAF_REDIS_PASSWORD=secure_redis_password
-FAF_REDIS_DB=0
-FAF_REDIS_PREFIX=faf:memory:
-FAF_REDIS_TTL=86400  # 24 hours in seconds
+JAF_MEMORY_TYPE=redis
+JAF_REDIS_HOST=redis
+JAF_REDIS_PORT=6379
+JAF_REDIS_PASSWORD=secure_redis_password
+JAF_REDIS_DB=0
+JAF_REDIS_PREFIX=jaf:memory:
+JAF_REDIS_TTL=86400  # 24 hours in seconds
 
 # Alternative: Redis URL
-FAF_REDIS_URL=redis://:secure_redis_password@redis:6379/0
+JAF_REDIS_URL=redis://:secure_redis_password@redis:6379/0
 ```
 
 #### In-Memory Configuration
 ```bash
 # In-Memory Provider (development only)
-FAF_MEMORY_TYPE=memory
-FAF_MEMORY_MAX_CONVERSATIONS=1000
-FAF_MEMORY_MAX_MESSAGES=1000
+JAF_MEMORY_TYPE=memory
+JAF_MEMORY_MAX_CONVERSATIONS=1000
+JAF_MEMORY_MAX_MESSAGES=1000
 ```
 
 ## Database Setup
@@ -117,20 +117,20 @@ FAF_MEMORY_MAX_MESSAGES=1000
 
 ```sql
 -- Create database and user
-CREATE DATABASE faf_memory;
-CREATE USER faf_user WITH ENCRYPTED PASSWORD 'secure_password';
-GRANT ALL PRIVILEGES ON DATABASE faf_memory TO faf_user;
+CREATE DATABASE jaf_memory;
+CREATE USER jaf_user WITH ENCRYPTED PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE jaf_memory TO jaf_user;
 
 -- Connect to the database
-\c faf_memory;
+\c jaf_memory;
 
 -- Grant schema permissions
-GRANT ALL ON SCHEMA public TO faf_user;
+GRANT ALL ON SCHEMA public TO jaf_user;
 ```
 
 #### 2. Table Schema
 
-The FAF PostgreSQL provider automatically creates the required schema:
+The JAF PostgreSQL provider automatically creates the required schema:
 
 ```sql
 CREATE TABLE IF NOT EXISTS conversations (
@@ -228,8 +228,8 @@ FROM node:18-alpine AS production
 RUN apk add --no-cache dumb-init
 
 # Create non-root user
-RUN addgroup -g 1001 -S faf && \
-    adduser -S faf -u 1001
+RUN addgroup -g 1001 -S jaf && \
+    adduser -S jaf -u 1001
 
 WORKDIR /app
 
@@ -239,8 +239,8 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
 
 # Change ownership to non-root user
-RUN chown -R faf:faf /app
-USER faf
+RUN chown -R jaf:jaf /app
+USER jaf
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
@@ -260,7 +260,7 @@ CMD ["node", "dist/index.js"]
 version: '3.8'
 
 services:
-  faf-app:
+  jaf-app:
     build: .
     ports:
       - "3000:3000"
@@ -268,11 +268,11 @@ services:
       - NODE_ENV=development
       - PORT=3000
       - HOST=0.0.0.0
-      - FAF_MEMORY_TYPE=postgres
-      - FAF_POSTGRES_HOST=postgres
-      - FAF_POSTGRES_DB=faf_memory
-      - FAF_POSTGRES_USER=faf_user
-      - FAF_POSTGRES_PASSWORD=dev_password
+      - JAF_MEMORY_TYPE=postgres
+      - JAF_POSTGRES_HOST=postgres
+      - JAF_POSTGRES_DB=jaf_memory
+      - JAF_POSTGRES_USER=jaf_user
+      - JAF_POSTGRES_PASSWORD=dev_password
       - LITELLM_URL=http://litellm:4000
     depends_on:
       - postgres
@@ -285,8 +285,8 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=faf_memory
-      - POSTGRES_USER=faf_user
+      - POSTGRES_DB=jaf_memory
+      - POSTGRES_USER=jaf_user
       - POSTGRES_PASSWORD=dev_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -326,8 +326,8 @@ volumes:
 version: '3.8'
 
 services:
-  faf-app:
-    image: your-registry/faf-app:latest
+  jaf-app:
+    image: your-registry/jaf-app:latest
     ports:
       - "3000:3000"
     environment:
@@ -365,15 +365,15 @@ services:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
     depends_on:
-      - faf-app
+      - jaf-app
     restart: unless-stopped
 
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_DB=${FAF_POSTGRES_DB}
-      - POSTGRES_USER=${FAF_POSTGRES_USER}
-      - POSTGRES_PASSWORD=${FAF_POSTGRES_PASSWORD}
+      - POSTGRES_DB=${JAF_POSTGRES_DB}
+      - POSTGRES_USER=${JAF_POSTGRES_USER}
+      - POSTGRES_PASSWORD=${JAF_POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./postgresql.conf:/etc/postgresql/postgresql.conf
@@ -398,11 +398,11 @@ volumes:
 ### Nginx Configuration
 
 ```nginx
-upstream faf_backend {
+upstream jaf_backend {
     least_conn;
-    server faf-app-1:3000 weight=1 max_fails=3 fail_timeout=30s;
-    server faf-app-2:3000 weight=1 max_fails=3 fail_timeout=30s;
-    server faf-app-3:3000 weight=1 max_fails=3 fail_timeout=30s;
+    server jaf-app-1:3000 weight=1 max_fails=3 fail_timeout=30s;
+    server jaf-app-2:3000 weight=1 max_fails=3 fail_timeout=30s;
+    server jaf-app-3:3000 weight=1 max_fails=3 fail_timeout=30s;
 }
 
 server {
@@ -442,7 +442,7 @@ server {
     location / {
         limit_req zone=api burst=20 nodelay;
         
-        proxy_pass http://faf_backend;
+        proxy_pass http://jaf_backend;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -460,7 +460,7 @@ server {
     
     # Health check endpoint (bypass rate limiting)
     location /health {
-        proxy_pass http://faf_backend;
+        proxy_pass http://jaf_backend;
         access_log off;
     }
     
@@ -478,22 +478,22 @@ server {
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: faf-app
+  name: jaf-app
   labels:
-    app: faf-app
+    app: jaf-app
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: faf-app
+      app: jaf-app
   template:
     metadata:
       labels:
-        app: faf-app
+        app: jaf-app
     spec:
       containers:
-      - name: faf-app
-        image: your-registry/faf-app:latest
+      - name: jaf-app
+        image: your-registry/jaf-app:latest
         ports:
         - containerPort: 3000
         env:
@@ -505,9 +505,9 @@ spec:
           value: "0.0.0.0"
         envFrom:
         - secretRef:
-            name: faf-secrets
+            name: jaf-secrets
         - configMapRef:
-            name: faf-config
+            name: jaf-config
         resources:
           requests:
             memory: "256Mi"
@@ -540,10 +540,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: faf-app-service
+  name: jaf-app-service
 spec:
   selector:
-    app: faf-app
+    app: jaf-app
   ports:
   - protocol: TCP
     port: 80
@@ -554,7 +554,7 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: faf-app-ingress
+  name: jaf-app-ingress
   annotations:
     kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -563,7 +563,7 @@ spec:
   tls:
   - hosts:
     - your-domain.com
-    secretName: faf-tls
+    secretName: jaf-tls
   rules:
   - host: your-domain.com
     http:
@@ -572,7 +572,7 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: faf-app-service
+            name: jaf-app-service
             port:
               number: 80
 
@@ -580,12 +580,12 @@ spec:
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: faf-app-hpa
+  name: jaf-app-hpa
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: faf-app
+    name: jaf-app
   minReplicas: 2
   maxReplicas: 10
   metrics:
@@ -607,7 +607,7 @@ spec:
 
 ### Application Metrics
 
-FAF provides built-in health checks and tracing. Implement additional monitoring:
+JAF provides built-in health checks and tracing. Implement additional monitoring:
 
 ```typescript
 // Custom metrics for Prometheus
@@ -615,20 +615,20 @@ import promClient from 'prom-client';
 
 // Create metrics
 const httpRequestDuration = new promClient.Histogram({
-  name: 'faf_http_request_duration_seconds',
+  name: 'jaf_http_request_duration_seconds',
   help: 'Duration of HTTP requests in seconds',
   labelNames: ['method', 'route', 'status_code'],
   buckets: [0.1, 0.5, 1, 2, 5]
 });
 
 const conversationCounter = new promClient.Counter({
-  name: 'faf_conversations_total',
+  name: 'jaf_conversations_total',
   help: 'Total number of conversations',
   labelNames: ['agent', 'memory_provider']
 });
 
 const memoryProviderLatency = new promClient.Histogram({
-  name: 'faf_memory_provider_duration_seconds',
+  name: 'jaf_memory_provider_duration_seconds',
   help: 'Memory provider operation duration',
   labelNames: ['provider', 'operation'],
   buckets: [0.01, 0.05, 0.1, 0.5, 1]
@@ -662,9 +662,9 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
-  - job_name: 'faf-app'
+  - job_name: 'jaf-app'
     static_configs:
-      - targets: ['faf-app:3000']
+      - targets: ['jaf-app:3000']
     scrape_interval: 15s
     metrics_path: /metrics
 
@@ -677,7 +677,7 @@ scrape_configs:
       - targets: ['redis-exporter:9121']
 
 rule_files:
-  - "faf_alerts.yml"
+  - "jaf_alerts.yml"
 
 alerting:
   alertmanagers:
@@ -688,21 +688,21 @@ alerting:
 ### Alert Rules
 
 ```yaml
-# faf_alerts.yml
+# jaf_alerts.yml
 groups:
-  - name: faf_alerts
+  - name: jaf_alerts
     rules:
-      - alert: FAFHighErrorRate
-        expr: rate(faf_http_request_duration_seconds_count{status_code=~"5.."}[5m]) > 0.1
+      - alert: JAFHighErrorRate
+        expr: rate(jaf_http_request_duration_seconds_count{status_code=~"5.."}[5m]) > 0.1
         for: 2m
         labels:
           severity: warning
         annotations:
           summary: "High error rate detected"
-          description: "FAF application has a high error rate: {{ $value }} errors/sec"
+          description: "JAF application has a high error rate: {{ $value }} errors/sec"
 
-      - alert: FAFHighLatency
-        expr: histogram_quantile(0.95, rate(faf_http_request_duration_seconds_bucket[5m])) > 2
+      - alert: JAFHighLatency
+        expr: histogram_quantile(0.95, rate(jaf_http_request_duration_seconds_bucket[5m])) > 2
         for: 5m
         labels:
           severity: warning
@@ -710,14 +710,14 @@ groups:
           summary: "High latency detected"
           description: "95th percentile latency is {{ $value }}s"
 
-      - alert: FAFMemoryProviderDown
-        expr: up{job="faf-app"} == 0
+      - alert: JAFMemoryProviderDown
+        expr: up{job="jaf-app"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "FAF application is down"
-          description: "FAF application has been down for more than 1 minute"
+          summary: "JAF application is down"
+          description: "JAF application has been down for more than 1 minute"
 
       - alert: PostgreSQLDown
         expr: up{job="postgres"} == 0
@@ -734,14 +734,14 @@ groups:
 ```json
 {
   "dashboard": {
-    "title": "FAF Application Dashboard",
+    "title": "JAF Application Dashboard",
     "panels": [
       {
         "title": "Request Rate",
         "type": "graph",
         "targets": [
           {
-            "expr": "rate(faf_http_request_duration_seconds_count[5m])",
+            "expr": "rate(jaf_http_request_duration_seconds_count[5m])",
             "legendFormat": "{{method}} {{route}}"
           }
         ]
@@ -751,11 +751,11 @@ groups:
         "type": "graph",
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, rate(faf_http_request_duration_seconds_bucket[5m]))",
+            "expr": "histogram_quantile(0.95, rate(jaf_http_request_duration_seconds_bucket[5m]))",
             "legendFormat": "95th percentile"
           },
           {
-            "expr": "histogram_quantile(0.50, rate(faf_http_request_duration_seconds_bucket[5m]))",
+            "expr": "histogram_quantile(0.50, rate(jaf_http_request_duration_seconds_bucket[5m]))",
             "legendFormat": "50th percentile"
           }
         ]
@@ -765,7 +765,7 @@ groups:
         "type": "graph",
         "targets": [
           {
-            "expr": "histogram_quantile(0.95, rate(faf_memory_provider_duration_seconds_bucket[5m]))",
+            "expr": "histogram_quantile(0.95, rate(jaf_memory_provider_duration_seconds_bucket[5m]))",
             "legendFormat": "{{provider}} {{operation}}"
           }
         ]
@@ -775,7 +775,7 @@ groups:
         "type": "graph",
         "targets": [
           {
-            "expr": "rate(faf_conversations_total[5m])",
+            "expr": "rate(jaf_conversations_total[5m])",
             "legendFormat": "{{agent}}"
           }
         ]
@@ -805,15 +805,15 @@ groups:
   </parse>
 </filter>
 
-<match docker.faf-app>
+<match docker.jaf-app>
   @type elasticsearch
   host elasticsearch
   port 9200
-  index_name faf-logs
+  index_name jaf-logs
   type_name _doc
   <buffer>
     @type file
-    path /var/log/fluentd-buffers/faf.buffer
+    path /var/log/fluentd-buffers/jaf.buffer
     flush_mode interval
     flush_interval 10s
   </buffer>
@@ -882,10 +882,10 @@ groups:
    ALTER SYSTEM SET log_min_duration_statement = 1000;
    
    -- Create limited user for application
-   CREATE USER faf_app WITH PASSWORD 'secure_password';
-   GRANT CONNECT ON DATABASE faf_memory TO faf_app;
-   GRANT USAGE ON SCHEMA public TO faf_app;
-   GRANT SELECT, INSERT, UPDATE, DELETE ON conversations TO faf_app;
+   CREATE USER jaf_app WITH PASSWORD 'secure_password';
+   GRANT CONNECT ON DATABASE jaf_memory TO jaf_app;
+   GRANT USAGE ON SCHEMA public TO jaf_app;
+   GRANT SELECT, INSERT, UPDATE, DELETE ON conversations TO jaf_app;
    ```
 
 3. **Container Security**
@@ -910,31 +910,31 @@ groups:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: faf-secrets
+  name: jaf-secrets
 type: Opaque
 stringData:
   LITELLM_API_KEY: "your-api-key"
-  FAF_POSTGRES_PASSWORD: "secure-database-password"
-  FAF_REDIS_PASSWORD: "secure-redis-password"
+  JAF_POSTGRES_PASSWORD: "secure-database-password"
+  JAF_REDIS_PASSWORD: "secure-redis-password"
   JWT_SECRET: "your-jwt-secret"
 
 ---
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:
-  name: faf-external-secrets
+  name: jaf-external-secrets
 spec:
   refreshInterval: 1h
   secretStoreRef:
     name: vault-secret-store
     kind: SecretStore
   target:
-    name: faf-secrets
+    name: jaf-secrets
     creationPolicy: Owner
   data:
   - secretKey: LITELLM_API_KEY
     remoteRef:
-      key: secret/faf
+      key: secret/jaf
       property: litellm_api_key
 ```
 
@@ -960,7 +960,7 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_PASSWORD: test
-          POSTGRES_DB: faf_test
+          POSTGRES_DB: jaf_test
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -994,11 +994,11 @@ jobs:
     - name: Run tests
       run: npm test
       env:
-        FAF_POSTGRES_HOST: localhost
-        FAF_POSTGRES_DB: faf_test
-        FAF_POSTGRES_USER: postgres
-        FAF_POSTGRES_PASSWORD: test
-        FAF_REDIS_HOST: localhost
+        JAF_POSTGRES_HOST: localhost
+        JAF_POSTGRES_DB: jaf_test
+        JAF_POSTGRES_USER: postgres
+        JAF_POSTGRES_PASSWORD: test
+        JAF_REDIS_HOST: localhost
     
     - name: Type check
       run: npm run typecheck
@@ -1061,8 +1061,8 @@ jobs:
 ```yaml
 # Chart.yaml
 apiVersion: v2
-name: faf-app
-description: Functional Agent Framework Application
+name: jaf-app
+description: Juspay Agent Framework Application
 version: 0.1.0
 appVersion: "1.0"
 
@@ -1070,7 +1070,7 @@ appVersion: "1.0"
 replicaCount: 3
 
 image:
-  repository: ghcr.io/your-org/faf-app
+  repository: ghcr.io/your-org/jaf-app
   pullPolicy: IfNotPresent
   tag: ""
 
@@ -1085,14 +1085,14 @@ ingress:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
   hosts:
-    - host: faf.example.com
+    - host: jaf.example.com
       paths:
         - path: /
           pathType: Prefix
   tls:
-    - secretName: faf-tls
+    - secretName: jaf-tls
       hosts:
-        - faf.example.com
+        - jaf.example.com
 
 resources:
   limits:
@@ -1112,7 +1112,7 @@ postgresql:
   enabled: true
   auth:
     postgresPassword: secure-password
-    database: faf_memory
+    database: jaf_memory
 
 redis:
   enabled: true
@@ -1147,11 +1147,11 @@ redis:
    // PostgreSQL connection pooling
    const { Pool } = require('pg');
    const pool = new Pool({
-     host: process.env.FAF_POSTGRES_HOST,
-     port: process.env.FAF_POSTGRES_PORT,
-     database: process.env.FAF_POSTGRES_DB,
-     user: process.env.FAF_POSTGRES_USER,
-     password: process.env.FAF_POSTGRES_PASSWORD,
+     host: process.env.JAF_POSTGRES_HOST,
+     port: process.env.JAF_POSTGRES_PORT,
+     database: process.env.JAF_POSTGRES_DB,
+     user: process.env.JAF_POSTGRES_USER,
+     password: process.env.JAF_POSTGRES_PASSWORD,
      max: 20,
      idleTimeoutMillis: 30000,
      connectionTimeoutMillis: 2000,
@@ -1241,11 +1241,11 @@ app.addHook('onResponse', async (request, reply) => {
 **Solutions:**
 ```bash
 # Check connectivity
-docker exec faf-app nc -zv postgres 5432
-docker exec faf-app nc -zv redis 6379
+docker exec jaf-app nc -zv postgres 5432
+docker exec jaf-app nc -zv redis 6379
 
 # Verify credentials
-docker exec postgres psql -U faf_user -d faf_memory -c "SELECT 1;"
+docker exec postgres psql -U jaf_user -d jaf_memory -c "SELECT 1;"
 
 # Check Redis auth
 docker exec redis redis-cli -a password ping
@@ -1374,16 +1374,16 @@ app.get('/health/detailed', async (request, reply) => {
 ```bash
 # Common log queries
 # High error rate
-kubectl logs -l app=faf-app | grep "ERROR" | tail -50
+kubectl logs -l app=jaf-app | grep "ERROR" | tail -50
 
 # Slow requests
-kubectl logs -l app=faf-app | grep "Slow request" | tail -20
+kubectl logs -l app=jaf-app | grep "Slow request" | tail -20
 
 # Memory provider issues
-kubectl logs -l app=faf-app | grep "MEMORY:" | tail -30
+kubectl logs -l app=jaf-app | grep "MEMORY:" | tail -30
 
 # Connection issues
-kubectl logs -l app=faf-app | grep -E "(ECONNREFUSED|timeout|connection)" | tail -20
+kubectl logs -l app=jaf-app | grep -E "(ECONNREFUSED|timeout|connection)" | tail -20
 ```
 
 ### Performance Debugging
@@ -1418,6 +1418,6 @@ pool.query = function(...args) {
 };
 ```
 
-This comprehensive deployment guide provides all the necessary information to deploy FAF applications to production environments. The guide covers everything from basic containerization to advanced Kubernetes deployments, monitoring, security, and troubleshooting.
+This comprehensive deployment guide provides all the necessary information to deploy JAF applications to production environments. The guide covers everything from basic containerization to advanced Kubernetes deployments, monitoring, security, and troubleshooting.
 
 For additional support or specific deployment scenarios, refer to the individual component documentation and consider the specific requirements of your infrastructure and compliance needs.

@@ -1,5 +1,5 @@
 /**
- * A2A Task Memory Types for FAF
+ * A2A Task Memory Types for JAF
  * Extends the core memory system to support A2A task queue persistence
  */
 
@@ -116,7 +116,7 @@ export type A2ATaskProvider = {
 // Configuration schemas for A2A task storage
 export const A2ATaskMemoryConfigSchema = z.object({
   type: z.enum(['memory', 'redis', 'postgres']),
-  keyPrefix: z.string().default('faf:a2a:tasks:'),
+  keyPrefix: z.string().default('jaf:a2a:tasks:'),
   defaultTtl: z.number().optional(), // Default TTL in seconds for tasks
   cleanupInterval: z.number().default(3600), // Cleanup interval in seconds
   maxTasks: z.number().default(10000), // Maximum tasks to store (for in-memory)
@@ -141,7 +141,7 @@ export const A2APostgresTaskConfigSchema = A2ATaskMemoryConfigSchema.extend({
   type: z.literal('postgres'),
   host: z.string().default('localhost'),
   port: z.number().default(5432),
-  database: z.string().default('faf_a2a'),
+  database: z.string().default('jaf_a2a'),
   username: z.string().default('postgres'),
   password: z.string().optional(),
   ssl: z.boolean().default(false),

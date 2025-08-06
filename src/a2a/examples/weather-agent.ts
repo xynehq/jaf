@@ -1,6 +1,6 @@
 /**
  * Example Weather Agent using pure functional A2A integration
- * Demonstrates how to create A2A-compatible agents with FAF
+ * Demonstrates how to create A2A-compatible agents with JAF
  */
 
 import { z } from 'zod';

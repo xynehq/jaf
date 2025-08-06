@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Session Management Tests
+ * JAF ADK Layer - Session Management Tests
  */
 
 import {

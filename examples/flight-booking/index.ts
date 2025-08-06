@@ -1,8 +1,8 @@
 /**
- * Flight Booking Example using FAF ADK
+ * Flight Booking Example using JAF ADK
  * 
  * This example demonstrates how to build a flight booking agent
- * using the FAF ADK (Agent Development Kit) layer.
+ * using the JAF ADK (Agent Development Kit) layer.
  */
 
 import 'dotenv/config';

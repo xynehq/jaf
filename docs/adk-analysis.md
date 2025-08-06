@@ -1,8 +1,8 @@
-# Google ADK Analysis: Primitives, Style, and FAF Integration Plan
+# Google ADK Analysis: Primitives, Style, and JAF Integration Plan
 
 ## Executive Summary
 
-Google ADK (Agent Development Kit) represents a mature, production-ready framework for building AI agents with a rich ecosystem of tools, session management, and streaming capabilities. This document analyzes ADK's core primitives and programming patterns to design a FAF ADK Layer that brings ADK-style functionality to FAF's functional paradigm.
+Google ADK (Agent Development Kit) represents a mature, production-ready framework for building AI agents with a rich ecosystem of tools, session management, and streaming capabilities. This document analyzes ADK's core primitives and programming patterns to design a JAF ADK Layer that brings ADK-style functionality to JAF's functional paradigm.
 
 ## ADK Programming Style Analysis
 
@@ -184,7 +184,7 @@ ExampleTool(examples=[
 ])
 ```
 
-## FAF vs ADK Feature Comparison
+## JAF vs ADK Feature Comparison
 
 ### ADK Strengths
 ✅ **Rich Tool Ecosystem**: OpenAPI, CrewAI, LangChain, MCP integrations  
@@ -198,14 +198,14 @@ ExampleTool(examples=[
 ✅ **Live Interaction**: Bidirectional communication  
 ✅ **Web UI**: Built-in agent testing interface  
 
-### FAF Strengths
+### JAF Strengths
 ✅ **Functional Purity**: No classes, immutable functions  
 ✅ **Simplicity**: Minimal API surface  
 ✅ **Memory Providers**: Pluggable persistence layer  
 ✅ **Lightweight**: Minimal dependencies  
 ✅ **TypeScript Native**: Strong typing throughout  
 
-### FAF Missing Features (Present in ADK)
+### JAF Missing Features (Present in ADK)
 ❌ **Rich Tool Integrations**: Limited to basic function tools  
 ❌ **Session Management**: Basic conversation handling  
 ❌ **Streaming**: Manual implementation required  
@@ -260,4 +260,4 @@ agent = LlmAgent(
 
 ## Next Steps
 
-This analysis provides the foundation for designing a FAF ADK Layer that brings ADK's rich feature set to FAF's functional paradigm while maintaining FAF's core principles of functional purity and simplicity.
+This analysis provides the foundation for designing a JAF ADK Layer that brings ADK's rich feature set to JAF's functional paradigm while maintaining JAF's core principles of functional purity and simplicity.

@@ -1,5 +1,5 @@
 /**
- * FAF ADK Layer - Streaming System
+ * JAF ADK Layer - Streaming System
  * 
  * Functional streaming and live interaction utilities
  */

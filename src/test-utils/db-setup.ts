@@ -49,9 +49,9 @@ export const createTestPostgresClient = (): Pool | undefined => {
     const pool = new Pool({
       host: process.env.POSTGRES_HOST || 'localhost',
       port: parseInt(process.env.POSTGRES_PORT || '5432'),
-      user: process.env.POSTGRES_USER || 'faf_test',
-      password: process.env.POSTGRES_PASSWORD || 'faf_test_password',
-      database: process.env.POSTGRES_DATABASE || 'faf_test_db',
+      user: process.env.POSTGRES_USER || 'jaf_test',
+      password: process.env.POSTGRES_PASSWORD || 'jaf_test_password',
+      database: process.env.POSTGRES_DATABASE || 'jaf_test_db',
       max: 10,
       idleTimeoutMillis: 30000,
       connectionTimeoutMillis: 2000,
@@ -117,9 +117,9 @@ export const cleanupTestDatabases = async (clients: TestDatabaseClients): Promis
     // Clean up test tables
     try {
       await clients.postgres.query(`
-        DROP TABLE IF EXISTS faf_sessions CASCADE;
-        DROP TABLE IF EXISTS faf_artifacts CASCADE;
-        DROP TABLE IF EXISTS faf_memory CASCADE;
+        DROP TABLE IF EXISTS jaf_sessions CASCADE;
+        DROP TABLE IF EXISTS jaf_artifacts CASCADE;
+        DROP TABLE IF EXISTS jaf_memory CASCADE;
       `);
     } catch (error) {
       // Ignore cleanup errors

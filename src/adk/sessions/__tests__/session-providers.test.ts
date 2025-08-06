@@ -380,7 +380,7 @@ describe('Session Providers', () => {
         () => createRedisSessionProvider({
           host: process.env.REDIS_HOST || 'localhost',
           port: parseInt(process.env.REDIS_PORT || '6379'),
-          keyPrefix: 'faf_test:',
+          keyPrefix: 'jaf_test:',
           ttl: 3600
         }),
         async () => {
@@ -393,7 +393,7 @@ describe('Session Providers', () => {
               port: parseInt(process.env.REDIS_PORT || '6379')
             });
             
-            const keys = await client.keys('faf_test:*');
+            const keys = await client.keys('jaf_test:*');
             if (keys.length > 0) {
               await client.del(...keys);
             }
@@ -453,7 +453,7 @@ describe('Session Providers', () => {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { Pool } = require('pg');
         const testPool = new Pool({
-          connectionString: process.env.POSTGRES_URL || 'postgresql://faf_test:faf_test_password@localhost:5432/faf_test_db',
+          connectionString: process.env.POSTGRES_URL || 'postgresql://jaf_test:jaf_test_password@localhost:5432/jaf_test_db',
           max: 1
         });
         
@@ -469,8 +469,8 @@ describe('Session Providers', () => {
       runProviderTests(
         'PostgreSQL',
         () => createPostgresSessionProvider({
-          connectionString: process.env.POSTGRES_URL || 'postgresql://faf_test:faf_test_password@localhost:5432/faf_test_db',
-          tableName: 'faf_test_sessions'
+          connectionString: process.env.POSTGRES_URL || 'postgresql://jaf_test:jaf_test_password@localhost:5432/jaf_test_db',
+          tableName: 'jaf_test_sessions'
         }),
         async () => {
           // Cleanup test table
@@ -478,10 +478,10 @@ describe('Session Providers', () => {
             // eslint-disable-next-line @typescript-eslint/no-var-requires
             const { Pool } = require('pg');
             const pool = new Pool({
-              connectionString: process.env.DATABASE_URL || 'postgresql://localhost/faf_test'
+              connectionString: process.env.DATABASE_URL || 'postgresql://localhost/jaf_test'
             });
             
-            await pool.query('DROP TABLE IF EXISTS faf_test_sessions');
+            await pool.query('DROP TABLE IF EXISTS jaf_test_sessions');
             await pool.end();
           } catch (error) {
             console.error('PostgreSQL cleanup failed:', error);

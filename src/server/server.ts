@@ -14,10 +14,10 @@ import { RunState, Message, createRunId, createTraceId } from '../core/types';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
- * Create and configure a FAF server instance
- * Functional implementation following FAF principles
+ * Create and configure a JAF server instance
+ * Functional implementation following JAF principles
  */
-export function createFAFServer<Ctx>(config: ServerConfig<Ctx>): {
+export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
   app: FastifyInstance;
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -146,8 +146,8 @@ export function createFAFServer<Ctx>(config: ServerConfig<Ctx>): {
           return reply.code(404).send(response);
         }
 
-        // Convert HTTP messages to FAF messages
-        const fafMessages: Message[] = validatedRequest.messages.map(msg => ({
+        // Convert HTTP messages to JAF messages
+        const jafMessages: Message[] = validatedRequest.messages.map(msg => ({
           role: msg.role === 'system' ? 'user' : msg.role as 'user' | 'assistant',
           content: msg.content
         }));
@@ -162,7 +162,7 @@ export function createFAFServer<Ctx>(config: ServerConfig<Ctx>): {
         const initialState: RunState<Ctx> = {
           runId,
           traceId,
-          messages: fafMessages,
+          messages: jafMessages,
           currentAgentName: validatedRequest.agentName,
           context: validatedRequest.context || {} as Ctx,
           turnCount: 0
@@ -196,7 +196,7 @@ export function createFAFServer<Ctx>(config: ServerConfig<Ctx>): {
         const result = await run(initialState, runConfig);
         const executionTime = Date.now() - requestStartTime;
 
-        // Convert FAF messages back to HTTP messages, including tool interactions
+        // Convert JAF messages back to HTTP messages, including tool interactions
         const httpMessages: any[] = result.finalState.messages.map(msg => {
           if (msg.role === 'tool') {
             // Include tool messages with special formatting
@@ -422,7 +422,7 @@ export function createFAFServer<Ctx>(config: ServerConfig<Ctx>): {
       });
       console.log(`🔧 Fastify server started successfully`);
       
-      console.log(`🚀 FAF Server running on http://${host}:${port}`);
+      console.log(`🚀 JAF Server running on http://${host}:${port}`);
       console.log(`📋 Available agents: ${Array.from(config.agentRegistry.keys()).join(', ')}`);
       console.log(`🏥 Health check: http://${host}:${port}/health`);
       console.log(`🤖 Agents list: http://${host}:${port}/agents`);

@@ -1,6 +1,6 @@
-# Functional Agent Framework (FAF) - Core Concepts
+# Juspay Agent Framework (JAF) - Core Concepts
 
-The Functional Agent Framework (FAF) is a type-safe, functional programming framework for building AI agent systems. This guide covers the core concepts, type system, and architectural patterns that make FAF a robust foundation for agent development.
+The Juspay Agent Framework (JAF) is a type-safe, functional programming framework for building AI agent systems. This guide covers the core concepts, type system, and architectural patterns that make JAF a robust foundation for agent development.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ The Functional Agent Framework (FAF) is a type-safe, functional programming fram
 
 ### Core Principle: Immutability
 
-FAF follows strict functional programming principles where all state is immutable. The central state object, `RunState`, represents the complete execution context at any point in time and is never mutated - only new states are created.
+JAF follows strict functional programming principles where all state is immutable. The central state object, `RunState`, represents the complete execution context at any point in time and is never mutated - only new states are created.
 
 ```typescript
 export type RunState<Ctx> = {
@@ -64,7 +64,7 @@ This immutability ensures:
 
 ### Agent Type Definition
 
-Agents are the core execution units in FAF, defined as immutable configuration objects:
+Agents are the core execution units in JAF, defined as immutable configuration objects:
 
 ```typescript
 export type Agent<Ctx, Out> = {
@@ -182,7 +182,7 @@ const searchTool: Tool<{ query: string; limit?: number }, MyContext> = {
 
 ### ToolResult System
 
-FAF provides a standardized result system for consistent error handling:
+JAF provides a standardized result system for consistent error handling:
 
 ```typescript
 export interface ToolResult<T = any> {
@@ -407,7 +407,7 @@ state.messages.push(assistantMessage); // This would cause TypeScript error
 
 ### Purpose and Distinction
 
-FAF uses two levels of identification for tracking and observability:
+JAF uses two levels of identification for tracking and observability:
 
 - **`TraceId`**: Groups related executions across agent handoffs
 - **`RunId`**: Identifies individual execution runs within a trace
@@ -419,7 +419,7 @@ export type RunId = string & { readonly _brand: 'RunId' };
 
 ### Branded Types
 
-FAF uses TypeScript branded types to prevent ID confusion:
+JAF uses TypeScript branded types to prevent ID confusion:
 
 ```typescript
 // These are string types at runtime but distinct types at compile time
@@ -457,10 +457,10 @@ export type TraceEvent =
 
 ### Functional Error Types
 
-FAF uses discriminated unions for type-safe error handling:
+JAF uses discriminated unions for type-safe error handling:
 
 ```typescript
-export type FAFError =
+export type JAFError =
   | { readonly _tag: "MaxTurnsExceeded"; readonly turns: number }
   | { readonly _tag: "ModelBehaviorError"; readonly detail: string }
   | { readonly _tag: "DecodeError"; readonly errors: z.ZodIssue[] }
@@ -473,10 +473,10 @@ export type FAFError =
 
 ### Error Classification
 
-The FAF error system includes utilities for error analysis:
+The JAF error system includes utilities for error analysis:
 
 ```typescript
-const errorHandler = new FAFErrorHandler();
+const errorHandler = new JAFErrorHandler();
 
 // Format errors for display
 const message = errorHandler.format(error);
@@ -497,7 +497,7 @@ export type RunResult<Out> = {
   readonly finalState: RunState<any>;
   readonly outcome:
     | { readonly status: 'completed'; readonly output: Out }
-    | { readonly status: 'error'; readonly error: FAFError };
+    | { readonly status: 'error'; readonly error: JAFError };
 };
 ```
 
@@ -509,7 +509,7 @@ const result = await run(initialState, config);
 if (result.outcome.status === 'completed') {
   console.log('Success:', result.outcome.output);
 } else {
-  console.error('Error:', FAFErrorHandler.format(result.outcome.error));
+  console.error('Error:', JAFErrorHandler.format(result.outcome.error));
 }
 ```
 
@@ -548,7 +548,7 @@ const contentFilter: Guardrail<string> = (input: string): ValidationResult => {
 
 ### Generic Context System
 
-FAF uses TypeScript generics to provide type-safe context throughout the system:
+JAF uses TypeScript generics to provide type-safe context throughout the system:
 
 ```typescript
 // Define your application context
@@ -619,7 +619,7 @@ const updatedState: RunState<MyApplicationContext> = {
 
 ### Memory Provider Interface
 
-FAF includes a pluggable memory system for conversation persistence:
+JAF includes a pluggable memory system for conversation persistence:
 
 ```typescript
 export type MemoryProvider = {
@@ -675,7 +675,7 @@ if (result.success) {
 
 ### Memory Provider Types
 
-FAF supports multiple memory providers:
+JAF supports multiple memory providers:
 
 - **InMemoryProvider**: For development and testing
 - **RedisProvider**: For production caching
@@ -687,7 +687,7 @@ Each provider follows the same interface but with provider-specific configuratio
 
 ### Pure Functions
 
-All core functions in FAF are pure - they don't have side effects and return the same output for the same input:
+All core functions in JAF are pure - they don't have side effects and return the same output for the same input:
 
 ```typescript
 // Pure function - no side effects
@@ -718,7 +718,7 @@ const mappedMessages = state.messages.map(m => ({ ...m, processed: true }));
 
 ### Composition
 
-FAF emphasizes function composition:
+JAF emphasizes function composition:
 
 ```typescript
 // Compose validation functions
@@ -779,9 +779,9 @@ async function safeOperation(): Promise<OperationResult<string>> {
 
 ## Conclusion
 
-The Functional Agent Framework provides a robust, type-safe foundation for building AI agent systems. Its core principles of immutability, pure functions, and strong typing create a predictable and maintainable development environment.
+The Juspay Agent Framework provides a robust, type-safe foundation for building AI agent systems. Its core principles of immutability, pure functions, and strong typing create a predictable and maintainable development environment.
 
-Key benefits of FAF's approach:
+Key benefits of JAF's approach:
 
 - **Predictability**: Immutable state and pure functions make behavior predictable
 - **Type Safety**: Strong TypeScript typing catches errors at compile time  
