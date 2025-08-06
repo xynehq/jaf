@@ -1,6 +1,6 @@
 # JAF Graphviz Visualization
 
-The JAF (Juspay Agent Framework) visualization module provides powerful graph generation capabilities for visualizing agents, tools, and runner architectures using Graphviz. This comprehensive system enables developers to create clear, professional diagrams of their agent systems.
+The JAF (Juspay Agent Framework) visualization module provides powerful graph generation capabilities for visualizing agents, tools, and runner architectures. The system now uses direct DOT generation instead of the graphviz npm package, providing better reliability and performance.
 
 ## Table of Contents
 

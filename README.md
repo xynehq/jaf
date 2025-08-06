@@ -492,6 +492,7 @@ Comprehensive documentation is available in the [`/docs`](./docs) folder:
 - **[Examples](./docs/examples.md)** - Tutorials and integration patterns
 - **[Deployment](./docs/deployment.md)** - Production deployment guide
 - **[Troubleshooting](./docs/troubleshooting.md)** - Common issues and debugging
+- **[New Features](./docs/new-features.md)** - Recent enhancements and capabilities
 
 ### 📖 Documentation Website
 
@@ -560,6 +561,31 @@ npm test        # Run tests
 npm run lint    # Lint code
 npm run typecheck # Type checking
 ```
+
+## ✨ Recent Enhancements
+
+### Multi-Agent Coordination
+- **Intelligent Agent Selection**: Automatic keyword-based routing for conditional delegation
+- **Parallel Response Merging**: Smart merging of responses from multiple agents
+- **Coordination Rules**: Define custom rules for sophisticated orchestration
+- **Hierarchical Delegation**: Multi-level agent architectures with automatic handoffs
+
+### Enhanced Schema Validation
+- **Full JSON Schema Draft 7**: Complete support for all validation features
+- **Format Validators**: Built-in email, URL, date, UUID, IPv4/IPv6 validation
+- **Advanced Constraints**: minLength, maxLength, pattern, multipleOf, uniqueItems
+- **Deep Validation**: Object property constraints, array uniqueness with deep equality
+
+### Visualization System
+- **DOT Generation**: Direct Graphviz DOT generation for better reliability
+- **Multiple Color Schemes**: Default, modern, and minimal themes
+- **Architecture Diagrams**: Generate agent, tool, and runner visualizations
+- **Fallback Support**: DOT content available even if rendering fails
+
+### Model Support
+- **300+ Models**: Comprehensive enum with all major LLM providers
+- **Type-Safe**: Strongly typed model identifiers
+- **Provider Detection**: Automatic provider identification from model names
 
 ## 🏛️ Architecture Principles
 

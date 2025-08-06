@@ -14,12 +14,13 @@ This comprehensive guide covers the example projects in the JAF framework, demon
 
 ## Overview
 
-The JAF framework includes two comprehensive example projects that demonstrate different aspects of the framework:
+The JAF framework includes three comprehensive example projects that demonstrate different aspects of the framework:
 
 1. **Server Demo** (`examples/server-demo/`) - A multi-agent HTTP server with memory persistence
 2. **RAG Demo** (`examples/rag-demo/`) - Vertex AI RAG integration with streaming responses
+3. **Visualization Demo** (`examples/visualization-demo/`) - Graphviz-based agent and tool visualization
 
-Both examples showcase the framework's core principles:
+All examples showcase the framework's core principles:
 - **Immutability**: All state is deeply readonly
 - **Pure Functions**: Core logic expressed as pure, predictable functions
 - **Type Safety**: Leverages TypeScript's advanced features

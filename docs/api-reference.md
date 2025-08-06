@@ -739,6 +739,57 @@ type Guardrail<I> = (
 ) => Promise<ValidationResult> | ValidationResult;
 ```
 
+### Schema Validation
+
+#### `JsonSchema` Interface
+```typescript
+interface JsonSchema {
+  type: string;
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  items?: JsonSchema;
+  enum?: unknown[];
+  description?: string;
+  default?: unknown;
+  // String validations
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  format?: string;  // 'email' | 'uri' | 'date' | 'date-time' | 'uuid'
+  // Number validations
+  minimum?: number;
+  maximum?: number;
+  exclusiveMinimum?: boolean;
+  exclusiveMaximum?: boolean;
+  multipleOf?: number;
+  // Array validations
+  minItems?: number;
+  maxItems?: number;
+  uniqueItems?: boolean;
+  // Object validations
+  additionalProperties?: boolean | JsonSchema;
+}
+```
+
+#### Schema Validators
+
+```typescript
+// Create validators with full JSON Schema support
+createSchemaValidator<T>(schema: JsonSchema, validator: TypeGuard<T>): SchemaValidator<T>
+
+// Specific type validators
+createStringValidator(options?: { minLength?, maxLength?, pattern?, format? }): SchemaValidator<string>
+createNumberValidator(options?: { minimum?, maximum?, multipleOf? }): SchemaValidator<number>
+createArrayValidator<T>(items: JsonSchema, options?: { minItems?, maxItems?, uniqueItems? }): SchemaValidator<T[]>
+createObjectValidator<T>(properties: Record<string, JsonSchema>, required?: string[]): SchemaValidator<T>
+
+// Validation utilities
+validateInput<T>(validator: SchemaValidator<T>, data: unknown): ValidationResult<T>
+validateOutput<T>(validator: SchemaValidator<T>, data: unknown): ValidationResult<T>
+assertValid<T>(validator: SchemaValidator<T>, data: unknown): T  // Throws on invalid
+isValid<T>(validator: SchemaValidator<T>, data: unknown): data is T
+```
+
 ### Validation Functions
 
 #### `composeValidations(...fns)`
@@ -1109,6 +1160,187 @@ This example demonstrates:
 - Enabling tracing and observability
 - Starting a development server
 - Handling graceful shutdown
+
+---
+
+## Multi-Agent Coordination Features
+
+### Intelligent Agent Selection
+
+The framework now includes intelligent agent selection based on keyword matching when using the `conditional` delegation strategy:
+
+```typescript
+// How intelligent selection works:
+// 1. Extracts keywords from user message (removing common words)
+// 2. Scores each agent based on:
+//    - Name matches (+3 points)
+//    - Instruction matches (+2 points)  
+//    - Tool name matches (+2 points)
+//    - Tool description matches (+1 point)
+// 3. Selects the highest-scoring agent
+
+const coordinator: Agent<Context, any> = {
+  name: 'smart_coordinator',
+  instructions: 'Route to the best specialist',
+  tools: [],
+  subAgents: [weatherAgent, newsAgent, calculatorAgent],
+  delegationStrategy: 'conditional' // Uses intelligent selection
+};
+```
+
+### Parallel Response Merging
+
+The parallel execution strategy now intelligently merges responses from multiple agents:
+
+```typescript
+const parallelAgent: Agent<Context, any> = {
+  name: 'parallel_researcher',
+  instructions: 'Research multiple topics simultaneously',
+  tools: [],
+  subAgents: [dataAgent, analysisAgent, reportAgent],
+  delegationStrategy: 'parallel'
+};
+
+// Merged response includes:
+// - Agent-prefixed text: "[dataAgent]: Data collected..."
+// - Agent-prefixed artifacts: "dataAgent_results"
+// - Combined response parts from all agents
+```
+
+### Coordination Rules
+
+Define custom rules for fine-grained control over agent delegation:
+
+```typescript
+interface CoordinationRule {
+  condition: (message: Content, context: RunContext) => boolean;
+  action: 'delegate' | 'parallel' | 'sequential';
+  targetAgents?: string[];
+}
+
+const multiAgentConfig: MultiAgentConfig = {
+  name: 'advanced_coordinator',
+  model: 'gpt-4',
+  instruction: 'Coordinate based on rules',
+  tools: [],
+  subAgents: [agent1, agent2, agent3],
+  delegationStrategy: 'conditional',
+  coordinationRules: [
+    {
+      condition: (msg, ctx) => msg.parts.some(p => p.text?.includes('urgent')),
+      action: 'parallel',
+      targetAgents: ['agent1', 'agent2']
+    },
+    {
+      condition: (msg, ctx) => msg.parts.some(p => p.text?.includes('analyze')),
+      action: 'delegate',
+      targetAgents: ['analysis_agent']
+    }
+  ]
+};
+```
+
+---
+
+## Enhanced Schema Validation
+
+The schema validation system now supports comprehensive JSON Schema features:
+
+### String Format Validation
+
+```typescript
+const emailValidator = createStringValidator({ format: 'email' });
+const urlValidator = createStringValidator({ format: 'uri' });
+const dateValidator = createStringValidator({ format: 'date' });
+const uuidValidator = createStringValidator({ format: 'uuid' });
+const ipv4Validator = createStringValidator({ format: 'ipv4' });
+const ipv6Validator = createStringValidator({ format: 'ipv6' });
+```
+
+### Number Validation Features
+
+```typescript
+const ageValidator = createNumberValidator({
+  minimum: 0,
+  maximum: 150,
+  integer: true // Must be whole number
+});
+
+const priceValidator = createNumberValidator({
+  minimum: 0,
+  exclusiveMinimum: true, // > 0, not >= 0
+  multipleOf: 0.01 // Currency precision
+});
+```
+
+### Array Validation with Unique Items
+
+```typescript
+const uniqueTagsValidator = createArrayValidator(
+  stringSchema(),
+  {
+    minItems: 1,
+    maxItems: 10,
+    uniqueItems: true // Deep equality check
+  }
+);
+```
+
+### Object Property Constraints
+
+```typescript
+const userSchema = objectSchema(
+  {
+    name: stringSchema({ minLength: 1 }),
+    email: stringSchema({ format: 'email' }),
+    age: numberSchema({ minimum: 0, integer: true })
+  },
+  ['name', 'email'], // Required fields
+  {
+    minProperties: 2,
+    maxProperties: 10,
+    additionalProperties: false
+  }
+);
+```
+
+---
+
+## Visualization System
+
+The visualization system now uses direct DOT generation instead of the graphviz npm package:
+
+### DOT Generation Approach
+
+```typescript
+import { generateAgentGraph, generateToolGraph, generateRunnerGraph } from 'jaf/visualization';
+
+// Generate visualizations with DOT
+const agentResult = await generateAgentGraph(agents, {
+  title: 'Agent Architecture',
+  outputFormat: 'png',
+  colorScheme: 'modern'
+});
+
+// DOT content is always available
+if (!agentResult.success && agentResult.graphDot) {
+  // Save DOT for manual processing
+  writeFileSync('graph.dot', agentResult.graphDot);
+  // Process manually: dot -Tpng graph.dot -o graph.png
+}
+```
+
+### Built-in Color Schemes
+
+- **default**: Professional blue-purple palette
+- **modern**: Contemporary gradients with bold fonts
+- **minimal**: Clean black-and-white design
+
+### Fallback Mechanisms
+
+1. Falls back to system Graphviz command if npm package fails
+2. Provides DOT content even if generation fails
+3. Supports manual DOT processing with standard Graphviz tools
 
 ---
 

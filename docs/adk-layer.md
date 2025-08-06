@@ -708,6 +708,18 @@ const agent = createAgent({
 
 ### Multi-Agent Patterns
 
+#### Intelligent Agent Selection
+
+The framework now includes intelligent agent selection based on keyword matching. When using the `conditional` delegation strategy, the system automatically selects the most relevant agent by:
+
+1. **Extracting keywords** from the user's message (removing common words)
+2. **Scoring each agent** based on keyword matches:
+   - +3 points for matches in agent name
+   - +2 points for matches in agent instruction
+   - +2 points for matches in tool names
+   - +1 point for matches in tool descriptions
+3. **Selecting the highest-scoring agent** to handle the request
+
 #### Hierarchical Delegation
 
 ```typescript
@@ -726,7 +738,7 @@ const reportWriter = createAgent({
   tools: [reportingTools]
 });
 
-// Create coordinator
+// Create coordinator with intelligent routing
 const coordinator = createMultiAgent(
   'research_coordinator',
   'gemini-2.0-flash',
@@ -735,7 +747,7 @@ const coordinator = createMultiAgent(
    - Send report requests to report_writer
    - Synthesize results into final output`,
   [dataAnalyst, reportWriter],
-  'conditional'
+  'conditional'  // Uses intelligent agent selection
 );
 ```
 
@@ -761,6 +773,40 @@ const parallelProcessing = createMultiAgent(
   [newsAgent, weatherAgent, stockAgent],
   'parallel'
 );
+```
+
+The parallel strategy now includes intelligent response merging that:
+- Combines responses from all agents with agent identifiers
+- Merges artifacts with agent-prefixed keys
+- Preserves individual agent contributions in the final response
+
+#### Coordination Rules
+
+You can define custom coordination rules for fine-grained control:
+
+```typescript
+const multiConfig: MultiAgentConfig = {
+  name: 'smart_coordinator',
+  model: 'gpt-4',
+  instruction: 'Coordinate based on rules',
+  tools: [],
+  subAgents: [weatherAgent, newsAgent, calcAgent],
+  delegationStrategy: 'conditional',
+  coordinationRules: [
+    {
+      condition: (message, context) => 
+        message.parts.some(p => p.text?.includes('weather')),
+      action: 'delegate',
+      targetAgents: ['weather_specialist']
+    },
+    {
+      condition: (message, context) => 
+        message.parts.some(p => p.text?.includes('calculate')),
+      action: 'parallel',
+      targetAgents: ['calculator', 'validator']
+    }
+  ]
+};
 ```
 
 ### Session Provider Selection
