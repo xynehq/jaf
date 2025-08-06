@@ -148,148 +148,363 @@ const executeAgent = async (
   context: RunContext
 ): Promise<AgentResponse> => {
   const agent = config.agent;
+  const callbacks = config.callbacks;
   let currentSession = session;
   const toolCalls: FunctionCall[] = [];
   const toolResponses: FunctionResponse[] = [];
+  let iterationCount = 0;
+  const maxIterations = config.maxLLMCalls || 10;
+  let shouldContinue = true;
+  const toolHistory: any[] = [];
+  let contextData: any[] = [];
+  let llmResponse: Content | undefined = undefined;
   
-  // Check if this is a multi-agent
-  if (isMultiAgent(agent)) {
-    return await executeMultiAgent(config, currentSession, message, context);
+  // Lifecycle: onStart
+  if (callbacks?.onStart) {
+    await callbacks.onStart(context, message, currentSession);
   }
   
-  // Call real LLM service
-  const llmResponse = await callRealLLM(agent, message, currentSession);
-  
-  // Check for function calls in the response
-  const functionCalls = getFunctionCalls(llmResponse);
-  
-  if (functionCalls.length > 0) {
-    // Execute tools
-    const toolContext = createToolContext(agent, currentSession, message);
+  try {
+    // Check if this is a multi-agent
+    if (isMultiAgent(agent)) {
+      return await executeMultiAgent(config, currentSession, message, context);
+    }
     
-    for (const functionCall of functionCalls) {
-      const tool = agent.config.tools.find(t => t.name === functionCall.name);
+    // Main iteration loop for synthesis-based execution
+    while (shouldContinue && iterationCount < maxIterations) {
+      iterationCount++;
       
-      if (tool) {
-        try {
-          const toolResult = await executeTool(tool, functionCall.args, toolContext);
+      // Iteration control: onIterationStart
+      if (callbacks?.onIterationStart) {
+        const iterationControl = await callbacks.onIterationStart(iterationCount);
+        if (iterationControl) {
+          if (iterationControl.continue === false) {
+            shouldContinue = false;
+            break;
+          }
+          if (iterationControl.maxIterations) {
+            config.maxLLMCalls = iterationControl.maxIterations;
+          }
+        }
+      }
+      
+      // Synthesis check
+      if (callbacks?.onCheckSynthesis && contextData.length > 0) {
+        const synthesisResult = await callbacks.onCheckSynthesis(currentSession, contextData);
+        if (synthesisResult && synthesisResult.complete) {
+          // Synthesis complete, generate final answer
+          const finalMessage = createUserMessage(
+            synthesisResult.answer || 'Please provide a final answer based on the context.'
+          );
+          const finalResponse = await callRealLLM(agent, finalMessage, currentSession);
+          currentSession = addMessageToSession(currentSession, finalResponse);
+          await config.sessionProvider.updateSession(currentSession);
           
-          const functionResponse: FunctionResponse = {
-            id: functionCall.id,
-            name: functionCall.name,
-            response: toolResult.data,
-            success: toolResult.success,
-            error: toolResult.error
+          const response: AgentResponse = {
+            content: finalResponse,
+            session: currentSession,
+            toolCalls,
+            toolResponses,
+            metadata: {
+              requestId: generateRequestId(),
+              agentId: agent.id,
+              llmCalls: iterationCount,
+              timestamp: new Date(),
+              executionTime: Date.now() - Date.now() // Will be calculated at the runner level
+            }
           };
           
-          toolResponses.push(functionResponse);
-          llmResponse.parts.push({
-            type: 'function_response',
-            functionResponse
-          });
+          if (callbacks?.onComplete) {
+            await callbacks.onComplete(response);
+          }
           
-          // Handle tool actions
-          if (toolContext.actions.transferToAgent) {
-            // Handle agent transfer
-            const targetAgent = agent.config.subAgents?.find(
-              sub => sub.name === toolContext.actions.transferToAgent
-            );
-            
-            if (targetAgent) {
-              const transferConfig = { ...config, agent: { ...agent, config: targetAgent } };
-              return await executeAgent(transferConfig, currentSession, message, context);
+          return response;
+        }
+      }
+      
+      // Query rewriting
+      let currentMessage = message;
+      if (callbacks?.onQueryRewrite) {
+        const rewrittenQuery = await callbacks.onQueryRewrite(
+          getMessageText(message),
+          contextData
+        );
+        if (rewrittenQuery) {
+          currentMessage = createUserMessage(rewrittenQuery);
+        }
+      }
+      
+      // LLM call with callbacks
+      let llmResponse: Content;
+      
+      if (callbacks?.onBeforeLLMCall) {
+        const llmControl = await callbacks.onBeforeLLMCall(agent, currentMessage, currentSession);
+        if (llmControl) {
+          if (llmControl.skip) {
+            // Skip LLM call, use provided response or continue
+            if (llmControl.response) {
+              llmResponse = llmControl.response;
+            } else {
+              continue;
+            }
+          } else {
+            if (llmControl.message) {
+              currentMessage = llmControl.message;
+            }
+            llmResponse = await callRealLLM(agent, currentMessage, currentSession);
+          }
+        } else {
+          llmResponse = await callRealLLM(agent, currentMessage, currentSession);
+        }
+      } else {
+        llmResponse = await callRealLLM(agent, currentMessage, currentSession);
+      }
+      
+      if (callbacks?.onAfterLLMCall) {
+        const modifiedResponse = await callbacks.onAfterLLMCall(llmResponse, currentSession);
+        if (modifiedResponse) {
+          llmResponse = modifiedResponse;
+        }
+      }
+  
+      // Check for function calls in the response
+      const functionCalls = getFunctionCalls(llmResponse);
+      
+      if (functionCalls.length > 0) {
+        // Tool selection callbacks
+        let availableTools = agent.config.tools;
+        
+        if (callbacks?.onBeforeToolSelection) {
+          const toolSelectionControl = await callbacks.onBeforeToolSelection(availableTools, contextData);
+          if (toolSelectionControl) {
+            if (toolSelectionControl.tools) {
+              availableTools = toolSelectionControl.tools;
+            }
+            if (toolSelectionControl.customSelection) {
+              // Force a specific tool selection
+              functionCalls.length = 0;
+              functionCalls.push({
+                id: generateRequestId(),
+                name: toolSelectionControl.customSelection.tool,
+                args: toolSelectionControl.customSelection.params
+              });
+            }
+          }
+        }
+        
+        // Execute tools
+        const toolContext = createToolContext(agent, currentSession, currentMessage);
+        
+        for (const functionCall of functionCalls) {
+          // Loop detection
+          if (callbacks?.onLoopDetection) {
+            const shouldSkip = await callbacks.onLoopDetection(toolHistory, functionCall.name);
+            if (shouldSkip) {
+              continue;
             }
           }
           
-          if (toolContext.actions.addArtifact) {
-            // Artifacts are handled via the actions object
+          // Track tool in history
+          toolHistory.push({
+            tool: functionCall.name,
+            params: functionCall.args,
+            timestamp: Date.now()
+          });
+          
+          if (callbacks?.onToolSelected) {
+            await callbacks.onToolSelected(functionCall.name, functionCall.args);
           }
           
-        } catch (error) {
-          const functionResponse: FunctionResponse = {
-            id: functionCall.id,
-            name: functionCall.name,
-            response: null,
-            success: false,
-            error: error instanceof Error ? error.message : 'Tool execution failed'
-          };
+          const tool = availableTools.find(t => t.name === functionCall.name);
           
-          toolResponses.push(functionResponse);
+          if (tool) {
+            try {
+              let toolParams = functionCall.args;
+              let skipExecution = false;
+              let customResult = null;
+              
+              // Before tool execution callback
+              if (callbacks?.onBeforeToolExecution) {
+                const toolControl = await callbacks.onBeforeToolExecution(tool, toolParams);
+                if (toolControl) {
+                  if (toolControl.params) {
+                    toolParams = toolControl.params;
+                  }
+                  if (toolControl.skip) {
+                    skipExecution = true;
+                  }
+                  if (toolControl.result) {
+                    customResult = toolControl.result;
+                  }
+                }
+              }
+              
+              let toolResult;
+              if (skipExecution) {
+                toolResult = customResult || { success: false, data: null };
+              } else {
+                toolResult = await executeTool(tool, toolParams, toolContext);
+              }
+              
+              // After tool execution callback
+              if (callbacks?.onAfterToolExecution) {
+                const modifiedResult = await callbacks.onAfterToolExecution(tool, toolResult);
+                if (modifiedResult) {
+                  toolResult = modifiedResult;
+                }
+              }
+              
+              // Update context data
+              if (toolResult.data && toolResult.data.contexts) {
+                const newContextItems = toolResult.data.contexts;
+                
+                if (callbacks?.onContextUpdate) {
+                  const updatedContext = await callbacks.onContextUpdate(contextData, newContextItems);
+                  if (updatedContext) {
+                    contextData = updatedContext;
+                  } else {
+                    contextData.push(...newContextItems);
+                  }
+                } else {
+                  contextData.push(...newContextItems);
+                }
+              }
+              
+              const functionResponse: FunctionResponse = {
+                id: functionCall.id,
+                name: functionCall.name,
+                response: toolResult.data,
+                success: toolResult.success,
+                error: toolResult.error
+              };
+              
+              toolResponses.push(functionResponse);
+              llmResponse.parts.push({
+                type: 'function_response',
+                functionResponse
+              });
+              
+              // Handle tool actions
+              if (toolContext.actions.transferToAgent) {
+                // Handle agent transfer
+                const targetAgent = agent.config.subAgents?.find(
+                  sub => sub.name === toolContext.actions.transferToAgent
+                );
+                
+                if (targetAgent) {
+                  const transferConfig = { ...config, agent: { ...agent, config: targetAgent } };
+                  return await executeAgent(transferConfig, currentSession, currentMessage, context);
+                }
+              }
+              
+              if (toolContext.actions.addArtifact) {
+                // Artifacts are handled via the actions object
+              }
+              
+            } catch (error) {
+              const functionResponse: FunctionResponse = {
+                id: functionCall.id,
+                name: functionCall.name,
+                response: null,
+                success: false,
+                error: error instanceof Error ? error.message : 'Tool execution failed'
+              };
+              
+              toolResponses.push(functionResponse);
+              
+              // Callback for tool error
+              if (callbacks?.onAfterToolExecution) {
+                await callbacks.onAfterToolExecution(tool, null, error as Error);
+              }
+            }
+          }
+          
+          toolCalls.push(functionCall);
         }
       }
       
-      toolCalls.push(functionCall);
-    }
-    
-    // If tools were executed, make a second LLM call to get final response with tool results
-    if (toolResponses.length > 0) {
-      // Update session with the tool calls and responses first
+      // Iteration complete callback
+      if (callbacks?.onIterationComplete) {
+        const iterationResult = await callbacks.onIterationComplete(iterationCount, toolCalls.length > 0);
+        if (iterationResult) {
+          if (iterationResult.shouldStop) {
+            shouldContinue = false;
+          } else if (iterationResult.shouldContinue) {
+            shouldContinue = true;
+          }
+        }
+      }
+      
+      // Update session after iteration
       currentSession = addMessageToSession(currentSession, llmResponse);
       
-      // Create tool response messages for each tool call (required by OpenAI format)
-      for (const toolResponse of toolResponses) {
-        const toolResultMessage: Content = {
-          role: 'tool' as any, // Tool responses must have role 'tool' for OpenAI API
-          parts: [{
-            type: 'function_response',
-            functionResponse: toolResponse
-          }],
-          metadata: {}
-        };
-        
-        // Add each tool response message to session
-        currentSession = addMessageToSession(currentSession, toolResultMessage);
+      // Check if we should continue iterating
+      if (!shouldContinue || contextData.length === 0) {
+        break;
       }
-      
-      // Create a user message asking the LLM to provide a final response
-      const followUpMessage = createUserMessage('Please provide a final response based on the tool results.');
-      
-      // Make second LLM call to get final response
-      const finalResponse = await callRealLLM(agent, followUpMessage, currentSession);
-      
-      // Update session with final response
-      currentSession = addMessageToSession(currentSession, finalResponse);
-      await config.sessionProvider.updateSession(currentSession);
-      
-      // Return the final response that includes tool results
-      return {
-        content: finalResponse,
-        session: currentSession,
-        toolCalls,
-        toolResponses,
-        metadata: {
-          requestId: generateRequestId(),
-          agentId: agent.id,
-          llmCalls: 2, // Two LLM calls made
-          timestamp: new Date()
-        }
-      };
     }
+    
+    // Fallback check
+    if (callbacks?.onFallbackRequired) {
+      const fallbackCheck = await callbacks.onFallbackRequired(contextData);
+      if (fallbackCheck && fallbackCheck.required) {
+        // Execute fallback strategy
+        // This could be implemented based on the strategy specified
+      }
+    }
+    
+    // Generate final response if we haven't returned yet
+    // Make sure we have an llmResponse before using it
+    if (!llmResponse) {
+      // Create a default response if we don't have one
+      llmResponse = createModelMessage('I was unable to find relevant information to answer your question.');
+    }
+    
+    await config.sessionProvider.updateSession(currentSession);
+    
+    const finalResponse: AgentResponse = {
+      content: llmResponse,
+      session: currentSession,
+      toolCalls,
+      toolResponses,
+      metadata: {
+        requestId: generateRequestId(),
+        agentId: agent.id,
+        llmCalls: iterationCount,
+        timestamp: new Date(),
+        executionTime: Date.now() - Date.now() // Will be calculated at the runner level
+      }
+    };
+    
+    // Lifecycle: onComplete
+    if (callbacks?.onComplete) {
+      await callbacks.onComplete(finalResponse);
+    }
+    
+    return finalResponse;
+    
+  } catch (error) {
+    // Lifecycle: onError
+    if (callbacks?.onError) {
+      await callbacks.onError(error as Error, context);
+    }
+    
+    throwAgentError(
+      `Agent execution failed: ${error instanceof Error ? error.message : String(error)}`,
+      agent.id,
+      { context }
+    );
   }
   
-  // Update session with response (no tools were called)
-  currentSession = addMessageToSession(currentSession, llmResponse);
-  await config.sessionProvider.updateSession(currentSession);
-  
-  return {
-    content: llmResponse,
-    session: currentSession,
-    toolCalls,
-    toolResponses,
-    metadata: {
-      requestId: generateRequestId(),
-      agentId: agent.id,
-      llmCalls: 1, // One LLM call made
-      timestamp: new Date()
-    }
-  };
+  // This should never be reached due to throwAgentError always throwing
+  throw new Error('Unreachable code');
 };
 
 const executeAgentStream = async function* (
   config: RunnerConfig,
   session: Session,
   message: Content,
-  context: RunContext
+  _context: RunContext
 ): AsyncGenerator<AgentEvent> {
   const agent = config.agent;
   
@@ -394,7 +609,7 @@ const mergeParallelResponses = (
 const selectBestAgent = (
   subAgents: AgentConfig[],
   message: Content,
-  context: RunContext
+  _context: RunContext
 ): AgentConfig => {
   const messageText = message.parts
     .filter(p => p.type === 'text')
@@ -783,11 +998,16 @@ const callRealLLM = async (
 // ========== Mock Tool Detection Logic Removed ==========
 // This mock logic has been removed since real LLM now handles tool calling decisions
 
-const generateCallId = (): string => {
-  return `call_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-};
+// Removed unused generateCallId function
 
 // ========== Utility Functions ==========
+
+const getMessageText = (content: Content): string => {
+  return content.parts
+    .filter(p => p.type === 'text')
+    .map(p => p.text || '')
+    .join(' ');
+};
 
 const generateRequestId = (): string => {
   // Use crypto-based ID generation for pure functional approach

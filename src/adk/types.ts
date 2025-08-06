@@ -205,6 +205,62 @@ export interface RunnerConfig {
   guardrails?: GuardrailFunction[];
   maxLLMCalls?: number;
   timeout?: number;
+  callbacks?: RunnerCallbacks;
+}
+
+export interface RunnerCallbacks {
+  // Lifecycle hooks
+  onStart?: (context: RunContext, message: Content, session: Session) => Promise<void>;
+  onComplete?: (response: AgentResponse) => Promise<void>;
+  onError?: (error: Error, context: RunContext) => Promise<void>;
+  
+  // LLM interaction hooks
+  onBeforeLLMCall?: (agent: Agent, message: Content, session: Session) => Promise<{
+    message?: Content;  // Allow message modification
+    skip?: boolean;     // Skip this LLM call
+    response?: Content; // Provide custom response instead
+  } | void>;
+  onAfterLLMCall?: (response: Content, session: Session) => Promise<Content | void>;
+  
+  // Tool execution hooks
+  onBeforeToolSelection?: (tools: Tool[], context: any) => Promise<{
+    tools?: Tool[];     // Modify available tools
+    customSelection?: { tool: string; params: any }; // Force specific tool
+  } | void>;
+  onToolSelected?: (toolName: string | null, params: any) => Promise<void>;
+  onBeforeToolExecution?: (tool: Tool, params: any) => Promise<{
+    params?: any;       // Modify parameters
+    skip?: boolean;     // Skip execution
+    result?: any;       // Provide custom result
+  } | void>;
+  onAfterToolExecution?: (tool: Tool, result: any, error?: Error) => Promise<any | void>;
+  
+  // Iteration control
+  onIterationStart?: (iteration: number) => Promise<{
+    continue?: boolean;  // Continue iterating
+    maxIterations?: number; // Modify max iterations
+  } | void>;
+  onIterationComplete?: (iteration: number, hasToolCalls: boolean) => Promise<{
+    shouldContinue?: boolean; // Force another iteration
+    shouldStop?: boolean;     // Force stop
+  } | void>;
+  
+  // Custom logic injection points
+  onCheckSynthesis?: (session: Session, context: any) => Promise<{
+    complete?: boolean;  // Is synthesis complete?
+    answer?: string;     // Synthesis answer
+    confidence?: number; // Confidence score
+  } | void>;
+  onQueryRewrite?: (originalQuery: string, context: any) => Promise<string | null>;
+  onLoopDetection?: (toolHistory: any[], currentTool: string) => Promise<boolean>;
+  onFallbackRequired?: (context: any) => Promise<{
+    required: boolean;
+    strategy?: string;
+  } | void>;
+  
+  // Context management
+  onContextUpdate?: (context: any[], newItems: any[]) => Promise<any[] | void>;
+  onExcludedIdsUpdate?: (excludedIds: string[], newIds: string[]) => Promise<string[] | void>;
 }
 
 export interface RunContext {
