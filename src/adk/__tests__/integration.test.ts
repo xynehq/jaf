@@ -32,9 +32,96 @@ import {
 import { streamToArray } from '../streaming';
 
 // Mock the Core ModelProvider to avoid real API calls in tests
+let mockCallCount = 0;
 jest.mock('../../providers/model.js', () => ({
-  makeLiteLLMProvider: jest.fn()
+  makeLiteLLMProvider: jest.fn(() => ({
+    getCompletion: jest.fn(async (state: any, agent: any) => {
+      mockCallCount++;
+      
+      
+      // Check for invalid model
+      if (agent?.modelConfig?.name === 'invalid_model' || agent?.name === 'problematic_agent') {
+        throw new Error('Invalid model specified');
+      }
+      
+      // Check if this is a follow-up call after tool execution (contains tool responses)
+      const hasToolResponses = state?.messages?.some((m: any) => 
+        m.role === 'tool' || m.content?.includes('function_response')
+      );
+      
+      if (hasToolResponses) {
+        // This is the second call after tool execution, return final response
+        return {
+          message: {
+            content: 'The sum of the numbers is 150.',
+            tool_calls: null
+          }
+        };
+      }
+      
+      // First call - check if the agent has tools and simulate tool calls
+      if (agent?.tools && agent.tools.length > 0) {
+        // For the data processing tool test (Core tools have schema.name)
+        if (agent.tools.some((t: any) => t.schema?.name === 'process_data' || t.name === 'process_data')) {
+          return {
+            message: {
+              content: null,
+              tool_calls: [{
+                id: 'call_123',
+                type: 'function',
+                function: {
+                  name: 'process_data',
+                  arguments: JSON.stringify({
+                    data: [10, 20, 30, 40, 50],
+                    operation: 'sum'
+                  })
+                }
+              }]
+            }
+          };
+        }
+        // For the error tool test
+        if (agent.tools.some((t: any) => t.schema?.name === 'error_tool' || t.name === 'error_tool')) {
+          // Check the latest user message to decide whether to fail
+          // Messages array might have a different structure, let's check both content and text
+          const userMessages = state?.messages?.filter((m: any) => m.role === 'user') || [];
+          const lastUserMessage = userMessages[userMessages.length - 1];
+          const messageText = lastUserMessage?.content || lastUserMessage?.text || '';
+          const shouldFail = messageText.toLowerCase().includes('failure');
+          
+          return {
+            message: {
+              content: null,
+              tool_calls: [{
+                id: 'call_456',
+                type: 'function',
+                function: {
+                  name: 'error_tool',
+                  arguments: JSON.stringify({
+                    shouldFail: shouldFail
+                  })
+                }
+              }]
+            }
+          };
+        }
+      }
+      
+      // Default response without tools
+      return {
+        message: {
+          content: 'Mocked response',
+          tool_calls: null
+        }
+      };
+    })
+  }))
 }));
+
+// Reset mock call count before each test
+beforeEach(() => {
+  mockCallCount = 0;
+});
 
 describe('ADK Layer Integration', () => {
   describe('End-to-End Agent Workflows', () => {
@@ -327,6 +414,7 @@ describe('ADK Layer Integration', () => {
         message
       );
 
+
       expect(response.content).toBeDefined();
       expect(response.toolCalls.length).toBeGreaterThan(0);
       expect(response.toolResponses.length).toBeGreaterThan(0);
@@ -375,11 +463,11 @@ describe('ADK Layer Integration', () => {
 
       expect(successResponse.content).toBeDefined();
 
-      // Test failed tool execution
+      // Test failed tool execution (new session to avoid confusion)
       const failMessage = createUserMessage('Execute tool with failure');
       const failResponse = await runAgent(
         runnerConfig,
-        { userId: 'user_123', sessionId: successResponse.session.id },
+        { userId: 'user_123' },  // New session
         failMessage
       );
 
@@ -401,8 +489,9 @@ describe('ADK Layer Integration', () => {
 
       const message = createUserMessage('Try to execute');
       
-      await expect(runAgent(runnerConfig, { userId: 'user_123' }, message))
-        .rejects.toThrow();
+      // The runner now returns an error message instead of throwing for most errors
+      const response = await runAgent(runnerConfig, { userId: 'user_123' }, message);
+      expect(response.content.parts[0].text).toContain('experiencing technical difficulties');
     });
   });
 

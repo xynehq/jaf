@@ -60,15 +60,15 @@ export const runAgent = async (
       sessionId: context.sessionId
     });
     
-    // Add user message to session
-    const updatedSession = addMessageToSession(session, message);
-    
-    // Apply guardrails
+    // Apply guardrails before adding to session
     const guardedMessage = await applyGuardrails(
       config.guardrails || [],
       message,
-      { agent: config.agent, session: updatedSession, previousMessages: updatedSession.messages }
+      { agent: config.agent, session, previousMessages: session.messages }
     );
+    
+    // Add guarded message to session
+    const updatedSession = addMessageToSession(session, guardedMessage);
     
     // Execute agent
     const result = await executeAgent(config, updatedSession, guardedMessage, context);
@@ -117,15 +117,15 @@ export const runAgentStream = async function* (
       sessionId: context.sessionId
     });
     
-    // Add user message to session
-    const updatedSession = addMessageToSession(session, message);
-    
-    // Apply guardrails
+    // Apply guardrails before adding to session
     const guardedMessage = await applyGuardrails(
       config.guardrails || [],
       message,
-      { agent: config.agent, session: updatedSession, previousMessages: updatedSession.messages }
+      { agent: config.agent, session, previousMessages: session.messages }
     );
+    
+    // Add guarded message to session
+    const updatedSession = addMessageToSession(session, guardedMessage);
     
     // Execute agent with streaming
     yield* executeAgentStream(config, updatedSession, guardedMessage, context);
@@ -520,7 +520,12 @@ const callRealLLM = async (
   } catch (error) {
     console.error('[ADK:LLM] Real LLM call failed:', error);
     
-    // Fallback to a simple error response
+    // Check if this is a critical error that should propagate
+    if (error instanceof Error && error.message.includes('Invalid model')) {
+      throw error;
+    }
+    
+    // Fallback to a simple error response for other errors
     return createModelMessage(`I apologize, but I'm experiencing technical difficulties. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 };

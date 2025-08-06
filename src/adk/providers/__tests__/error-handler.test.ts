@@ -238,7 +238,13 @@ describe('LLM Error Handling System', () => {
 
       const retryFn = withLLMRetry(mockFn as any, { maxRetries: 3 }, 'test', 'model');
 
-      await expect(retryFn()).rejects.toThrow('Invalid API key');
+      try {
+        await retryFn();
+        fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).toBe('Invalid API key');
+        expect(error.code).toBe(LLM_ERROR_TYPES.INVALID_API_KEY);
+      }
       expect(mockFn).toHaveBeenCalledTimes(1);
     });
 
@@ -248,7 +254,13 @@ describe('LLM Error Handling System', () => {
 
       const retryFn = withLLMRetry(mockFn as any, { maxRetries: 2 }, 'test', 'model');
 
-      await expect(retryFn()).rejects.toThrow('Rate limit exceeded');
+      try {
+        await retryFn();
+        fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).toBe('Rate limit exceeded');
+        expect(error.code).toBe(LLM_ERROR_TYPES.RATE_LIMITED);
+      }
       expect(mockFn).toHaveBeenCalledTimes(3); // Initial + 2 retries
     });
   });
@@ -269,7 +281,13 @@ describe('LLM Error Handling System', () => {
       );
       const timeoutFn = withLLMTimeout(mockFn as any, 500, 'test', 'model');
 
-      await expect(timeoutFn()).rejects.toThrow('LLM request timed out after 500ms');
+      try {
+        await timeoutFn();
+        fail('Should have timed out');
+      } catch (error: any) {
+        expect(error.message).toBe('LLM request timed out after 500ms');
+        expect(error.code).toBe(LLM_ERROR_TYPES.TIMEOUT);
+      }
     });
   });
 
@@ -297,11 +315,28 @@ describe('LLM Error Handling System', () => {
       }, 'test', 'model');
 
       // First two failures should still call the function
-      await expect(circuitFn()).rejects.toThrow('Service error');
-      await expect(circuitFn()).rejects.toThrow('Service error');
+      try {
+        await circuitFn();
+        fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).toContain('Service error');
+      }
+      
+      try {
+        await circuitFn();
+        fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).toContain('Service error');
+      }
 
       // Third call should be rejected by circuit breaker
-      await expect(circuitFn()).rejects.toThrow('Circuit breaker open');
+      try {
+        await circuitFn();
+        fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).toContain('Circuit breaker open');
+        expect(error.code).toBe(LLM_ERROR_TYPES.SERVICE_UNAVAILABLE);
+      }
       
       // Function should only have been called twice
       expect(mockFn).toHaveBeenCalledTimes(2);
@@ -322,9 +357,27 @@ describe('LLM Error Handling System', () => {
       }, 'test', 'model');
 
       // Trigger circuit breaker
-      await expect(circuitFn()).rejects.toThrow('Service error');
-      await expect(circuitFn()).rejects.toThrow('Service error');
-      await expect(circuitFn()).rejects.toThrow('Circuit breaker open');
+      try {
+        await circuitFn();
+        fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).toContain('Service error');
+      }
+      
+      try {
+        await circuitFn();
+        fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).toContain('Service error');
+      }
+      
+      try {
+        await circuitFn();
+        fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).toContain('Circuit breaker open');
+        expect(error.code).toBe(LLM_ERROR_TYPES.SERVICE_UNAVAILABLE);
+      }
 
       // Fast forward time to reset circuit
       jest.advanceTimersByTime(1500);
@@ -366,9 +419,14 @@ describe('LLM Error Handling System', () => {
       const primaryFn = jest.fn<() => Promise<string>>().mockRejectedValue(new Error('Auth error'));
       const fallbackFn = jest.fn<() => Promise<string>>().mockResolvedValue('fallback result');
       const shouldFallback = jest.fn<(error: any) => boolean>().mockReturnValue(false);
-      const strategyFn = createFallbackStrategy(primaryFn as any, fallbackFn as any, shouldFallback as any);
+      const strategyFn = createFallbackStrategy(primaryFn as any, fallbackFn as any, shouldFallback);
 
-      await expect(strategyFn()).rejects.toThrow('Auth error');
+      try {
+        await strategyFn();
+        fail('Should have thrown');
+      } catch (error: any) {
+        expect(error.message).toContain('Auth error');
+      }
       expect(fallbackFn).not.toHaveBeenCalled();
     });
   });

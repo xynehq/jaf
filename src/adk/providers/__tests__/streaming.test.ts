@@ -2,9 +2,56 @@
  * Tests for real LLM streaming implementation
  */
 
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { createAdkLLMService } from '../llm-service.js';
 import { createAgent, createUserMessage } from '../../index.js';
 import { createInMemorySessionProvider } from '../../sessions/index.js';
+
+// Mock OpenAI for error test
+jest.mock('openai', () => ({
+  __esModule: true,
+  default: class MockOpenAI {
+    constructor(config: any) {
+      this.apiKey = config.apiKey;
+    }
+    
+    apiKey: string;
+    
+    chat = {
+      completions: {
+        create: jest.fn().mockImplementation(async (params: any) => {
+          if (this.apiKey === 'invalid-key') {
+            throw new Error('Invalid API key provided');
+          }
+          
+          // For streaming responses
+          if (params.stream) {
+            return {
+              async *[Symbol.asyncIterator]() {
+                yield {
+                  choices: [{
+                    delta: {
+                      content: 'Test response'
+                    }
+                  }]
+                };
+              }
+            };
+          } else {
+            // Non-streaming response
+            return {
+              choices: [{
+                message: {
+                  content: 'Test response'
+                }
+              }]
+            };
+          }
+        })
+      }
+    };
+  }
+}));
 
 describe('Real LLM Streaming', () => {
   // Skip tests if no API key is available
@@ -73,7 +120,7 @@ describe('Real LLM Streaming', () => {
             type: 'string',
             description: 'The math expression to evaluate'
           }],
-          execute: async (params) => ({ success: true, data: eval(params.expression) })
+          execute: async (params) => ({ success: true, data: eval((params as any).expression) })
         }]
       });
 
@@ -148,6 +195,12 @@ describe('Real LLM Streaming', () => {
 
   describe('Streaming Error Handling', () => {
     it('should handle streaming errors gracefully', async () => {
+      // Set global config for streaming client
+      (global as any).__adk_llm_config = {
+        provider: 'openai',
+        apiKey: 'invalid-key'
+      };
+      
       const service = createAdkLLMService({
         provider: 'openai',
         apiKey: 'invalid-key'
@@ -169,11 +222,19 @@ describe('Real LLM Streaming', () => {
       const message = createUserMessage('Test');
       const stream = service.generateStreamingResponse(agent, session, message);
       
-      await expect(async () => {
+      let errorThrown = false;
+      try {
         for await (const chunk of stream) {
           // Should throw before yielding any chunks
         }
-      }).rejects.toThrow();
+      } catch (error: any) {
+        errorThrown = true;
+        // ADK errors might be plain objects
+        expect(error).toBeDefined();
+        expect(error.message || error.toString()).toContain('Invalid API key');
+      }
+      
+      expect(errorThrown).toBe(true);
     });
   });
 });

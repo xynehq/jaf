@@ -32,6 +32,63 @@ jest.mock('../error-handler.js', () => ({
   }))
 }));
 
+// Mock OpenAI SDK
+let mockOpenAIError: Error | null = null;
+const mockOpenAICreate = jest.fn().mockImplementation(async (params: any) => {
+  if (mockOpenAIError) {
+    throw mockOpenAIError;
+  }
+  
+  if (params.stream) {
+    // Return a mock async iterator for streaming
+    return {
+      async *[Symbol.asyncIterator]() {
+        yield {
+          choices: [{
+            delta: {
+              content: 'Hello'
+            }
+          }]
+        };
+        yield {
+          choices: [{
+            delta: {
+              content: ' there!'
+            }
+          }]
+        };
+      }
+    };
+  } else {
+    // Non-streaming response
+    return {
+      choices: [{
+        message: {
+          content: 'Hello there!',
+          tool_calls: null
+        }
+      }]
+    };
+  }
+});
+
+jest.mock('openai', () => ({
+  __esModule: true,
+  default: class MockOpenAI {
+    constructor(config: any) {
+      this.baseURL = config.baseURL || 'https://api.openai.com/v1';
+    }
+    
+    baseURL: string;
+    
+    chat = {
+      completions: {
+        create: mockOpenAICreate
+      }
+    };
+  }
+}));
+
 describe('LLM Service Bridge', () => {
   let mockModelProvider: any;
   let testAgent: Agent;
@@ -39,12 +96,16 @@ describe('LLM Service Bridge', () => {
   let testMessage: Content;
 
   beforeEach(() => {
+    // Reset mocks
+    mockOpenAIError = null;
+    
     // Create mock model provider
     mockModelProvider = {
       getCompletion: jest.fn()
     };
 
     // Mock the makeLiteLLMProvider to return our mock
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { makeLiteLLMProvider } = require('../../../providers/model.js');
     (makeLiteLLMProvider as jest.Mock).mockReturnValue(mockModelProvider);
 
@@ -264,14 +325,13 @@ describe('LLM Service Bridge', () => {
 
     it('should handle streaming errors', async () => {
       const config: AdkLLMServiceConfig = {
-        provider: 'litellm',
-        baseUrl: 'http://localhost:4000',
+        provider: 'openai',
         apiKey: 'test-key',
         defaultModel: 'gpt-4'
       };
 
-      // Mock LLM error
-      mockModelProvider.getCompletion.mockRejectedValue(new Error('Connection timeout'));
+      // Mock OpenAI streaming error
+      mockOpenAIError = new Error('Connection timeout');
 
       const service = createAdkLLMService(config);
       const streamGenerator = service.generateStreamingResponse(testAgent, testSession, testMessage);
