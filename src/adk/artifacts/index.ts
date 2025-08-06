@@ -249,8 +249,9 @@ export const createRedisArtifactStorage = (config: {
         if (value) {
           try {
             artifacts.push(JSON.parse(value));
-          } catch {
-            // Skip invalid artifacts
+          } catch (error) {
+            // Log error but continue with other artifacts
+            console.error(`[Artifacts] Failed to parse artifact: ${error instanceof Error ? error.message : 'Unknown error'}`);
           }
         }
       }

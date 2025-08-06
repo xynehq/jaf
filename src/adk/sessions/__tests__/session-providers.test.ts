@@ -413,8 +413,9 @@ describe('Session Providers', () => {
       try {
         require('ioredis');
         ioredisAvailable = true;
-      } catch {
+      } catch (error) {
         ioredisAvailable = false;
+        // Expected when ioredis is not installed
       }
       
       // Skip this test if ioredis is actually installed
@@ -498,8 +499,9 @@ describe('Session Providers', () => {
       try {
         require('pg');
         pgAvailable = true;
-      } catch {
+      } catch (error) {
         pgAvailable = false;
+        // Expected when pg is not installed
       }
       
       // Skip this test if pg is actually installed

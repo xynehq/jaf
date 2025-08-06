@@ -42,7 +42,7 @@ import { getOrCreateSession, addMessageToSession, addArtifactToSession } from '.
 import { executeTool } from '../tools';
 import { createModelMessage, getFunctionCalls, createUserMessage } from '../content';
 import { createAdkLLMService } from '../providers/llm-service.js';
-import { createAdkLLMConfigFromEnvironment, createAdkLLMServiceConfig } from '../config/llm-config.js';
+import { createAdkLLMConfigFromEnvironment } from '../config/llm-config.js';
 
 // ========== Core Runner Functions ==========
 
@@ -296,7 +296,12 @@ const executeAgentStream = async function* (
   try {
     // Create LLM service instance with environment-based configuration
     const llmConfig = createAdkLLMConfigFromEnvironment();
-    const llmService = createAdkLLMService(createAdkLLMServiceConfig(llmConfig));
+    const llmService = createAdkLLMService({
+      provider: llmConfig.provider,
+      baseUrl: llmConfig.baseUrl,
+      apiKey: llmConfig.apiKey,
+      defaultModel: llmConfig.defaultModel?.toString()
+    });
     
     // Call real streaming LLM
     const streamGenerator = llmService.generateStreamingResponse(agent, session, message, {
@@ -326,7 +331,7 @@ const executeAgentStream = async function* (
   } catch (error) {
     console.error('[ADK:STREAM] Real streaming failed:', error);
     
-    // Fallback to error message
+    // Yield error event but don't throw - streaming should complete gracefully
     yield createAgentEvent('error', {
       error: `Streaming error: ${error instanceof Error ? error.message : 'Unknown error'}`
     });
@@ -752,7 +757,12 @@ const callRealLLM = async (
   try {
     // Create LLM service instance with environment-based configuration
     const llmConfig = createAdkLLMConfigFromEnvironment();
-    const llmService = createAdkLLMService(createAdkLLMServiceConfig(llmConfig));
+    const llmService = createAdkLLMService({
+      provider: llmConfig.provider,
+      baseUrl: llmConfig.baseUrl,
+      apiKey: llmConfig.apiKey,
+      defaultModel: llmConfig.defaultModel?.toString()
+    });
     
     // Call real LLM
     const response = await llmService.generateResponse(agent, session, message, {
@@ -765,13 +775,8 @@ const callRealLLM = async (
   } catch (error) {
     console.error('[ADK:LLM] Real LLM call failed:', error);
     
-    // Check if this is a critical error that should propagate
-    if (error instanceof Error && error.message.includes('Invalid model')) {
-      throw error;
-    }
-    
-    // Fallback to a simple error response for other errors
-    return createModelMessage(`I apologize, but I'm experiencing technical difficulties. Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    // Always propagate errors for proper handling
+    throw error;
   }
 };
 

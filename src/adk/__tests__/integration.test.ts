@@ -489,9 +489,8 @@ describe('ADK Layer Integration', () => {
 
       const message = createUserMessage('Try to execute');
       
-      // The runner now returns an error message instead of throwing for most errors
-      const response = await runAgent(runnerConfig, { userId: 'user_123' }, message);
-      expect(response.content.parts[0].text).toContain('experiencing technical difficulties');
+      // The runner now throws errors for proper handling
+      await expect(runAgent(runnerConfig, { userId: 'user_123' }, message)).rejects.toThrow();
     });
   });
 

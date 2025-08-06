@@ -179,13 +179,13 @@ describe('Artifact Storage System', () => {
             port: 6379,
             keyPrefix: 'test:artifacts:'
           });
-        } catch {
+        } catch (error) {
           // Connection failed, skip tests
-          console.log('Redis connection failed - skipping tests');
+          console.log('Redis connection failed - skipping tests:', error instanceof Error ? error.message : 'Unknown error');
         }
-      } catch {
+      } catch (error) {
         // ioredis not available, skip tests
-        console.log('ioredis not installed - skipping tests');
+        console.log('ioredis not installed - skipping tests:', error instanceof Error ? error.message : 'Unknown error');
       }
     });
     
@@ -193,8 +193,9 @@ describe('Artifact Storage System', () => {
       if (storage && redisConnected) {
         try {
           await storage.clear(testSessionId);
-        } catch {
-          // Ignore cleanup errors
+        } catch (error) {
+          // Log but ignore cleanup errors
+          console.log('Cleanup error (ignored):', error instanceof Error ? error.message : 'Unknown error');
         }
       }
     });
@@ -242,8 +243,9 @@ describe('Artifact Storage System', () => {
           connectionString,
           tableName: 'test_artifacts'
         });
-      } catch {
+      } catch (error) {
         // PostgreSQL not available, skip tests
+        console.log('PostgreSQL not available - skipping tests:', error instanceof Error ? error.message : 'Unknown error');
       }
     });
     

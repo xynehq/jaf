@@ -7,7 +7,7 @@
 import { ModelProvider } from '../../core/types.js';
 import { makeLiteLLMProvider } from '../../providers/model.js';
 import { withLLMRetry, withLLMTimeout, classifyLLMError, createLLMErrorLogger } from './error-handler.js';
-import { convertAdkToolToCoreTool, convertAdkModelToCoreModel as convertModelToCoreModel } from './type-converters.js';
+import { convertAdkToolToCoreTool, convertAdkModelToCoreModel as convertModelToCoreModel, safeJsonParse } from './type-converters.js';
 import {
   Agent,
   Content,
@@ -537,7 +537,7 @@ const convertCoreMessageToAdkContent = (coreResponse: any): Content => {
         functionCall: {
           id: toolCall.id,
           name: toolCall.function.name,
-          args: JSON.parse(toolCall.function.arguments)
+          args: safeJsonParse(toolCall.function.arguments)
         }
       });
     }
@@ -558,7 +558,7 @@ const extractFunctionCallsFromCoreResponse = (coreResponse: any): FunctionCall[]
   return coreResponse.message.tool_calls.map((toolCall: any) => ({
     id: toolCall.id,
     name: toolCall.function.name,
-    args: JSON.parse(toolCall.function.arguments)
+    args: safeJsonParse(toolCall.function.arguments)
   }));
 };
 
