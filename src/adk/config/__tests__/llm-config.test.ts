@@ -326,7 +326,7 @@ describe('LLM Configuration System', () => {
   describe('Model Name Mapping', () => {
     it('should map ADK models to provider models', () => {
       expect(mapAdkModelToProviderModel(Model.GPT_4)).toBe('gpt-4');
-      expect(mapAdkModelToProviderModel(Model.CLAUDE_3_SONNET)).toBe('claude-3-sonnet');
+      expect(mapAdkModelToProviderModel(Model.CLAUDE_3_5_SONNET_LATEST)).toBe('claude-3-5-sonnet-latest');
       expect(mapAdkModelToProviderModel(Model.GEMINI_1_5_PRO)).toBe('gemini-1.5-pro');
       expect(mapAdkModelToProviderModel('custom-model')).toBe('custom-model');
     });

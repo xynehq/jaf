@@ -24,7 +24,9 @@ const calculatorTool: Tool = {
   execute: async (params, context) => {
     const expression = params.expression as string;
     try {
-      const result = eval(expression);
+      // Use safe math evaluator instead of eval
+      const { evaluateMathExpression } = require('../../src/utils/safe-math');
+      const result = evaluateMathExpression(expression);
       return {
         success: true,
         data: result.toString()

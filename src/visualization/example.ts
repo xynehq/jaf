@@ -29,8 +29,10 @@ const exampleCalculatorTool: Tool = {
   execute: async (params, context) => {
     const expression = params.expression as string;
     try {
-      // Simple calculator (in real implementation, use safer evaluation)
-      const result = eval(expression);
+      // Use safe math evaluator instead of eval
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { evaluateMathExpression } = require('../utils/safe-math');
+      const result = evaluateMathExpression(expression);
       return {
         success: true,
         data: result.toString()

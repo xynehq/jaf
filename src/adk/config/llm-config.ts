@@ -414,12 +414,12 @@ export const mapAdkModelToProviderModel = (adkModel: Model | string): string => 
       return 'gpt-4o';
     case Model.GPT_3_5_TURBO:
       return 'gpt-3.5-turbo';
-    case Model.CLAUDE_3_OPUS:
-      return 'claude-3-opus';
-    case Model.CLAUDE_3_SONNET:
-      return 'claude-3-sonnet';
-    case Model.CLAUDE_3_HAIKU:
-      return 'claude-3-haiku';
+    case Model.CLAUDE_3_OPUS_20240229:
+      return 'claude-3-opus-20240229';
+    case Model.CLAUDE_3_5_SONNET_LATEST:
+      return 'claude-3-5-sonnet-latest';
+    case Model.CLAUDE_3_HAIKU_20240307:
+      return 'claude-3-haiku-20240307';
     default:
       return 'gpt-4o';
   }

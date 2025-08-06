@@ -270,32 +270,43 @@ export const convertCoreToolToAdkTool = (coreTool: CoreTool<any, any>): Tool => 
 // ========== Model Conversions ==========
 
 export const convertAdkModelToCoreModel = (adkModel: Model | string): string => {
-  if (typeof adkModel === 'string') {
-    return adkModel;
-  }
-  
+  // Map specific model enum values to their Core equivalents
   switch (adkModel) {
     case Model.GEMINI_2_0_FLASH:
+    case 'gemini-2.0-flash':
       return 'gemini-2.0-flash';
     case Model.GEMINI_1_5_PRO:
+    case 'gemini-1.5-pro':
       return 'gemini-1.5-pro';
     case Model.GEMINI_1_5_FLASH:
+    case 'gemini-1.5-flash':
       return 'gemini-1.5-flash';
     case Model.GPT_4_TURBO:
+    case 'gpt-4-turbo':
       return 'gpt-4-turbo';
     case Model.GPT_4:
+    case 'gpt-4':
       return 'gpt-4';
     case Model.GPT_3_5_TURBO:
+    case 'gpt-3.5-turbo':
       return 'gpt-3.5-turbo';
-    case Model.CLAUDE_3_OPUS:
+    case Model.CLAUDE_3_OPUS_20240229:
+    case 'claude-3-opus-20240229':
       return 'claude-3-opus';
-    case Model.CLAUDE_3_SONNET:
+    case Model.CLAUDE_3_5_SONNET_LATEST:
+    case 'claude-3-5-sonnet-latest':
       return 'claude-3-sonnet';
-    case Model.CLAUDE_3_HAIKU:
+    case Model.CLAUDE_3_HAIKU_20240307:
+    case 'claude-3-haiku-20240307':
       return 'claude-3-haiku';
     case Model.CUSTOM:
+    case 'custom':
       return 'gpt-4o';
     default:
+      // For any other string model, return as-is
+      if (typeof adkModel === 'string') {
+        return adkModel;
+      }
       return 'gpt-4o';
   }
 };
@@ -315,11 +326,15 @@ export const convertCoreModelToAdkModel = (coreModel: string): Model => {
     case 'gpt-3.5-turbo':
       return Model.GPT_3_5_TURBO;
     case 'claude-3-opus':
-      return Model.CLAUDE_3_OPUS;
+    case 'claude-3-opus-20240229':
+      return Model.CLAUDE_3_OPUS_20240229;
     case 'claude-3-sonnet':
-      return Model.CLAUDE_3_SONNET;
+    case 'claude-3-5-sonnet':
+    case 'claude-3-5-sonnet-latest':
+      return Model.CLAUDE_3_5_SONNET_LATEST;
     case 'claude-3-haiku':
-      return Model.CLAUDE_3_HAIKU;
+    case 'claude-3-haiku-20240307':
+      return Model.CLAUDE_3_HAIKU_20240307;
     default:
       return Model.CUSTOM;
   }

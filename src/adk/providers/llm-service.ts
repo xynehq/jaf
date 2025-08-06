@@ -51,14 +51,14 @@ export type AdkLLMService = {
     agent: Agent,
     session: Session,
     message: Content,
-    config?: { modelOverride?: string; temperature?: number; maxTokens?: number }
+    requestConfig?: { modelOverride?: string; temperature?: number; maxTokens?: number }
   ) => Promise<AdkLLMResponse>;
   
   generateStreamingResponse: (
     agent: Agent,
     session: Session,
     message: Content,
-    config?: { modelOverride?: string; temperature?: number; maxTokens?: number }
+    requestConfig?: { modelOverride?: string; temperature?: number; maxTokens?: number }
   ) => AsyncGenerator<AdkLLMStreamChunk>;
 };
 
@@ -121,51 +121,32 @@ export const createAdkLLMService = (config: AdkLLMServiceConfig): AdkLLMService 
 // ========== Core Provider Creation ==========
 
 const createCoreProvider = (config: AdkLLMServiceConfig): ModelProvider<any> => {
-  console.log('🏗️ [LLM-DEBUG] Creating Core Provider...');
-  console.log('🏗️ [LLM-DEBUG] Config:', {
-    provider: config.provider,
-    baseUrl: config.baseUrl,
-    apiKey: config.apiKey ? `${config.apiKey.substring(0, 10)}...` : 'NOT SET',
-    defaultModel: config.defaultModel
-  });
-  console.log('🏗️ [LLM-DEBUG] Environment variables:', {
-    OPENAI_API_KEY: process.env.OPENAI_API_KEY ? `${process.env.OPENAI_API_KEY.substring(0, 10)}...` : 'NOT SET',
-    LITELLM_URL: process.env.LITELLM_URL || 'NOT SET'
-  });
 
   // Store config for streaming
   (global as any).__adk_llm_config = config;
 
   switch (config.provider) {
-    case 'litellm':
+    case 'litellm': {
       const litellmUrl = config.baseUrl || process.env.LITELLM_URL || 'http://localhost:4000';
       const litellmKey = config.apiKey || process.env.LITELLM_API_KEY || 'anything';
-      console.log('🔗 [LLM-DEBUG] Creating LiteLLM provider with:', { url: litellmUrl, key: `${litellmKey.substring(0, 10)}...` });
+      // console.log('🔗 [LLM-DEBUG] Creating LiteLLM provider with:', { url: litellmUrl, key: `${litellmKey.substring(0, 10)}...` });
       return makeLiteLLMProvider(litellmUrl, litellmKey);
+    }
     
-    case 'openai':
+    case 'openai': {
       const openaiKey = config.apiKey || process.env.OPENAI_API_KEY || '';
-      console.log('🔗 [LLM-DEBUG] Creating OpenAI provider via LiteLLM with:', { 
-        url: 'https://api.openai.com/v1', 
-        key: openaiKey ? `${openaiKey.substring(0, 10)}...` : 'EMPTY' 
-      });
       return makeLiteLLMProvider('https://api.openai.com/v1', openaiKey);
+    }
     
-    case 'anthropic':
+    case 'anthropic': {
       const anthropicKey = config.apiKey || process.env.ANTHROPIC_API_KEY || '';
-      console.log('🔗 [LLM-DEBUG] Creating Anthropic provider via LiteLLM with:', { 
-        url: 'https://api.anthropic.com', 
-        key: anthropicKey ? `${anthropicKey.substring(0, 10)}...` : 'EMPTY' 
-      });
       return makeLiteLLMProvider('https://api.anthropic.com', anthropicKey);
+    }
     
-    case 'google':
+    case 'google': {
       const googleKey = config.apiKey || process.env.GOOGLE_API_KEY || '';
-      console.log('🔗 [LLM-DEBUG] Creating Google provider via LiteLLM with:', { 
-        url: 'https://generativelanguage.googleapis.com/v1beta', 
-        key: googleKey ? `${googleKey.substring(0, 10)}...` : 'EMPTY' 
-      });
       return makeLiteLLMProvider('https://generativelanguage.googleapis.com/v1beta', googleKey);
+    }
     
     default:
       throw new Error(`Unsupported provider: ${config.provider}`);
@@ -181,51 +162,28 @@ const createGenerateResponse = (coreProvider: ModelProvider<any>) => {
     message: Content,
     config?: { modelOverride?: string; temperature?: number; maxTokens?: number }
   ): Promise<AdkLLMResponse> => {
-    console.log('🚀 [LLM-DEBUG] Starting API call...');
-    console.log('📤 [LLM-DEBUG] Agent:', { name: agent.config.name, model: agent.config.model });
-    console.log('📤 [LLM-DEBUG] Message:', { role: message.role, text: message.parts.map(p => p.text).join('') });
-    console.log('📤 [LLM-DEBUG] Config:', config);
+    // console.log('🚀 [LLM-DEBUG] Starting API call...');
+    // console.log('📤 [LLM-DEBUG] Agent:', { name: agent.config.name, model: agent.config.model });
+    // console.log('📤 [LLM-DEBUG] Message:', { role: message.role, text: message.parts.map(p => p.text).join('') });
+    // console.log('📤 [LLM-DEBUG] Config:', config);
     
     // Convert ADK types to Core types
     const coreState = convertAdkSessionToCoreState(session, message);
     const coreAgent = convertAdkAgentToCoreAgent(agent);
     const coreConfig = convertAdkConfigToCoreConfig(config, agent);
     
-    console.log('🔄 [LLM-DEBUG] Converted Core State:', {
-      messages: coreState.messages.length,
-      currentAgent: coreState.currentAgentName,
-      model: coreConfig?.name
-    });
-    console.log('🔄 [LLM-DEBUG] Core Config:', coreConfig);
+    // console.log('📡 [LLM-DEBUG] Calling coreProvider.getCompletion...');
     
-    try {
-      console.log('📡 [LLM-DEBUG] Calling coreProvider.getCompletion...');
-      
-      // Call Core ModelProvider
-      const coreResponse = await coreProvider.getCompletion(coreState, coreAgent, coreConfig);
-      
-      console.log('📥 [LLM-DEBUG] Raw Core Response:', coreResponse);
-      console.log('✅ [LLM-DEBUG] API call successful!');
-      
-      // Convert Core response back to ADK format
-      const adkResponse = convertCoreResponseToAdkResponse(coreResponse, config?.modelOverride || agent.config.model.toString());
-      
-      console.log('🔄 [LLM-DEBUG] Converted ADK Response:', {
-        contentLength: adkResponse.content.parts.map(p => p.text?.length || 0),
-        functionCalls: adkResponse.functionCalls.length,
-        metadata: adkResponse.metadata
-      });
-      
-      return adkResponse;
-    } catch (error) {
-      console.error('❌ [LLM-DEBUG] API call failed:', error);
-      console.error('❌ [LLM-DEBUG] Error details:', {
-        name: (error as any)?.name,
-        message: (error as any)?.message,
-        stack: (error as any)?.stack?.split('\n').slice(0, 5).join('\n')
-      });
-      throw error;
-    }
+    // Call Core ModelProvider
+    const coreResponse = await coreProvider.getCompletion(coreState, coreAgent, coreConfig);
+    
+    // console.log('📥 [LLM-DEBUG] Raw Core Response:', coreResponse);
+    // console.log('✅ [LLM-DEBUG] API call successful!');
+    
+    // Convert Core response back to ADK format
+    const adkResponse = convertCoreResponseToAdkResponse(coreResponse, config?.modelOverride || agent.config.model.toString());
+    
+    return adkResponse;
   };
 };
 
@@ -238,7 +196,7 @@ const createGenerateStreamingResponse = (coreProvider: ModelProvider<any>) => {
     message: Content,
     config?: { modelOverride?: string; temperature?: number; maxTokens?: number }
   ): AsyncGenerator<AdkLLMStreamChunk> {
-    console.log('🌊 [LLM-DEBUG] Starting streaming API call...');
+    // console.log('🌊 [LLM-DEBUG] Starting streaming API call...');
     
     // Get OpenAI client directly for streaming support
     const { client, model } = await getStreamingClient(config, agent);
@@ -273,18 +231,17 @@ const createGenerateStreamingResponse = (coreProvider: ModelProvider<any>) => {
       }
     })) : undefined;
     
-    try {
-      // Create streaming completion
-      const stream = await client.chat.completions.create({
-        model: model,
-        messages: messages as any,
-        temperature: config?.temperature ?? 0.7,
-        max_tokens: config?.maxTokens ?? 2000,
-        tools: tools,
-        stream: true
-      });
-      
-      let accumulatedText = '';
+    // Create streaming completion
+    const stream = await client.chat.completions.create({
+      model: model,
+      messages: messages as any,
+      temperature: config?.temperature ?? 0.7,
+      max_tokens: config?.maxTokens ?? 2000,
+      tools: tools,
+      stream: true
+    });
+    
+    let accumulatedText = '';
       let currentFunctionCall: Partial<FunctionCall> | null = null;
       
       // Process the stream
@@ -348,12 +305,8 @@ const createGenerateStreamingResponse = (coreProvider: ModelProvider<any>) => {
         delta: '',
         isDone: true
       };
-      
-      console.log('✅ [LLM-DEBUG] Streaming completed successfully');
-    } catch (error) {
-      console.error('❌ [LLM-DEBUG] Streaming failed:', error);
-      throw error;
-    }
+    
+    // console.log('✅ [LLM-DEBUG] Streaming completed successfully');
   };
 };
 
@@ -526,12 +479,12 @@ const convertAdkModelToCoreModel = (adkModel: Model | string): string => {
       return 'gpt-4';
     case Model.GPT_3_5_TURBO:
       return 'gpt-3.5-turbo';
-    case Model.CLAUDE_3_OPUS:
-      return 'claude-3-opus';
-    case Model.CLAUDE_3_SONNET:
-      return 'claude-3-sonnet';
-    case Model.CLAUDE_3_HAIKU:
-      return 'claude-3-haiku';
+    case Model.CLAUDE_3_OPUS_20240229:
+      return 'claude-3-opus-20240229';
+    case Model.CLAUDE_3_5_SONNET_LATEST:
+      return 'claude-3-5-sonnet-latest';
+    case Model.CLAUDE_3_HAIKU_20240307:
+      return 'claude-3-haiku-20240307';
     default:
       return 'gpt-4o';
   }
@@ -636,7 +589,7 @@ const getStreamingClient = async (
   let model: string;
   
   switch (serviceConfig.provider) {
-    case 'openai':
+    case 'openai': {
       const openaiKey = serviceConfig.apiKey || process.env.OPENAI_API_KEY;
       if (!openaiKey) {
         throw new Error('OPENAI_API_KEY is required for OpenAI streaming');
@@ -649,8 +602,9 @@ const getStreamingClient = async (
       
       model = config?.modelOverride || serviceConfig.defaultModel || (agent ? convertModelToCoreModel(agent.config.model) : 'gpt-4o');
       break;
+    }
       
-    case 'litellm':
+    case 'litellm': {
       const litellmUrl = serviceConfig.baseUrl || process.env.LITELLM_URL || 'http://localhost:4000';
       const litellmKey = serviceConfig.apiKey || process.env.LITELLM_API_KEY || 'anything';
       
@@ -662,8 +616,9 @@ const getStreamingClient = async (
       
       model = config?.modelOverride || serviceConfig.defaultModel || (agent ? convertModelToCoreModel(agent.config.model) : 'gpt-4o');
       break;
+    }
       
-    case 'anthropic':
+    case 'anthropic': {
       // For Anthropic via LiteLLM proxy
       const anthropicUrl = serviceConfig.baseUrl || process.env.LITELLM_URL || 'http://localhost:4000';
       const anthropicKey = serviceConfig.apiKey || process.env.ANTHROPIC_API_KEY || process.env.LITELLM_API_KEY || 'anything';
@@ -677,8 +632,9 @@ const getStreamingClient = async (
       // Use claude model for Anthropic
       model = config?.modelOverride || serviceConfig.defaultModel || 'claude-3-sonnet';
       break;
+    }
       
-    case 'google':
+    case 'google': {
       // For Google via LiteLLM proxy
       const googleUrl = serviceConfig.baseUrl || process.env.LITELLM_URL || 'http://localhost:4000';
       const googleKey = serviceConfig.apiKey || process.env.GOOGLE_API_KEY || process.env.LITELLM_API_KEY || 'anything';
@@ -692,16 +648,11 @@ const getStreamingClient = async (
       // Use gemini model for Google
       model = config?.modelOverride || serviceConfig.defaultModel || 'gemini-1.5-pro';
       break;
+    }
       
     default:
       throw new Error(`Unsupported streaming provider: ${serviceConfig.provider}`);
   }
-  
-  console.log('🌊 [LLM-DEBUG] Streaming client created:', { 
-    provider: serviceConfig.provider, 
-    model,
-    baseURL: client.baseURL 
-  });
   
   return { client, model };
 };

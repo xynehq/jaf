@@ -42,7 +42,9 @@ const calculatorTool: Tool<{ expression: string }, MyContext> = {
     }
     
     try {
-      const result = eval(sanitized);
+      // Use safe math evaluator instead of eval
+      const { evaluateMathExpression } = require('../../src/utils/safe-math');
+      const result = evaluateMathExpression(sanitized);
       return ToolResponse.success(`${args.expression} = ${result}`, {
         originalExpression: args.expression,
         result,

@@ -593,24 +593,28 @@ export const createEchoTool = (): Tool => {
 };
 
 export const createCalculatorTool = (): Tool => {
+  // Import safe math evaluator
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { evaluateMathExpression } = require('../../utils/safe-math');
+  
   return createFunctionTool({
     name: 'calculator',
-    description: 'Performs basic mathematical calculations',
+    description: 'Performs safe mathematical calculations',
     execute: (params) => {
       const typedParams = params as { expression: string };
       try {
-        // Simple calculator - in production use a proper math parser
-        const result = eval(typedParams.expression);
+        // Use safe math parser instead of eval
+        const result = evaluateMathExpression(typedParams.expression);
         return { result, expression: typedParams.expression };
       } catch (error) {
-        throw new Error(`Invalid expression: ${typedParams.expression}`);
+        throw new Error(`Invalid expression: ${typedParams.expression}. ${error instanceof Error ? error.message : ''}`);
       }
     },
     parameters: [
       {
         name: 'expression',
         type: ToolParameterType.STRING,
-        description: 'Mathematical expression to evaluate (e.g., "2 + 2")',
+        description: 'Mathematical expression to evaluate (e.g., "2 + 2", "sqrt(16)", "2^3")',
         required: true
       }
     ]

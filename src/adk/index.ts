@@ -7,6 +7,19 @@
 // ========== Core Types ==========
 export * from './types';
 
+// ========== Model Definitions ==========
+export { 
+  Model, 
+  ModelCategory, 
+  isValidModel, 
+  getModelProvider, 
+  getModelCategory,
+  // Backward compatibility aliases
+  CLAUDE_3_OPUS,
+  CLAUDE_3_SONNET,
+  CLAUDE_3_HAIKU
+} from './models';
+
 // ========== Content System ==========
 export {
   // Content Creation
@@ -173,6 +186,28 @@ export {
   createSessionError,
   withSessionErrorHandling
 } from './sessions';
+
+// ========== Artifact Storage ==========
+export {
+  // Types
+  type Artifact,
+  type ArtifactMetadata,
+  type ArtifactStorage,
+  type ArtifactStorageConfig,
+  
+  // Storage Implementations
+  createMemoryArtifactStorage,
+  createRedisArtifactStorage,
+  createPostgresArtifactStorage,
+  createArtifactStorage,
+  
+  // Session Integration
+  getSessionArtifact,
+  setSessionArtifact,
+  deleteSessionArtifact,
+  clearSessionArtifacts,
+  listSessionArtifacts
+} from './artifacts';
 
 // ========== Runner System ==========
 export {
@@ -431,11 +466,13 @@ export const createQuickChatAgent = () => {
     execute: (params, context) => {
       const { expression } = params as { expression: string };
       try {
-        // Simple calculator - in production use a proper math parser
-        const result = eval(expression);
+        // Use safe math evaluator instead of eval
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const { evaluateMathExpression } = require('../utils/safe-math');
+        const result = evaluateMathExpression(expression);
         return { result, expression };
       } catch (error) {
-        throw new Error(`Invalid expression: ${expression}`);
+        throw new Error(`Invalid expression: ${expression}. ${error instanceof Error ? error.message : ''}`);
       }
     },
     parameters: [

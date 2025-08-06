@@ -13,12 +13,9 @@ const calculatorTool = {
     },
     execute: async (args, context) => {
         try {
-            // Basic safety check - only allow simple math expressions
-            const sanitized = args.expression.replace(/[^0-9+\-*/().]/g, '');
-            if (sanitized !== args.expression) {
-                return "Error: Invalid characters in expression. Only numbers, +, -, *, /, (, ) are allowed.";
-            }
-            const result = eval(sanitized);
+            // Use safe math evaluator instead of eval
+            const { evaluateMathExpression } = require('../../src/utils/safe-math');
+            const result = evaluateMathExpression(args.expression);
             return `${args.expression} = ${result}`;
         }
         catch (error) {

@@ -182,14 +182,14 @@ describe('Type Converters', () => {
     it('should convert ADK models to Core model names', () => {
       expect(convertAdkModelToCoreModel(Model.GPT_4)).toBe('gpt-4');
       expect(convertAdkModelToCoreModel(Model.GPT_4_TURBO)).toBe('gpt-4-turbo');
-      expect(convertAdkModelToCoreModel(Model.CLAUDE_3_SONNET)).toBe('claude-3-sonnet');
+      expect(convertAdkModelToCoreModel(Model.CLAUDE_3_5_SONNET_LATEST)).toBe('claude-3-sonnet');
       expect(convertAdkModelToCoreModel(Model.GEMINI_1_5_PRO)).toBe('gemini-1.5-pro');
       expect(convertAdkModelToCoreModel('custom-model')).toBe('custom-model');
     });
 
     it('should convert Core model names to ADK models', () => {
       expect(convertCoreModelToAdkModel('gpt-4')).toBe(Model.GPT_4);
-      expect(convertCoreModelToAdkModel('claude-3-sonnet')).toBe(Model.CLAUDE_3_SONNET);
+      expect(convertCoreModelToAdkModel('claude-3-sonnet')).toBe(Model.CLAUDE_3_5_SONNET_LATEST);
       expect(convertCoreModelToAdkModel('gemini-1.5-pro')).toBe(Model.GEMINI_1_5_PRO);
       expect(convertCoreModelToAdkModel('unknown-model')).toBe(Model.CUSTOM);
     });
@@ -237,7 +237,7 @@ describe('Type Converters', () => {
 
       expect(adkAgent.id).toBe('CoreAgent');
       expect(adkAgent.config.name).toBe('CoreAgent');
-      expect(adkAgent.config.model).toBe(Model.CLAUDE_3_SONNET);
+      expect(adkAgent.config.model).toBe(Model.CLAUDE_3_5_SONNET_LATEST);
       expect(adkAgent.config.instruction).toBe('Instructions from core');
     });
   });

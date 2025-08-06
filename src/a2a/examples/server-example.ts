@@ -25,13 +25,13 @@ const createCalculatorAgent = () => createA2AAgent({
       }),
       execute: async ({ expression, showSteps }) => {
         try {
-          // Simple expression evaluation (in production, use a proper math library)
-          const sanitizedExpression = expression.replace(/[^0-9+\-*/().\s]/g, '');
-          const result = eval(sanitizedExpression);
+          // Use safe math evaluator instead of eval
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { evaluateMathExpression } = require('../../utils/safe-math');
+          const result = evaluateMathExpression(expression);
           
           if (showSteps) {
             return `Calculation: ${expression}\n` +
-                   `Simplified: ${sanitizedExpression}\n` +
                    `Result: ${result}`;
           } else {
             return `${expression} = ${result}`;

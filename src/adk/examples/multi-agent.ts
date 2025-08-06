@@ -144,7 +144,10 @@ export const createCalculatorSpecialistAgent = (): AgentConfig => {
               const [, percent, of] = percentMatch;
               result = (parseFloat(percent) / 100) * parseFloat(of);
             } else {
-              result = eval(expression);
+              // Use safe math evaluator instead of eval
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              const { evaluateMathExpression } = require('../../utils/safe-math');
+              result = evaluateMathExpression(expression);
             }
             break;
           }
@@ -156,13 +159,20 @@ export const createCalculatorSpecialistAgent = (): AgentConfig => {
               const radius = parseFloat(areaMatch[1]);
               result = Math.PI * radius * radius;
             } else {
-              result = eval(expression);
+              // Use safe math evaluator instead of eval
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              const { evaluateMathExpression } = require('../../utils/safe-math');
+              result = evaluateMathExpression(expression);
             }
             break;
           }
             
-          default:
-            result = eval(expression);
+          default: {
+            // Use safe math evaluator instead of eval
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const { evaluateMathExpression } = require('../../utils/safe-math');
+            result = evaluateMathExpression(expression);
+          }
         }
         
         return {

@@ -22,5 +22,6 @@ module.exports = {
   testPathIgnorePatterns: [
     'src/providers/mcp.ts',
     'src/a2a/examples'
-  ]
+  ],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js']
 };
