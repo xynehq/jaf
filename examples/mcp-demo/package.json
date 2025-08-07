@@ -1,0 +1,23 @@
+{
+  "name": "mcp-filesystem-server",
+  "version": "1.0.0",
+  "description": "MCP Filesystem Server demo using JAF",
+  "main": "mcp-filesystem-server.ts",
+  "scripts": {
+    "start": "npx tsx mcp-filesystem-server.ts",
+    "dev": "npx tsx --watch mcp-filesystem-server.ts",
+    "build": "npx tsc"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.3",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": ["mcp", "filesystem", "jaf", "server"],
+  "author": "Juspay",
+  "license": "MIT"
+}
