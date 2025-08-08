@@ -1,6 +1,6 @@
 /**
  * A2A Integration for JAF - Main Export
- * Pure functional A2A protocol support for Functional Agent Framework
+ * Pure functional A2A protocol support for Juspay Agent Framework
  */
 
 // Core A2A Types

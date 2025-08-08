@@ -165,8 +165,8 @@ const main = async () => {
       description: 'A collection of specialized AI agents providing weather, calculation, and greeting services through the A2A protocol',
       version: '1.0.0',
       provider: {
-        organization: 'JAF Example Service',
-        url: 'https://github.com/functional-agent-framework'
+        organization: 'Juspay',
+        url: 'https://juspay.in'
       }
     },
     

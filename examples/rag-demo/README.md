@@ -1,6 +1,6 @@
 # JAF Vertex AI RAG Demo
 
-This demo showcases the integration of **Vertex AI RAG (Retrieval Augmented Generation)** with the **Functional Agent Framework (JAF)**. It demonstrates how to build AI agents that can query knowledge bases and provide grounded, source-cited responses.
+This demo showcases the integration of **Vertex AI RAG (Retrieval Augmented Generation)** with the **Juspay Agent Framework (JAF)**. It demonstrates how to build AI agents that can query knowledge bases and provide grounded, source-cited responses.
 
 ## 🎯 Features Demonstrated
 

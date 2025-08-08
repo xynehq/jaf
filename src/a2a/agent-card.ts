@@ -131,7 +131,7 @@ export const generateAgentCardForAgent = (
     version: config.version || '1.0.0',
     provider: config.provider || {
       organization: 'JAF Agent',
-      url: 'https://functional-agent-framework.com'
+      url: 'https://juspay.in'
     }
   };
   
