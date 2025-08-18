@@ -159,6 +159,8 @@ async function runInternal<Ctx, Out>(
   };
 
   const newMessages = [...state.messages, assistantMessage];
+  // Increment turnCount after each AI invocation
+  const updatedTurnCount = state.turnCount + 1;
 
   if (llmResponse.message.tool_calls && llmResponse.message.tool_calls.length > 0) {
     console.log(`[JAF:ENGINE] Processing ${llmResponse.message.tool_calls.length} tool calls`);
@@ -180,7 +182,7 @@ async function runInternal<Ctx, Out>(
         
         if (!currentAgent.handoffs?.includes(targetAgent)) {
           return {
-            finalState: { ...state, messages: newMessages },
+            finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
             outcome: {
               status: 'error',
               error: {
@@ -200,7 +202,7 @@ async function runInternal<Ctx, Out>(
           ...state,
           messages: [...newMessages, ...toolResults.map(r => r.message)],
           currentAgentName: targetAgent,
-          turnCount: state.turnCount + 1
+          turnCount: updatedTurnCount
         };
 
         return runInternal(nextState, config);
@@ -210,7 +212,7 @@ async function runInternal<Ctx, Out>(
     const nextState: RunState<Ctx> = {
       ...state,
       messages: [...newMessages, ...toolResults.map(r => r.message)],
-      turnCount: state.turnCount + 1
+      turnCount: updatedTurnCount
     };
 
     return runInternal(nextState, config);
@@ -224,7 +226,7 @@ async function runInternal<Ctx, Out>(
       
       if (!parseResult.success) {
         return {
-          finalState: { ...state, messages: newMessages },
+          finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
           outcome: {
             status: 'error',
             error: {
@@ -240,7 +242,7 @@ async function runInternal<Ctx, Out>(
           const result = await guardrail(parseResult.data);
           if (!result.isValid) {
             return {
-              finalState: { ...state, messages: newMessages },
+              finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
               outcome: {
                 status: 'error',
                 error: {
@@ -254,7 +256,7 @@ async function runInternal<Ctx, Out>(
       }
 
       return {
-        finalState: { ...state, messages: newMessages },
+        finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
         outcome: {
           status: 'completed',
           output: parseResult.data as Out
@@ -266,7 +268,7 @@ async function runInternal<Ctx, Out>(
           const result = await guardrail(llmResponse.message.content);
           if (!result.isValid) {
             return {
-              finalState: { ...state, messages: newMessages },
+              finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
               outcome: {
                 status: 'error',
                 error: {
@@ -280,7 +282,7 @@ async function runInternal<Ctx, Out>(
       }
 
       return {
-        finalState: { ...state, messages: newMessages },
+        finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
         outcome: {
           status: 'completed',
           output: llmResponse.message.content as Out
@@ -290,7 +292,7 @@ async function runInternal<Ctx, Out>(
   }
 
   return {
-    finalState: { ...state, messages: newMessages },
+    finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
     outcome: {
       status: 'error',
       error: {
