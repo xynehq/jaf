@@ -74,7 +74,10 @@ export const transformA2AAgentToJAF = (a2aAgent: A2AAgent): Agent<any, string> =
   name: a2aAgent.name,
   instructions: () => a2aAgent.instruction,
   tools: a2aAgent.tools.map(transformA2AToolToJAF),
-  outputCodec: z.string()
+  outputCodec: z.string(),
+  modelConfig: {
+    name: 'default'
+  }
 });
 
 // Pure function to transform A2A tool to JAF tool

@@ -7,6 +7,9 @@ describe('JAF Engine', () => {
     name: 'TestAgent',
     instructions: () => 'Test agent instructions',
     tools: [],
+    modelConfig: {
+      name: 'test-model'
+    }
   };
 
   const mockModelProvider = {
