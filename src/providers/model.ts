@@ -13,7 +13,11 @@ export const makeLiteLLMProvider = <Ctx>(
 
   return {
     async getCompletion(state, agent, config) {
-      const model = config.modelOverride ?? agent.modelConfig?.name ?? "gpt-4o";
+      const model = config.modelOverride ?? agent.modelConfig?.name;
+
+      if (!model) {
+        throw new Error(`Model not specified for agent ${agent.name}`);
+      }
 
       const systemMessage: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
         role: "system",
@@ -47,6 +51,7 @@ export const makeLiteLLMProvider = <Ctx>(
         response_format: agent.outputCodec ? { type: "json_object" } : undefined,
       };
 
+      console.log(`📞 Calling model: ${model} with params: ${JSON.stringify(requestParams, null, 2)}`);
       const resp = await client.chat.completions.create(requestParams);
 
       return resp.choices[0];

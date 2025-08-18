@@ -125,7 +125,20 @@ async function runInternal<Ctx, Out>(
     console.log(`[JAF:ENGINE] Available tools:`, currentAgent.tools.map(t => t.schema.name));
   }
 
-  const model = config.modelOverride ?? currentAgent.modelConfig?.name ?? "gpt-4o";
+  const model = config.modelOverride ?? currentAgent.modelConfig?.name;
+
+  if (!model) {
+    return {
+      finalState: state,
+      outcome: {
+        status: 'error',
+        error: {
+          _tag: 'ModelBehaviorError',
+          detail: 'No model configured for agent'
+        }
+      }
+    };
+  }
   
   config.onEvent?.({
     type: 'llm_call_start',
