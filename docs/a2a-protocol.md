@@ -363,7 +363,7 @@ JAF_A2A_TASK_PROVIDER_POSTGRES_MAX_CONNECTIONS=10
 #### Environment-Based Setup
 
 ```typescript
-import { createA2ATaskProviderFromEnv } from 'functional-agent-framework/a2a';
+import { createA2ATaskProviderFromEnv } from '@xynehq/jaf/a2a';
 
 // Automatically creates provider based on environment variables
 const provider = await createA2ATaskProviderFromEnv({
@@ -423,7 +423,7 @@ import {
   createA2ATask,
   updateA2ATaskStatus,
   completeA2ATask 
-} from 'functional-agent-framework/a2a';
+} from '@xynehq/jaf/a2a';
 
 // Create provider
 const provider = await createA2ATaskProvider({

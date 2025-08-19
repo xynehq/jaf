@@ -21,7 +21,7 @@ Welcome to the Juspay Agent Framework (JAF) - a purely functional agent framewor
 ### Basic Installation
 
 ```bash
-npm install functional-agent-framework
+npm install @xynehq/jaf
 ```
 
 ### Prerequisites
@@ -95,7 +95,7 @@ import {
   makeLiteLLMProvider,
   generateRunId,
   generateTraceId
-} from 'functional-agent-framework';
+} from '@xynehq/jaf';
 
 // 1. Define your context type
 type MyContext = {
@@ -172,7 +172,7 @@ import {
   ToolResponse,
   ToolErrorCodes,
   withErrorHandling
-} from 'functional-agent-framework';
+} from '@xynehq/jaf';
 
 type MyContext = {
   userId: string;
@@ -297,7 +297,7 @@ const myTool: Tool<ArgsType, ContextType> = {
 ### Using Standardized Error Handling
 
 ```typescript
-import { withErrorHandling, ToolResponse, ToolErrorCodes } from 'functional-agent-framework';
+import { withErrorHandling, ToolResponse, ToolErrorCodes } from '@xynehq/jaf';
 
 const robustTool: Tool<{ input: string }, MyContext> = {
   schema: {
@@ -352,7 +352,7 @@ return ToolResponse.permissionDenied("Access denied", ['admin']);
 ### Basic Execution
 
 ```typescript
-import { run, makeLiteLLMProvider } from 'functional-agent-framework';
+import { run, makeLiteLLMProvider } from '@xynehq/jaf';
 
 async function runAgent() {
   const modelProvider = makeLiteLLMProvider('http://localhost:4000');
@@ -384,7 +384,7 @@ async function runAgent() {
 ### With Tracing and Observability
 
 ```typescript
-import { ConsoleTraceCollector } from 'functional-agent-framework';
+import { ConsoleTraceCollector } from '@xynehq/jaf';
 
 const traceCollector = new ConsoleTraceCollector();
 
@@ -430,7 +430,7 @@ JAF provides a powerful memory system for conversation persistence:
 ### Basic Memory Setup
 
 ```typescript
-import { createInMemoryProvider } from 'functional-agent-framework';
+import { createInMemoryProvider } from '@xynehq/jaf';
 
 const memoryProvider = await createInMemoryProvider();
 
@@ -454,7 +454,7 @@ npm install redis
 ```
 
 ```typescript
-import { createMemoryProviderFromEnv } from 'functional-agent-framework';
+import { createMemoryProviderFromEnv } from '@xynehq/jaf';
 
 // Set environment variables
 process.env.JAF_MEMORY_TYPE = 'redis';
@@ -504,7 +504,7 @@ const memoryProvider = await createMemoryProviderFromEnv({ postgres: postgresCli
 JAF includes a built-in development server for testing agents via HTTP:
 
 ```typescript
-import { runServer } from 'functional-agent-framework';
+import { runServer } from '@xynehq/jaf';
 
 async function startDevServer() {
   const modelProvider = makeLiteLLMProvider('http://localhost:4000');
@@ -562,7 +562,7 @@ JAF provides comprehensive error handling:
 ### Runtime Error Types
 
 ```typescript
-import { JAFErrorHandler } from 'functional-agent-framework';
+import { JAFErrorHandler } from '@xynehq/jaf';
 
 if (result.outcome.status === 'error') {
   const error = result.outcome.error;
@@ -608,7 +608,7 @@ if (toolResult.status === 'error') {
 ### Agent Handoffs
 
 ```typescript
-import { handoffTool } from 'functional-agent-framework';
+import { handoffTool } from '@xynehq/jaf';
 
 const triageAgent: Agent<MyContext, string> = {
   name: 'TriageAgent',

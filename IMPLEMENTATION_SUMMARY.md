@@ -2,7 +2,7 @@
 
 ## 🎯 Project Overview
 
-Successfully implemented the complete **Functional Agent Framework (JAF) v2.0** as specified in the requirements. This is a production-ready, purely functional AI agent framework built on TypeScript with comprehensive type safety, immutable state management, and composable policies.
+Successfully implemented the complete **Juspay Agent Framework (JAF) v2.0** as specified in the requirements. This is a production-ready, purely functional AI agent framework built on TypeScript with comprehensive type safety, immutable state management, and composable policies.
 
 ## ✅ Implementation Completeness
 

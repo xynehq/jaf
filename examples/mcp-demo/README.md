@@ -1,6 +1,6 @@
 # MCP Filesystem Server Demo
 
-This demo showcases the integration of **Model Context Protocol (MCP)** with the **Functional Agent Framework (JAF)**. It demonstrates how to build AI agents that can perform filesystem operations using MCP tools, providing a secure and interactive file management system.
+This demo showcases the integration of **Model Context Protocol (MCP)** with the **Juspay Agent Framework (JAF)**. It demonstrates how to build AI agents that can perform filesystem operations using MCP tools, providing a secure and interactive file management system.
 
 ## 🎯 Features Demonstrated
 

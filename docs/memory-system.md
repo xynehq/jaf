@@ -111,7 +111,7 @@ Error types include:
 #### Configuration
 
 ```typescript
-import { createInMemoryProvider } from 'functional-agent-framework';
+import { createInMemoryProvider } from '@xynehq/jaf';
 
 const provider = createInMemoryProvider({
   type: 'memory',
@@ -161,7 +161,7 @@ sudo apt install redis-server && sudo systemctl start redis-server  # Ubuntu
 #### Configuration
 
 ```typescript
-import { createRedisProvider } from 'functional-agent-framework';
+import { createRedisProvider } from '@xynehq/jaf';
 import { createClient } from 'redis';
 
 // Create Redis client
@@ -252,7 +252,7 @@ sudo -u postgres createdb jaf_memory  # Ubuntu
 #### Configuration
 
 ```typescript
-import { createPostgresProvider } from 'functional-agent-framework';
+import { createPostgresProvider } from '@xynehq/jaf';
 import { Client } from 'pg';
 
 // Create PostgreSQL client
@@ -337,7 +337,7 @@ const analytics = await provider.getAnalytics('user123');
 #### Create from Configuration Object
 
 ```typescript
-import { createMemoryProvider } from 'functional-agent-framework';
+import { createMemoryProvider } from '@xynehq/jaf';
 
 const provider = await createMemoryProvider(
   {
@@ -356,7 +356,7 @@ const provider = await createMemoryProvider(
 #### Create from Environment Variables
 
 ```typescript
-import { createMemoryProviderFromEnv } from 'functional-agent-framework';
+import { createMemoryProviderFromEnv } from '@xynehq/jaf';
 
 const provider = await createMemoryProviderFromEnv({
   redis: redisClient,  // Only needed if JAF_MEMORY_TYPE=redis
@@ -367,7 +367,7 @@ const provider = await createMemoryProviderFromEnv({
 #### Simple Provider Creation
 
 ```typescript
-import { createSimpleMemoryProvider } from 'functional-agent-framework';
+import { createSimpleMemoryProvider } from '@xynehq/jaf';
 
 // In-memory
 const memoryProvider = await createSimpleMemoryProvider('memory');
@@ -385,7 +385,7 @@ const postgresProvider = await createSimpleMemoryProvider('postgres', postgresCl
 ### Memory Configuration in Engine
 
 ```typescript
-import { runServer } from 'functional-agent-framework';
+import { runServer } from '@xynehq/jaf';
 
 const server = await runServer(
   agents,
@@ -538,7 +538,7 @@ import {
   isMemoryConnectionError,
   isMemoryNotFoundError,
   isMemoryStorageError 
-} from 'functional-agent-framework';
+} from '@xynehq/jaf';
 
 const result = await provider.getConversation('conv-123');
 

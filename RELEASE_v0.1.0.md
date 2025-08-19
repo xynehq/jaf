@@ -1,6 +1,6 @@
 # JAF v0.1.0 - Initial Release 🎉
 
-We're excited to announce the first public release of JAF (Functional Agent Framework) - a purely functional framework for building AI agents with TypeScript.
+We're excited to announce the first public release of JAF (Juspay Agent Framework) - a purely functional framework for building AI agents with TypeScript.
 
 ## 🌟 What is JAF?
 

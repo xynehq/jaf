@@ -88,7 +88,7 @@ Found an issue or want to improve the documentation?
 
 ### Key Functions
 ```typescript
-import { run, runServer, createInMemoryProvider } from 'functional-agent-framework';
+import { run, runServer, createInMemoryProvider } from '@xynehq/jaf';
 ```
 
 ### Essential Types

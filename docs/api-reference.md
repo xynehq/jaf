@@ -43,7 +43,7 @@ function run<Ctx, Out>(
 
 **Example:**
 ```typescript
-import { run, createRunId, createTraceId } from 'functional-agent-framework';
+import { run, createRunId, createTraceId } from '@xynehq/jaf';
 
 const initialState = {
   runId: createRunId('run-123'),
@@ -86,7 +86,7 @@ function runServer<Ctx>(
 
 **Example:**
 ```typescript
-import { runServer, makeLiteLLMProvider } from 'functional-agent-framework';
+import { runServer, makeLiteLLMProvider } from '@xynehq/jaf';
 
 const myAgent = {
   name: 'assistant',
@@ -116,7 +116,7 @@ function generateRunId(): RunId
 
 **Example:**
 ```typescript
-import { generateTraceId, generateRunId } from 'functional-agent-framework';
+import { generateTraceId, generateRunId } from '@xynehq/jaf';
 
 const traceId = generateTraceId();
 const runId = generateRunId();
@@ -333,7 +333,7 @@ const ToolErrorCodes = {
 ### Example Tool Implementation
 ```typescript
 import { z } from 'zod';
-import { Tool, ToolResponse, withErrorHandling } from 'functional-agent-framework';
+import { Tool, ToolResponse, withErrorHandling } from '@xynehq/jaf';
 
 const weatherSchema = z.object({
   city: z.string().describe("The city to get weather for"),
@@ -506,7 +506,7 @@ type PostgresConfig = z.infer<typeof PostgresConfigSchema>;
 
 ### Example Memory Usage
 ```typescript
-import { createSimpleMemoryProvider } from 'functional-agent-framework';
+import { createSimpleMemoryProvider } from '@xynehq/jaf';
 
 // In-memory provider
 const memoryProvider = await createSimpleMemoryProvider('memory');
@@ -567,7 +567,7 @@ function makeLiteLLMProvider<Ctx>(
 
 **Example:**
 ```typescript
-import { makeLiteLLMProvider } from 'functional-agent-framework';
+import { makeLiteLLMProvider } from '@xynehq/jaf';
 
 // For local LiteLLM instance
 const localProvider = makeLiteLLMProvider('http://localhost:4000');
@@ -860,7 +860,7 @@ Pre-built tool for handing off conversations between agents.
 
 **Example:**
 ```typescript
-import { handoffTool } from 'functional-agent-framework';
+import { handoffTool } from '@xynehq/jaf';
 
 const routerAgent = {
   name: 'router',
@@ -937,7 +937,7 @@ import {
   ConsoleTraceCollector,
   FileTraceCollector,
   createCompositeTraceCollector 
-} from 'functional-agent-framework';
+} from '@xynehq/jaf';
 
 const collector = createCompositeTraceCollector(
   new ConsoleTraceCollector(),
@@ -1052,7 +1052,7 @@ import {
   ToolResponse,
   handoffTool,
   z 
-} from 'functional-agent-framework';
+} from '@xynehq/jaf';
 
 // Define context type
 interface AppContext {

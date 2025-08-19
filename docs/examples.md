@@ -566,7 +566,7 @@ A return URL is a web address where users are redirected after completing an act
 
 ```typescript
 import { z } from 'zod';
-import { Tool, ToolResponse, ToolErrorCodes, withErrorHandling } from 'functional-agent-framework';
+import { Tool, ToolResponse, ToolErrorCodes, withErrorHandling } from '@xynehq/jaf';
 
 const myTool: Tool<{ input: string }, MyContext> = {
   schema: {
@@ -605,7 +605,7 @@ const myTool: Tool<{ input: string }, MyContext> = {
 #### Tool with Validation Policies
 
 ```typescript
-import { withValidation, createPathValidator, composeValidations } from 'functional-agent-framework';
+import { withValidation, createPathValidator, composeValidations } from '@xynehq/jaf';
 
 // Create validators
 const pathValidator = createPathValidator(['/safe', '/public']);
@@ -628,7 +628,7 @@ const secureFileTool = withValidation(baseFileTool, combinedValidator);
 #### Agent Handoff Implementation
 
 ```typescript
-import { handoffTool, Agent } from 'functional-agent-framework';
+import { handoffTool, Agent } from '@xynehq/jaf';
 
 const triageAgent: Agent<Context, { agentName: string }> = {
   name: 'TriageAgent',
@@ -666,7 +666,7 @@ const workflowConfig: RunConfig<MyContext> = {
 #### Custom Memory Provider
 
 ```typescript
-import { MemoryProvider, ConversationMemory, Result } from 'functional-agent-framework';
+import { MemoryProvider, ConversationMemory, Result } from '@xynehq/jaf';
 
 class CustomMemoryProvider implements MemoryProvider {
   async storeMessages(
@@ -730,7 +730,7 @@ const prodMemoryConfig = {
 #### Custom Trace Collector
 
 ```typescript
-import { TraceEvent, ConsoleTraceCollector } from 'functional-agent-framework';
+import { TraceEvent, ConsoleTraceCollector } from '@xynehq/jaf';
 
 class CustomTraceCollector {
   constructor(private logLevel: 'debug' | 'info' | 'warn' | 'error' = 'info') {}
@@ -774,7 +774,7 @@ class CustomTraceCollector {
 #### Error Handling Strategies
 
 ```typescript
-import { JAFErrorHandler, RunResult } from 'functional-agent-framework';
+import { JAFErrorHandler, RunResult } from '@xynehq/jaf';
 
 async function handleRunResult<T>(result: RunResult<T>): Promise<T> {
   if (result.outcome.status === 'completed') {
@@ -814,7 +814,7 @@ async function handleRunResult<T>(result: RunResult<T>): Promise<T> {
 #### Content Filtering
 
 ```typescript
-import { Guardrail, createContentFilter, createRateLimiter } from 'functional-agent-framework';
+import { Guardrail, createContentFilter, createRateLimiter } from '@xynehq/jaf';
 
 const contentFilter: Guardrail<string> = createContentFilter({
   blockedWords: ['spam', 'abuse'],
@@ -865,7 +865,7 @@ const customGuardrail: Guardrail<string> = async (input: string) => {
 #### Setting Up MCP Tools
 
 ```typescript
-import { makeMCPClient, mcpToolToJAFTool } from 'functional-agent-framework';
+import { makeMCPClient, mcpToolToJAFTool } from '@xynehq/jaf';
 
 // Connect to MCP server
 const mcpClient = await makeMCPClient('python', ['-m', 'mcp_server']);
