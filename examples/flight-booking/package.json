@@ -11,7 +11,7 @@
     "start": "node dist/jaf-server.js"
   },
   "dependencies": {
-    "@xynehq/jaf": "file:../..",
+    "@xynehq/jaf": "workspace:*",
     "tsx": "^4.7.0",
     "zod": "^3.22.4",
     "dotenv": "^16.3.1"

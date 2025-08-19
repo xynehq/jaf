@@ -17,7 +17,7 @@ import {
   Model,
   ToolParameterType,
   AgentConfig
-} from '../../src/adk';
+} from '@xynehq/jaf/adk';
 
 // Import tools from main example
 import {
@@ -212,7 +212,7 @@ const manageLoyaltyPointsTool = createFunctionTool({
 
 const createFlightSearchSpecialist = (): AgentConfig => ({
   name: 'flight_search_specialist',
-  model: Model.GEMINI_2_0_FLASH,
+  model: Model.GEMINI_2_5_FLASH_LITE,
   instruction: `You are a flight search specialist. Your role is to:
   - Find the best flight options based on customer preferences
   - Check direct and connecting flights
@@ -223,7 +223,7 @@ const createFlightSearchSpecialist = (): AgentConfig => ({
 
 const createPricingSpecialist = (): AgentConfig => ({
   name: 'pricing_specialist',
-  model: Model.GEMINI_2_0_FLASH,
+  model: Model.GEMINI_2_5_FLASH_LITE,
   instruction: `You are a pricing and loyalty specialist. Your role is to:
   - Calculate accurate pricing with all fees
   - Apply loyalty program benefits
@@ -234,7 +234,7 @@ const createPricingSpecialist = (): AgentConfig => ({
 
 const createBookingSpecialist = (): AgentConfig => ({
   name: 'booking_specialist',
-  model: Model.GEMINI_2_0_FLASH,
+  model: Model.GEMINI_2_5_FLASH_LITE,
   instruction: `You are a booking specialist. Your role is to:
   - Verify seat availability before booking
   - Process bookings accurately
@@ -252,7 +252,7 @@ export const createFlightBookingTeam = () => {
 
   const coordinator = createMultiAgent(
     'flight_booking_coordinator',
-    Model.GEMINI_2_0_FLASH,
+    Model.GEMINI_2_5_FLASH_LITE,
     `You are the lead flight booking coordinator managing a team of specialists.
     
     Your team includes:

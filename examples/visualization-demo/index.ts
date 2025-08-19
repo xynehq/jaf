@@ -14,7 +14,7 @@ import {
   ToolParameterType,
   createRunnerConfig,
   createInMemorySessionProvider
-} from '../../src/adk';
+} from '@xynehq/jaf/adk';
 
 import {
   generateAgentGraph,
@@ -23,7 +23,7 @@ import {
   isGraphvizInstalled,
   getGraphDot,
   validateGraphOptions
-} from '../../src/visualization/graphviz';
+} from '@xynehq/jaf/visualization';
 
 // Import tools from examples instead of production tools
 import { writeFileSync, mkdirSync, existsSync } from 'fs';

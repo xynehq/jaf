@@ -101,3 +101,14 @@ site/
 _site/
 
 output/
+
+# Example build artifacts
+examples/**/*.js
+examples/**/*.js.map
+examples/**/*.d.ts
+examples/**/*.d.ts.map
+!examples/**/*.config.js
+
+# Lock files in examples (using workspace)
+examples/**/package-lock.json
+examples/**/yarn.lock

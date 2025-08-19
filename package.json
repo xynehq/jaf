@@ -2,6 +2,7 @@
   "name": "@xynehq/jaf",
   "version": "0.1.3",
   "description": "Juspay Agent Framework - A purely functional agent framework with immutable state and composable tools",
+  "packageManager": "pnpm@9.0.0",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -14,13 +15,53 @@
       "import": "./dist/adk/index.js",
       "require": "./dist/adk/index.js",
       "types": "./dist/adk/index.d.ts"
+    },
+    "./server": {
+      "import": "./dist/server/index.js",
+      "require": "./dist/server/index.js",
+      "types": "./dist/server/index.d.ts"
+    },
+    "./providers": {
+      "import": "./dist/providers/index.js",
+      "require": "./dist/providers/index.js",
+      "types": "./dist/providers/index.d.ts"
+    },
+    "./policies": {
+      "import": "./dist/policies/index.js",
+      "require": "./dist/policies/index.js",
+      "types": "./dist/policies/index.d.ts"
+    },
+    "./memory": {
+      "import": "./dist/memory/index.js",
+      "require": "./dist/memory/index.js",
+      "types": "./dist/memory/index.d.ts"
+    },
+    "./core": {
+      "import": "./dist/core/index.js",
+      "require": "./dist/core/index.js",
+      "types": "./dist/core/index.d.ts"
+    },
+    "./visualization": {
+      "import": "./dist/visualization/index.js",
+      "require": "./dist/visualization/index.js",
+      "types": "./dist/visualization/index.d.ts"
+    },
+    "./utils": {
+      "import": "./dist/utils/index.js",
+      "require": "./dist/utils/index.js",
+      "types": "./dist/utils/index.d.ts"
     }
   },
   "typesVersions": {
     "*": {
-      "adk": [
-        "dist/adk/index.d.ts"
-      ]
+      "adk": ["dist/adk/index.d.ts"],
+      "server": ["dist/server/index.d.ts"],
+      "providers": ["dist/providers/index.d.ts"],
+      "policies": ["dist/policies/index.d.ts"],
+      "memory": ["dist/memory/index.d.ts"],
+      "core": ["dist/core/index.d.ts"],
+      "visualization": ["dist/visualization/index.d.ts"],
+      "utils": ["dist/utils/index.d.ts"]
     }
   },
   "files": [
@@ -34,16 +75,19 @@
     "test": "jest",
     "test:db:start": "./scripts/setup-test-db.sh",
     "test:db:stop": "./scripts/teardown-test-db.sh",
-    "test:with-db": "npm run test:db:start && npm test; npm run test:db:stop",
+    "test:with-db": "pnpm run test:db:start && pnpm test; pnpm run test:db:stop",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run lint && npm run test && npm run build",
-    "prepare": "npm run build",
-    "version": "npm run build && git add -A",
+    "prepublishOnly": "pnpm run lint && pnpm run test && pnpm run build",
+    "prepare": "pnpm run build",
+    "version": "pnpm run build && git add -A",
     "postversion": "git push && git push --tags",
     "a2a:example": "tsx src/a2a/examples/server-example.ts",
     "a2a:client": "tsx src/a2a/examples/client-example.ts",
-    "a2a:dev": "tsx watch src/a2a/examples/server-example.ts"
+    "a2a:dev": "tsx watch src/a2a/examples/server-example.ts",
+    "build:all": "pnpm -r build",
+    "typecheck:all": "pnpm -r typecheck",
+    "test:all": "pnpm -r test"
   },
   "keywords": [
     "ai",

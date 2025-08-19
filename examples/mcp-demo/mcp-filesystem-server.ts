@@ -16,8 +16,8 @@ import {
   withErrorHandling,
   createInMemoryProvider,
   ToolErrorCodes
-} from '../../src/index';
-import { makeMCPClient, mcpToolToJAFTool } from '../../src/providers/mcp';
+} from '@xynehq/jaf';
+import { makeMCPClient, mcpToolToJAFTool } from '@xynehq/jaf/providers';
 import { z } from 'zod';
 
 // Context type for filesystem operations

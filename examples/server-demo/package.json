@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "dotenv": "^17.2.1",
-    "functional-agent-framework": "file:../../"
+    "@xynehq/jaf": "workspace:*"
   },
   "optionalDependencies": {
     "redis": "^4.6.0",

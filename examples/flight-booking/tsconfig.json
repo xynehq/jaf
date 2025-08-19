@@ -5,8 +5,8 @@
     "rootDir": "../..",
     "baseUrl": "../..",
     "paths": {
-      "functional-agent-framework": ["./src/index"],
-      "functional-agent-framework/*": ["./src/*"]
+      "@xynehq/jaf": ["./src/index"],
+      "@xynehq/jaf/*": ["./src/*"]
     }
   },
   "include": [

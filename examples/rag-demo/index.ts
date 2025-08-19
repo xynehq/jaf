@@ -8,7 +8,7 @@ import {
   ConsoleTraceCollector,
   makeLiteLLMProvider,
   createInMemoryProvider
-} from 'functional-agent-framework';
+} from '@xynehq/jaf';
 import { ragAgent } from './rag-agent';
 
 type RAGContext = {

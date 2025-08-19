@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Tool } from '../../src/core/types';
+import { Tool } from '@xynehq/jaf/core';
 import { GoogleGenAI } from '@google/genai';
 
 interface RAGMetrics {

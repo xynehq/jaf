@@ -9,6 +9,7 @@
     "build": "npx tsc"
   },
   "dependencies": {
+    "@xynehq/jaf": "workspace:*",
     "dotenv": "^16.0.3",
     "zod": "^3.22.4"
   },

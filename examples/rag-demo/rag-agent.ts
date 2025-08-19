@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Agent } from '../../src/core/types';
+import { Agent } from '@xynehq/jaf/core';
 import { vertexAIRAGTool } from './rag-tool';
 
 type RAGContext = {

@@ -19,7 +19,7 @@ import {
   stringSchema,
   numberSchema,
   quickSetup
-} from '../../src/adk';
+} from '@xynehq/jaf/adk';
 
 // ========== Types ==========
 

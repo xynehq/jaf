@@ -11,7 +11,7 @@
     "clean": "rm -rf output"
   },
   "dependencies": {
-    "@xynehq/jaf": "file:../.."
+    "@xynehq/jaf": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
