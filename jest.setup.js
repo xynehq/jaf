@@ -4,6 +4,11 @@ require('dotenv').config({ path: '.env.test' });
 // Increase timeout for database tests
 jest.setTimeout(10000);
 
+// Ensure external streaming-dependent tests are skipped unless explicitly enabled
+delete process.env.LITELLM_URL;
+delete process.env.LITELLM_API_KEY;
+delete process.env.OPENAI_API_KEY;
+
 // Global test setup
 beforeAll(async () => {
   // Any global setup needed

@@ -4,7 +4,14 @@ module.exports = {
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
   transform: {
-    '^.+\\.ts$': 'ts-jest',
+    '^.+\\.ts$': ['ts-jest', {
+      tsconfig: {
+        types: ['jest', 'node'],
+      },
+      diagnostics: {
+        ignoreCodes: [7006, 2743],
+      },
+    }],
   },
   transformIgnorePatterns: [
     'node_modules/(?!(@modelcontextprotocol)/)'
