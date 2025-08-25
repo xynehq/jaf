@@ -179,7 +179,7 @@ interface ChatRequest {
   agentName: string;               // Required: Target agent name
   context?: any;                   // Optional: Agent context
   maxTurns?: number;              // Optional: Override max turns
-  stream?: boolean;               // Optional: Streaming (not yet implemented)
+  stream?: boolean;               // Optional: When true, responds with Server-Sent Events (SSE)
   conversationId?: string;        // Optional: For conversation persistence
   memory?: {
     autoStore?: boolean;          // Default: true
@@ -194,7 +194,7 @@ interface HttpMessage {
 }
 ```
 
-**Response:**
+**Response (non-streaming):**
 ```json
 {
   "success": true,
@@ -217,6 +217,66 @@ interface HttpMessage {
   }
 }
 ```
+
+#### Streaming Responses (SSE)
+
+Set `stream: true` to receive a Server-Sent Events stream instead of a JSON response. The server keeps the HTTP connection open and pushes events as they happen. Each event name corresponds to a `TraceEvent.type`.
+
+```bash
+curl -N -H "Content-Type: application/json" \
+  -X POST http://localhost:3000/chat \
+  -d '{
+    "messages": [{"role": "user", "content": "Hi, I am Alice. What time is it?"}],
+    "agentName": "Assistant",
+    "stream": true,
+    "context": {"userId": "user123"}
+  }'
+```
+
+SSE event format:
+- Content-Type: `text/event-stream`
+- Each event:
+  - `event: <TraceEvent.type>`
+  - `data: <JSON payload>`
+  - blank line terminator
+
+Example events you may see:
+- `run_start`
+- `llm_call_start` / `llm_call_end`
+- `assistant_message`
+- `tool_requests`
+- `tool_call_start` / `tool_call_end`
+- `tool_results_to_llm`
+- `final_output`
+- `run_end`
+
+The stream starts with a `stream_start` event containing run metadata and ends with `stream_end` after `run_end`.
+
+#### SSE Event Types and Payloads
+
+Below is the list of SSE events you may receive when `stream: true` is set on `/chat` and their payload shapes. Events correspond to engine `TraceEvent`s unless noted.
+
+| Event | Description | Payload (JSON) |
+|------|-------------|----------------|
+| `stream_start` | Server-only preface with metadata | `{ runId: string, traceId: string, conversationId?: string, agent: string }` |
+| `run_start` | A new run has begun | `{ runId: string, traceId: string }` |
+| `turn_start` | Turn started | `{ turn: number, agentName: string }` |
+| `llm_call_start` | Engine is calling the model | `{ agentName: string, model: string }` |
+| `llm_call_end` | Model responded (raw choice) | `{ choice: any }` |
+| `token_usage` | Token usage reported by provider | `{ prompt?: number, completion?: number, total?: number, model?: string }` |
+| `assistant_message` | Assistant message received from model | `{ message: { role: 'assistant', content?: string, tool_calls?: Array<{ id: string, type: 'function', function: { name: string, arguments: string } }> } }` |
+| `tool_requests` | LLM requested tool invocations | `{ toolCalls: Array<{ id: string, name: string, args: any }>} ` |
+| `tool_call_start` | Tool execution started | `{ toolName: string, args: any }` |
+| `tool_call_end` | Tool execution finished | `{ toolName: string, result: string, toolResult?: any, status?: string }` |
+| `tool_results_to_llm` | Tool results appended for next LLM turn | `{ results: Array<{ role: 'tool', content: string, tool_call_id?: string }> }` |
+| `handoff` | Agent handoff occurred | `{ from: string, to: string }` |
+| `handoff_denied` | Agent handoff was rejected | `{ from: string, to: string, reason: string }` |
+| `guardrail_violation` | Input/output guardrail blocked output | `{ stage: 'input' | 'output', reason: string }` |
+| `decode_error` | Output codec validation failed | `{ errors: any }` |
+| `turn_end` | Turn finished | `{ turn: number, agentName: string }` |
+| `final_output` | Final output before completion | `{ output: any }` |
+| `run_end` | Run completed or failed | `{ outcome: { status: 'completed' | 'error', output?: any, error?: any } }` |
+| `stream_end` | Server-only terminator | `{ ended: true }` |
 
 ### Agent-Specific Chat
 
@@ -455,7 +515,8 @@ All endpoints return errors in a consistent format:
 - **400**: Bad Request (invalid JSON, missing required fields)
 - **404**: Not Found (agent not found)
 - **500**: Internal Server Error (agent execution failed, memory provider error)
-- **501**: Not Implemented (streaming requests)
+  
+Note: For streaming (`stream: true`), a successful connection returns `200` and remains open until the run finishes or the client disconnects.
 - **503**: Service Unavailable (memory provider not configured)
 
 ### Agent Execution Errors

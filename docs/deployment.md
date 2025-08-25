@@ -457,6 +457,17 @@ server {
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
     }
+
+    # SSE streaming endpoint (optional: if you want specific tuning)
+    location = /chat {
+        proxy_pass http://jaf_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection '';
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        add_header X-Accel-Buffering no;
+    }
     
     # Health check endpoint (bypass rate limiting)
     location /health {

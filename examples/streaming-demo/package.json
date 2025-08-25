@@ -1,0 +1,23 @@
+{
+  "name": "jaf-streaming-demo",
+  "version": "1.0.0",
+  "description": "Demonstration of JAF event streaming over SSE",
+  "main": "server.ts",
+  "scripts": {
+    "dev": "tsx server.ts",
+    "server": "tsx server.ts",
+    "direct": "tsx stream-direct.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "@xynehq/jaf": "workspace:*",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

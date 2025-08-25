@@ -9,7 +9,7 @@ import {
   HttpMessage,
   chatRequestSchema
 } from './types';
-import { run } from '../core/engine';
+import { run, runStream } from '../core/engine';
 import { RunState, Message, createRunId, createTraceId } from '../core/types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -183,13 +183,61 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
 
         // Handle streaming vs non-streaming
         if (validatedRequest.stream) {
-          // For streaming, we'd need to implement Server-Sent Events
-          // For now, return an error indicating streaming is not yet implemented
-          const response: ChatResponse = {
-            success: false,
-            error: 'Streaming is not yet implemented. Set stream: false.'
+          // SSE headers
+          reply.raw.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache, no-transform',
+            Connection: 'keep-alive',
+            'X-Accel-Buffering': 'no'
+          });
+
+          const send = (event: string, data: any) => {
+            try {
+              reply.raw.write(`event: ${event}\n`);
+              reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+            } catch (e) {
+              app.log.warn({ err: e }, 'SSE write failed');
+            }
           };
-          return reply.code(501).send(response);
+
+          // Send initial metadata event
+          send('stream_start', {
+            runId,
+            traceId,
+            conversationId,
+            agent: validatedRequest.agentName
+          });
+
+          let clientClosed = false;
+          request.raw.on('close', () => {
+            clientClosed = true;
+            try { reply.raw.end(); } catch { /* ignore */ }
+          });
+
+          // Use the core streaming generator to forward events
+          try {
+            for await (const event of runStream<Ctx, unknown>(initialState, runConfig)) {
+              if (clientClosed) break;
+              send(event.type, event);
+
+              // If run ends, we close the stream
+              if (event.type === 'run_end') {
+                break;
+              }
+            }
+          } catch (streamErr) {
+            send('error', { message: streamErr instanceof Error ? streamErr.message : String(streamErr) });
+          } finally {
+            if (!clientClosed) {
+              send('stream_end', { ended: true });
+              try { reply.raw.end(); } catch { /* ignore */ }
+            }
+          }
+
+          // Fastify requires a return, but we've handled the response
+          // Returning undefined indicates the response has been sent
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+          return undefined as any;
         }
 
         // Run the agent
@@ -456,4 +504,3 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
     stop
   };
 }
-

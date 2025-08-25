@@ -555,6 +555,46 @@ curl -X POST http://localhost:3000/chat \
   }'
 ```
 
+### Streaming Responses
+
+Receive live events via Server‑Sent Events (SSE) by setting `stream: true`:
+
+```bash
+curl -N -H "Content-Type: application/json" \
+  -X POST http://localhost:3000/chat \
+  -d '{
+    "messages": [{"role": "user", "content": "Hi, I am Alice. What time is it?"}],
+    "agentName": "SmartAssistant",
+    "stream": true,
+    "context": {"userId": "user123"}
+  }'
+```
+
+Each SSE event is named after a `TraceEvent.type` (e.g., `run_start`, `assistant_message`, `tool_call_end`, `final_output`, `run_end`).
+
+### Direct Engine Streaming
+
+Stream events without starting a server using `runStream`:
+
+```typescript
+import { runStream, generateRunId, generateTraceId } from '@xynehq/jaf';
+
+const initialState = {
+  runId: generateRunId(),
+  traceId: generateTraceId(),
+  messages: [{ role: 'user', content: 'Hello' }],
+  currentAgentName: 'Assistant',
+  context: {},
+  turnCount: 0,
+} as const;
+
+const runConfig = { agentRegistry, modelProvider } as const;
+
+for await (const event of runStream(initialState, runConfig)) {
+  console.log(event.type);
+}
+```
+
 ## Error Handling
 
 JAF provides comprehensive error handling:

@@ -447,9 +447,20 @@ Events are automatically associated with traces:
 ```typescript
 export type TraceEvent =
   | { type: 'run_start'; data: { runId: RunId; traceId: TraceId; } }
+  | { type: 'turn_start'; data: { turn: number; agentName: string } }
   | { type: 'llm_call_start'; data: { agentName: string; model: string; } }
+  | { type: 'llm_call_end'; data: { choice: any } }
+  | { type: 'token_usage'; data: { prompt?: number; completion?: number; total?: number; model?: string } }
   | { type: 'tool_call_start'; data: { toolName: string; args: any; } }
+  | { type: 'tool_call_end'; data: { toolName: string; result: string; toolResult?: any; status?: string } }
+  | { type: 'assistant_message'; data: { message: Message } }
+  | { type: 'tool_requests'; data: { toolCalls: Array<{ id: string; name: string; args: any }> } }
+  | { type: 'tool_results_to_llm'; data: { results: Message[] } }
   | { type: 'handoff'; data: { from: string; to: string; } }
+  | { type: 'handoff_denied'; data: { from: string; to: string; reason: string } }
+  | { type: 'guardrail_violation'; data: { stage: 'input' | 'output'; reason: string } }
+  | { type: 'decode_error'; data: { errors: z.ZodIssue[] } }
+  | { type: 'turn_end'; data: { turn: number; agentName: string } }
   | { type: 'run_end'; data: { outcome: RunResult<any>['outcome'] } };
 ```
 

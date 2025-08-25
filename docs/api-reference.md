@@ -878,12 +878,69 @@ const routerAgent = {
 ```typescript
 type TraceEvent =
   | { type: 'run_start'; data: { runId: RunId; traceId: TraceId; } }
+  | { type: 'turn_start'; data: { turn: number; agentName: string } }
   | { type: 'llm_call_start'; data: { agentName: string; model: string; } }
   | { type: 'llm_call_end'; data: { choice: any; } }
+  | { type: 'token_usage'; data: { prompt?: number; completion?: number; total?: number; model?: string } }
   | { type: 'tool_call_start'; data: { toolName: string; args: any; } }
   | { type: 'tool_call_end'; data: { toolName: string; result: string; toolResult?: any; status?: string; } }
   | { type: 'handoff'; data: { from: string; to: string; } }
+  | { type: 'tool_requests'; data: { toolCalls: Array<{ id: string; name: string; args: any }>; } }
+  | { type: 'tool_results_to_llm'; data: { results: Message[] } }
+  | { type: 'assistant_message'; data: { message: Message } }
+  | { type: 'final_output'; data: { output: any } }
+  | { type: 'handoff_denied'; data: { from: string; to: string; reason: string } }
+  | { type: 'guardrail_violation'; data: { stage: 'input' | 'output'; reason: string } }
+  | { type: 'decode_error'; data: { errors: z.ZodIssue[] } }
+  | { type: 'turn_end'; data: { turn: number; agentName: string } }
   | { type: 'run_end'; data: { outcome: RunResult<any>['outcome'] } };
+```
+
+#### `TraceEvent` Payload Summary
+
+- `run_start`: `{ runId: RunId, traceId: TraceId }`
+- `llm_call_start`: `{ agentName: string, model: string }`
+- `llm_call_end`: `{ choice: any }` — raw model provider response
+- `token_usage`: `{ prompt?: number, completion?: number, total?: number, model?: string }`
+- `assistant_message`: `{ message: Message }` — assistant message with optional `tool_calls`
+- `tool_requests`: `{ toolCalls: Array<{ id: string, name: string, args: any }>} ` — parsed tool calls requested by LLM
+- `tool_call_start`: `{ toolName: string, args: any }`
+- `tool_call_end`: `{ toolName: string, result: string, toolResult?: any, status?: string }` — `toolResult` present when tool uses ToolResult API
+- `tool_results_to_llm`: `{ results: Message[] }` — tool messages appended and provided to the next LLM turn
+- `handoff`: `{ from: string, to: string }` — agent name transition
+- `handoff_denied`: `{ from: string, to: string, reason: string }` — attempted handoff was rejected
+- `guardrail_violation`: `{ stage: 'input' | 'output', reason: string }`
+- `decode_error`: `{ errors: z.ZodIssue[] }`
+- `turn_start`: `{ turn: number, agentName: string }`
+- `turn_end`: `{ turn: number, agentName: string }`
+- `final_output`: `{ output: any }` — emitted before returning a successful `RunResult`
+- `run_end`: `{ outcome: RunResult<any>['outcome'] }` — terminal event for the run
+
+### Engine Streaming
+
+Use `runStream` to stream `TraceEvent`s from the engine as they occur.
+
+```typescript
+import { runStream, Agent, Tool, Message, RunState, RunConfig } from '@xynehq/jaf';
+
+const agent: Agent<{}, string> = { /* ... */ };
+
+const messages: Message[] = [{ role: 'user', content: 'Hello' }];
+const initialState: RunState<{}> = {
+  runId: generateRunId(),
+  traceId: generateTraceId(),
+  messages,
+  currentAgentName: agent.name,
+  context: {},
+  turnCount: 0,
+};
+
+const agentRegistry = new Map([[agent.name, agent]]);
+const runConfig: RunConfig<{}> = { agentRegistry, modelProvider: /* ... */ };
+
+for await (const event of runStream<{}, string>(initialState, runConfig)) {
+  console.log('event:', event.type);
+}
 ```
 
 ### `TraceCollector` Interface

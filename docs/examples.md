@@ -14,11 +14,12 @@ This comprehensive guide covers the example projects in the JAF framework, demon
 
 ## Overview
 
-The JAF framework includes three comprehensive example projects that demonstrate different aspects of the framework:
+The JAF framework includes multiple example projects that demonstrate different aspects of the framework:
 
 1. **Server Demo** (`examples/server-demo/`) - A multi-agent HTTP server with memory persistence
-2. **RAG Demo** (`examples/rag-demo/`) - Vertex AI RAG integration with streaming responses
-3. **Visualization Demo** (`examples/visualization-demo/`) - Graphviz-based agent and tool visualization
+2. **Streaming Demo** (`examples/streaming-demo/`) - Event-level streaming via SSE and direct engine streaming
+3. **RAG Demo** (`examples/rag-demo/`) - Vertex AI RAG integration with streaming responses
+4. **Visualization Demo** (`examples/visualization-demo/`) - Graphviz-based agent and tool visualization
 
 All examples showcase the framework's core principles:
 - **Immutability**: All state is deeply readonly
@@ -1559,3 +1560,40 @@ if (stats.success) {
 ---
 
 This guide provides comprehensive coverage of the JAF framework examples, from basic usage to advanced patterns and troubleshooting. Each section includes practical code examples and real-world implementation strategies to help developers build robust AI agent systems using the Juspay Agent Framework.
+## Streaming Demo: SSE + Direct Engine
+
+### Overview
+
+The Streaming Demo showcases two ways to consume real-time events:
+- Over HTTP using Server‑Sent Events (SSE) from the built-in server
+- Directly from the engine using the `runStream` async generator (no server)
+
+**Location**: `examples/streaming-demo/`
+
+### Run the Server + SSE
+
+```bash
+# Terminal 1: start server
+cd examples/streaming-demo
+npm install
+npm run server
+
+# Terminal 2: stream SSE events
+curl -N -H "Content-Type: application/json" \
+  -X POST http://localhost:3004/chat \
+  -d '{
+    "agentName": "StreamerBot",
+    "stream": true,
+    "messages": [{ "role": "user", "content": "Hi, I am Alice. What time is it?" }],
+    "context": { "userId": "demo" }
+  }'
+```
+
+### Run Direct Engine Streaming
+
+```bash
+cd examples/streaming-demo
+npm run direct -- "Hi, I'm Bob. Please greet me then tell the time."
+```
+
+See the README in the example for environment variables and details.

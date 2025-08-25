@@ -62,6 +62,9 @@ export class ConsoleTraceCollector implements TraceCollector {
       case 'llm_call_start':
         console.log(`${prefix} Calling ${event.data.model} for agent ${event.data.agentName}`);
         break;
+      case 'turn_start':
+        console.log(`${prefix} Turn ${event.data.turn} started for ${event.data.agentName}`);
+        break;
       case 'llm_call_end': {
         const choice = event.data.choice;
         const hasTools = choice.message?.tool_calls?.length > 0;
@@ -69,6 +72,9 @@ export class ConsoleTraceCollector implements TraceCollector {
         console.log(`${prefix} LLM responded with ${hasTools ? 'tool calls' : hasContent ? 'content' : 'empty response'}`);
         break;
       }
+      case 'token_usage':
+        console.log(`${prefix} Token usage: prompt=${event.data.prompt ?? '-'} completion=${event.data.completion ?? '-'} total=${event.data.total ?? '-'}`);
+        break;
       case 'tool_call_start':
         console.log(`${prefix} Executing tool ${event.data.toolName} with args:`, event.data.args);
         break;
@@ -77,6 +83,18 @@ export class ConsoleTraceCollector implements TraceCollector {
         break;
       case 'handoff':
         console.log(`${prefix} Agent handoff: ${event.data.from} → ${event.data.to}`);
+        break;
+      case 'handoff_denied':
+        console.warn(`${prefix} Handoff denied: ${event.data.from} → ${event.data.to}. Reason: ${event.data.reason}`);
+        break;
+      case 'guardrail_violation':
+        console.warn(`${prefix} Guardrail violation (${event.data.stage}): ${event.data.reason}`);
+        break;
+      case 'decode_error':
+        console.error(`${prefix} Decode error:`, event.data.errors);
+        break;
+      case 'turn_end':
+        console.log(`${prefix} Turn ${event.data.turn} ended for ${event.data.agentName}`);
         break;
       case 'run_end': {
         const outcome = event.data.outcome;

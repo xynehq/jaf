@@ -66,6 +66,83 @@ export async function run<Ctx, Out>(
   }
 }
 
+// Streaming helper: create a simple async queue to yield events as they occur
+function createAsyncEventStream<T>() {
+  const queue: T[] = [];
+  let resolveNext: ((value: IteratorResult<T>) => void) | null = null;
+  let done = false;
+
+  return {
+    push(event: T) {
+      if (done) return;
+      if (resolveNext) {
+        const r = resolveNext;
+        resolveNext = null;
+        r({ value: event, done: false });
+      } else {
+        queue.push(event);
+      }
+    },
+    end() {
+      if (done) return;
+      done = true;
+      if (resolveNext) {
+        const r = resolveNext;
+        resolveNext = null;
+        r({ value: undefined as any, done: true });
+      }
+    },
+    iterator: {
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+      next(): Promise<IteratorResult<T>> {
+        if (queue.length > 0) {
+          return Promise.resolve({ value: queue.shift() as T, done: false });
+        }
+        if (done) {
+          return Promise.resolve({ value: undefined as any, done: true });
+        }
+        return new Promise<IteratorResult<T>>((resolve) => {
+          resolveNext = resolve;
+        });
+      },
+    },
+  } as const;
+}
+
+/**
+ * Stream run events as they happen via an async generator.
+ * Consumers can iterate events to build live UIs or forward via SSE.
+ */
+export async function* runStream<Ctx, Out>(
+  initialState: RunState<Ctx>,
+  config: RunConfig<Ctx>
+): AsyncGenerator<TraceEvent, void, unknown> {
+  const stream = createAsyncEventStream<TraceEvent>();
+  
+  // Tee events: push to stream and call any existing onEvent
+  const onEvent = (event: TraceEvent) => {
+    try { stream.push(event); } catch { /* ignore */ }
+    try { config.onEvent?.(event); } catch { /* ignore */ }
+  };
+
+  // Kick off the run without awaiting so events can flow concurrently
+  const runPromise = run<Ctx, Out>(initialState, { ...config, onEvent });
+  void runPromise.finally(() => {
+    stream.end();
+  });
+
+  try {
+    for await (const event of stream.iterator as AsyncGenerator<TraceEvent>) {
+      yield event;
+    }
+  } finally {
+    // Ensure completion
+    await runPromise.catch(() => undefined);
+  }
+}
+
 async function runInternal<Ctx, Out>(
   state: RunState<Ctx>,
   config: RunConfig<Ctx>
@@ -76,6 +153,11 @@ async function runInternal<Ctx, Out>(
       for (const guardrail of config.initialInputGuardrails) {
         const result = await guardrail(firstUserMessage.content);
         if (!result.isValid) {
+          // Emit guardrail violation for input stage
+          config.onEvent?.({
+            type: 'guardrail_violation',
+            data: { stage: 'input', reason: result.errorMessage }
+          });
           return {
             finalState: state,
             outcome: {
@@ -140,6 +222,10 @@ async function runInternal<Ctx, Out>(
     };
   }
   
+  // Turn lifecycle start (before LLM call)
+  const turnNumber = state.turnCount + 1;
+  config.onEvent?.({ type: 'turn_start', data: { turn: turnNumber, agentName: currentAgent.name } });
+
   config.onEvent?.({
     type: 'llm_call_start',
     data: { agentName: currentAgent.name, model }
@@ -152,7 +238,25 @@ async function runInternal<Ctx, Out>(
     data: { choice: llmResponse }
   });
 
+  // Emit token usage if provider supplied it
+  try {
+    const usage = (llmResponse as any)?.usage;
+    if (usage && (usage.prompt_tokens || usage.completion_tokens || usage.total_tokens)) {
+      config.onEvent?.({
+        type: 'token_usage',
+        data: {
+          prompt: usage.prompt_tokens,
+          completion: usage.completion_tokens,
+          total: usage.total_tokens,
+          model
+        }
+      });
+    }
+  } catch { /* ignore */ }
+
   if (!llmResponse.message) {
+    // End of turn due to error condition
+    config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
     return {
       finalState: state,
       outcome: {
@@ -171,6 +275,12 @@ async function runInternal<Ctx, Out>(
     tool_calls: llmResponse.message.tool_calls
   };
 
+  // Emit assistant message received (could include tool calls and/or content)
+  config.onEvent?.({
+    type: 'assistant_message',
+    data: { message: assistantMessage }
+  });
+
   const newMessages = [...state.messages, assistantMessage];
   // Increment turnCount after each AI invocation
   const updatedTurnCount = state.turnCount + 1;
@@ -178,6 +288,16 @@ async function runInternal<Ctx, Out>(
   if (llmResponse.message.tool_calls && llmResponse.message.tool_calls.length > 0) {
     console.log(`[JAF:ENGINE] Processing ${llmResponse.message.tool_calls.length} tool calls`);
     console.log(`[JAF:ENGINE] Tool calls:`, llmResponse.message.tool_calls);
+    
+    // Emit tool request(s) event with parsed args
+    try {
+      const requests = llmResponse.message.tool_calls.map(tc => ({
+        id: tc.id,
+        name: tc.function.name,
+        args: tryParseJSON(tc.function.arguments)
+      }));
+      config.onEvent?.({ type: 'tool_requests', data: { toolCalls: requests } });
+    } catch { /* ignore */ }
     
     const toolResults = await executeToolCalls(
       llmResponse.message.tool_calls,
@@ -188,12 +308,23 @@ async function runInternal<Ctx, Out>(
     
     console.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
 
+    // Emit tool results being added (and thus sent back to the LLM on next turn)
+    config.onEvent?.({
+      type: 'tool_results_to_llm',
+      data: { results: toolResults.map(r => r.message) }
+    });
+
     if (toolResults.some(r => r.isHandoff)) {
       const handoffResult = toolResults.find(r => r.isHandoff);
       if (handoffResult) {
         const targetAgent = handoffResult.targetAgent!;
         
         if (!currentAgent.handoffs?.includes(targetAgent)) {
+          // Emit handoff denied event for observability
+          config.onEvent?.({
+            type: 'handoff_denied',
+            data: { from: currentAgent.name, to: targetAgent, reason: `Agent ${currentAgent.name} cannot handoff to ${targetAgent}` }
+          });
           return {
             finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
             outcome: {
@@ -217,7 +348,8 @@ async function runInternal<Ctx, Out>(
           currentAgentName: targetAgent,
           turnCount: updatedTurnCount
         };
-
+        // End of turn before handing off to next agent
+        config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
         return runInternal(nextState, config);
       }
     }
@@ -227,7 +359,8 @@ async function runInternal<Ctx, Out>(
       messages: [...newMessages, ...toolResults.map(r => r.message)],
       turnCount: updatedTurnCount
     };
-
+    // End of this turn before next model call
+    config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
     return runInternal(nextState, config);
   }
 
@@ -238,6 +371,10 @@ async function runInternal<Ctx, Out>(
       );
       
       if (!parseResult.success) {
+        // Emit decode error
+        config.onEvent?.({ type: 'decode_error', data: { errors: parseResult.error.issues } });
+        // End of turn
+        config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
         return {
           finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
           outcome: {
@@ -254,6 +391,10 @@ async function runInternal<Ctx, Out>(
         for (const guardrail of config.finalOutputGuardrails) {
           const result = await guardrail(parseResult.data);
           if (!result.isValid) {
+            // Emit guardrail violation (output)
+            config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: result.errorMessage } });
+            // End of turn
+            config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
             return {
               finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
               outcome: {
@@ -267,6 +408,11 @@ async function runInternal<Ctx, Out>(
           }
         }
       }
+
+      // Emit final output prior to completion
+      config.onEvent?.({ type: 'final_output', data: { output: parseResult.data } });
+      // End of turn
+      config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
 
       return {
         finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
@@ -280,6 +426,10 @@ async function runInternal<Ctx, Out>(
         for (const guardrail of config.finalOutputGuardrails) {
           const result = await guardrail(llmResponse.message.content);
           if (!result.isValid) {
+            // Emit guardrail violation (output)
+            config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: result.errorMessage } });
+            // End of turn
+            config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
             return {
               finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
               outcome: {
@@ -294,6 +444,11 @@ async function runInternal<Ctx, Out>(
         }
       }
 
+      // Emit final output prior to completion
+      config.onEvent?.({ type: 'final_output', data: { output: llmResponse.message.content } });
+      // End of turn
+      config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+
       return {
         finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
         outcome: {
@@ -304,6 +459,8 @@ async function runInternal<Ctx, Out>(
     }
   }
 
+  // End of turn due to error
+  config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
   return {
     finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
     outcome: {
