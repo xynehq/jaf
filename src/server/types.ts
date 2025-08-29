@@ -59,16 +59,16 @@ export const fullMessageSchema = z.union([
 export const chatResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    runId: z.string(),
-    traceId: z.string(),
+      runId: z.string(),
+      traceId: z.string(),
     conversationId: z.string().optional(),
     messages: z.array(fullMessageSchema),
-    outcome: z.object({
-      status: z.enum(['completed', 'error', 'max_turns']),
-      output: z.string().optional(),
+      outcome: z.object({
+        status: z.enum(['completed', 'error', 'max_turns', 'interrupted']),
+        output: z.string().optional(),
       error: z.any().optional()
-    }),
-    turnCount: z.number(),
+      }),
+      turnCount: z.number(),
     executionTimeMs: z.number()
   }).optional(),
   error: z.string().optional()

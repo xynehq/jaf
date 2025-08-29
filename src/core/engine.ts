@@ -8,6 +8,8 @@ import {
   TraceEvent,
   Agent,
   Tool,
+  ToolCall,
+  Interruption,
 } from './types.js';
 
 export async function run<Ctx, Out>(
@@ -303,8 +305,25 @@ async function runInternal<Ctx, Out>(
       llmResponse.message.tool_calls,
       currentAgent,
       state,
-      config
+      config,
     );
+
+    const interruptions = toolResults
+      .map(r => r.interruption)
+      .filter(Boolean) as Interruption<Ctx>[];
+    if (interruptions.length > 0) {
+      return {
+        finalState: {
+          ...state,
+          messages: [...newMessages, ...toolResults.map(r => r.message)],
+          turnCount: updatedTurnCount,
+        },
+        outcome: {
+          status: 'interrupted',
+          interruptions,
+        },
+      };
+    }
     
     console.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
 
@@ -346,7 +365,8 @@ async function runInternal<Ctx, Out>(
           ...state,
           messages: [...newMessages, ...toolResults.map(r => r.message)],
           currentAgentName: targetAgent,
-          turnCount: updatedTurnCount
+          turnCount: updatedTurnCount,
+          approvals: state.approvals,
         };
         // End of turn before handing off to next agent
         config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -357,7 +377,8 @@ async function runInternal<Ctx, Out>(
     const nextState: RunState<Ctx> = {
       ...state,
       messages: [...newMessages, ...toolResults.map(r => r.message)],
-      turnCount: updatedTurnCount
+      turnCount: updatedTurnCount,
+      approvals: state.approvals,
     };
     // End of this turn before next model call
     config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -477,17 +498,11 @@ type ToolCallResult = {
   message: Message;
   isHandoff?: boolean;
   targetAgent?: string;
+  interruption?: Interruption<any>;
 };
 
 async function executeToolCalls<Ctx>(
-  toolCalls: Array<{
-    id: string;
-    type: 'function';
-    function: {
-      name: string;
-      arguments: string;
-    };
-  }>,
+  toolCalls: readonly ToolCall[],
   agent: Agent<Ctx, any>,
   state: RunState<Ctx>,
   config: RunConfig<Ctx>
@@ -548,6 +563,38 @@ async function executeToolCalls<Ctx>(
               content: errorResult,
               tool_call_id: toolCall.id
             }
+          };
+        }
+
+        const approvalStatus = state.approvals.get(toolCall.id);
+        if (tool.needsApproval && approvalStatus === undefined) {
+          return {
+            interruption: {
+              type: 'tool_approval',
+              toolCall,
+              agent,
+            },
+            message: {
+              role: 'tool',
+              content: JSON.stringify({
+                error: 'approval_required',
+                message: `Tool ${toolCall.function.name} requires approval.`,
+              }),
+              tool_call_id: toolCall.id,
+            },
+          };
+        }
+
+        if (approvalStatus === false) {
+          return {
+            message: {
+              role: 'tool',
+              content: JSON.stringify({
+                error: 'approval_denied',
+                message: `Tool ${toolCall.function.name} was denied.`,
+              }),
+              tool_call_id: toolCall.id,
+            },
           };
         }
 

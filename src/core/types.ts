@@ -11,18 +11,20 @@ export type ValidationResult =
   | { readonly isValid: true }
   | { readonly isValid: false; readonly errorMessage: string };
 
+export type ToolCall = {
+  readonly id: string;
+  readonly type: 'function';
+  readonly function: {
+    readonly name:string;
+    readonly arguments: string;
+  };
+};
+
 export type Message = {
   readonly role: 'user' | 'assistant' | 'tool';
   readonly content: string;
   readonly tool_call_id?: string;
-  readonly tool_calls?: readonly {
-    readonly id: string;
-    readonly type: 'function';
-    readonly function: {
-      readonly name: string;
-      readonly arguments: string;
-    };
-  }[];
+  readonly tool_calls?: readonly ToolCall[];
 };
 
 export type ModelConfig = {
@@ -37,7 +39,16 @@ export type Tool<A, Ctx> = {
     readonly description: string;
     readonly parameters: z.ZodType<A>;
   };
-  readonly execute: (args: A, context: Readonly<Ctx>) => Promise<string | import('./tool-results').ToolResult>;
+  readonly execute: (
+    args: A,
+    context: Readonly<Ctx>,
+  ) => Promise<string | import('./tool-results').ToolResult>;
+  readonly needsApproval?:
+    | boolean
+    | ((
+        context: Readonly<Ctx>,
+        params: Readonly<A>,
+      ) => Promise<boolean> | boolean);
 };
 
 export type Agent<Ctx, Out> = {
@@ -60,6 +71,7 @@ export type RunState<Ctx> = {
   readonly currentAgentName: string;
   readonly context: Readonly<Ctx>;
   readonly turnCount: number;
+  readonly approvals: ReadonlyMap<string, boolean>;
 };
 
 export type JAFError =
@@ -72,11 +84,23 @@ export type JAFError =
   | { readonly _tag: "HandoffError"; readonly detail: string }
   | { readonly _tag: "AgentNotFound"; readonly agentName: string };
 
+export type ToolApprovalInterruption<Ctx> = {
+  readonly type: 'tool_approval';
+  readonly toolCall: ToolCall;
+  readonly agent: Agent<Ctx, any>;
+};
+
+export type Interruption<Ctx> = ToolApprovalInterruption<Ctx>;
+
 export type RunResult<Out> = {
   readonly finalState: RunState<any>;
   readonly outcome:
     | { readonly status: 'completed'; readonly output: Out }
-    | { readonly status: 'error'; readonly error: JAFError };
+    | { readonly status: 'error'; readonly error: JAFError }
+    | {
+        readonly status: 'interrupted';
+        readonly interruptions: readonly Interruption<any>[];
+      };
 };
 
 export type TraceEvent =
@@ -106,14 +130,7 @@ export interface ModelProvider<Ctx> {
   ) => Promise<{
     message?: {
       content?: string | null;
-      tool_calls?: Array<{
-        id: string;
-        type: 'function';
-        function: {
-          name: string;
-          arguments: string;
-        };
-      }>;
+      tool_calls?: readonly ToolCall[];
     };
   }>;
 }

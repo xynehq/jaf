@@ -164,8 +164,9 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
           traceId,
           messages: jafMessages,
           currentAgentName: validatedRequest.agentName,
-          context: validatedRequest.context || {} as Ctx,
-          turnCount: 0
+          context: validatedRequest.context || ({} as Ctx),
+          turnCount: 0,
+          approvals: new Map(),
         };
 
         // Create run config with memory configuration
