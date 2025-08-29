@@ -114,7 +114,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
-    "@modelcontextprotocol/sdk": "^0.4.0",
+    "@modelcontextprotocol/sdk": "^1.17.4",
     "eventsource": "^2.0.2",
     "fastify": "^4.29.1",
     "mathjs": "^14.6.0",
