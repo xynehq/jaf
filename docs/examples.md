@@ -887,6 +887,22 @@ const mcpAgent: Agent<MyContext, string> = {
 };
 ```
 
+#### Streamable HTTP (SSE) MCP — Cloudflare Docs Server
+
+You can connect to a remote MCP server that implements the Streamable HTTP transport with SSE. For example, the Cloudflare Docs MCP server:
+
+```typescript
+import { makeMCPClientSSE } from '@xynehq/jaf'
+
+const endpoint = 'https://docs.mcp.cloudflare.com/sse'
+const mcpClient = await makeMCPClientSSE(endpoint)
+const tools = await mcpClient.listTools()
+console.log('Cloudflare Docs MCP tools:', tools.map(t => t.name))
+await mcpClient.close()
+```
+
+See a runnable demo in `examples/mcp-cloudflare-docs/` that lists all available tools from the remote server.
+
 #### MCP Tool Validation
 
 ```typescript

@@ -315,3 +315,22 @@ This demo shows how JAF integrates with MCP:
 ---
 
 **Ready to explore AI agents with real filesystem capabilities!** 🗂️
+### Connecting to a Remote MCP Server (SSE)
+
+You can also connect to a remote MCP server that implements the Streamable HTTP transport with Server‑Sent Events (SSE):
+
+```ts
+import { makeMCPClientSSE } from '../../src/providers/mcp'
+
+const mcpClient = await makeMCPClientSSE('https://your-remote-mcp.example.com/mcp', {
+  headers: {
+    // Optional: include auth or custom headers for the remote MCP server
+    Authorization: `Bearer ${process.env.MCP_API_TOKEN ?? ''}`,
+  },
+})
+
+const tools = await mcpClient.listTools()
+console.log('Remote MCP tools:', tools)
+```
+
+This uses the official `@modelcontextprotocol/sdk` SSE client to connect to remote servers per the MCP 2025‑06‑18 spec.
