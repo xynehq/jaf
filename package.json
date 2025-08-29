@@ -116,6 +116,7 @@
     "@fastify/cors": "^9.0.1",
     "@modelcontextprotocol/sdk": "^0.4.0",
     "fastify": "^4.29.1",
+    "langfuse": "^3.26.0",
     "mathjs": "^14.6.0",
     "openai": "^4.0.0",
     "uuid": "^9.0.0",
@@ -137,5 +138,12 @@
     "ts-jest": "^29.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
+  },
+  "optionalDependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-node": "^0.54.0",
+    "@opentelemetry/exporter-otlp-http": "^0.54.0",
+    "@opentelemetry/resources": "^1.28.0",
+    "@opentelemetry/semantic-conventions": "^1.28.0"
   }
 }
