@@ -54,14 +54,30 @@
   },
   "typesVersions": {
     "*": {
-      "adk": ["dist/adk/index.d.ts"],
-      "server": ["dist/server/index.d.ts"],
-      "providers": ["dist/providers/index.d.ts"],
-      "policies": ["dist/policies/index.d.ts"],
-      "memory": ["dist/memory/index.d.ts"],
-      "core": ["dist/core/index.d.ts"],
-      "visualization": ["dist/visualization/index.d.ts"],
-      "utils": ["dist/utils/index.d.ts"]
+      "adk": [
+        "dist/adk/index.d.ts"
+      ],
+      "server": [
+        "dist/server/index.d.ts"
+      ],
+      "providers": [
+        "dist/providers/index.d.ts"
+      ],
+      "policies": [
+        "dist/policies/index.d.ts"
+      ],
+      "memory": [
+        "dist/memory/index.d.ts"
+      ],
+      "core": [
+        "dist/core/index.d.ts"
+      ],
+      "visualization": [
+        "dist/visualization/index.d.ts"
+      ],
+      "utils": [
+        "dist/utils/index.d.ts"
+      ]
     }
   },
   "files": [
@@ -114,6 +130,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
+    "@google-cloud/vertexai": "^1.10.0",
     "@modelcontextprotocol/sdk": "^0.4.0",
     "eventsource": "^2.0.2",
     "fastify": "^4.29.1",
