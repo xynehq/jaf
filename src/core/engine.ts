@@ -17,7 +17,13 @@ export async function run<Ctx, Out>(
   try {
     config.onEvent?.({
       type: 'run_start',
-      data: { runId: initialState.runId, traceId: initialState.traceId }
+      data: { 
+        runId: initialState.runId, 
+        traceId: initialState.traceId,
+        context: initialState.context,
+        userId: (initialState.context as any)?.userId,
+        sessionId: (initialState.context as any)?.sessionId || (initialState.context as any)?.conversationId
+      }
     });
 
     // Load conversation history from memory if configured

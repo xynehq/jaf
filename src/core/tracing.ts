@@ -349,12 +349,26 @@ export class LangfuseTraceCollector implements TraceCollector {
       switch (eventType) {
         case 'run_start': {
           console.log(`[JAF:LANGFUSE] Starting trace for run: ${traceId}`);
+          
+          // Extract session and user info from context or event data
+          const context = (data as any).context || {};
+          const userId = (data as any).userId || context.userId || 'anonymous';
+          const sessionId = (data as any).sessionId || context.sessionId || context.conversationId || `session-${traceId}`;
+          
+          console.log(`[JAF:LANGFUSE] Using userId: ${userId}, sessionId: ${sessionId}`);
+          
           const trace = this.langfuse.trace({
             name: `jaf-run-${traceId}`,
-            userId: (data as any).userId,
-            sessionId: (data as any).sessionId,
+            userId: userId,
+            sessionId: sessionId,
             input: data,
-            metadata: { framework: 'jaf', eventType: 'run_start', traceId: String(traceId) },
+            metadata: { 
+              framework: 'jaf', 
+              eventType: 'run_start', 
+              traceId: String(traceId),
+              agentName: (data as any).agentName,
+              context: context
+            },
           });
           this.traceSpans.set(traceId, trace);
           break;

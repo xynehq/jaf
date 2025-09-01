@@ -15,7 +15,7 @@ import {
 // For local Langfuse instance, visit http://localhost:3000 and get your API keys
 process.env.LANGFUSE_PUBLIC_KEY = process.env.LANGFUSE_PUBLIC_KEY || "pk-lf-your-public-key-here";
 process.env.LANGFUSE_SECRET_KEY = process.env.LANGFUSE_SECRET_KEY || "sk-lf-your-secret-key-here";
-process.env.LANGFUSE_HOST = "http://localhost:3000"; // For local Langfuse v2 server
+process.env.LANGFUSE_HOST = process.env.LANGFUSE_HOST || "http://localhost:3000"; // For local Langfuse v2 server
 
 const WeatherSchema = z.object({
   location: z.string().describe("The location to get the weather for."),
