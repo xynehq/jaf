@@ -1,6 +1,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { z } from 'zod';
 import { Tool } from '../core/types.js';
 
@@ -130,6 +131,109 @@ export async function makeMCPClientSSE(url: string, opts?: { headers?: Record<st
         }));
       } catch (error) {
         console.error('Failed to list MCP tools (SSE):', error);
+        return [];
+      }
+    },
+
+    async callTool(name: string, args: unknown) {
+      try {
+        const response = await client.callTool({
+          name,
+          arguments: args as Record<string, unknown>
+        });
+
+        if (response.content && Array.isArray(response.content) && response.content.length > 0) {
+          return response.content.map((c: any) => {
+            if (c.type === 'text') {
+              return c.text;
+            }
+            return JSON.stringify(c);
+          }).join('\n');
+        }
+
+        return JSON.stringify(response);
+      } catch (error) {
+        return JSON.stringify({
+          error: 'mcp_tool_error',
+          message: error instanceof Error ? error.message : String(error),
+          tool_name: name
+        });
+      }
+    },
+
+    async close() {
+      await client.close();
+    }
+  };
+}
+
+/**
+ * Create an MCP client using the Streamable HTTP transport.
+ *
+ * This connects to a remote MCP server that implements the Streamable HTTP transport
+ * specification using HTTP POST for sending messages and HTTP GET with Server-Sent Events
+ * for receiving messages.
+ *
+ * Example:
+ *   const mcp = await makeMCPClientHTTP('https://example.com/mcp', {
+ *     headers: { Authorization: `Bearer ${token}` },
+ *     sessionId: 'my-session-123'
+ *   })
+ */
+export async function makeMCPClientHTTP(url: string, opts?: {
+  headers?: Record<string, string>;
+  sessionId?: string;
+  fetch?: typeof fetch;
+  requestInit?: RequestInit;
+}): Promise<MCPClient> {
+  const endpoint = new URL(url);
+
+  // Ensure EventSource is available in Node environments for the underlying SSE functionality
+  if (typeof (globalThis as any).EventSource === 'undefined') {
+    try {
+      const mod = await import('eventsource');
+      const ES = (mod as any).default ?? (mod as any);
+      (globalThis as any).EventSource = ES;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`EventSource is not defined. Install the 'eventsource' package or run in a browser. Cause: ${msg}`);
+    }
+  }
+
+  const transportOpts = {
+    requestInit: {
+      ...opts?.requestInit,
+      headers: {
+        ...opts?.requestInit?.headers,
+        ...opts?.headers
+      }
+    },
+    fetch: opts?.fetch,
+    // Only set sessionId if explicitly provided and not empty
+    // Otherwise let the server generate a new session ID
+    ...(opts?.sessionId && opts.sessionId.trim() ? { sessionId: opts.sessionId } : {})
+  };
+
+  const transport = new StreamableHTTPClientTransport(endpoint, transportOpts);
+
+  const client = new Client({
+    name: "jaf-client",
+    version: "2.0.0",
+  });
+
+  await client.connect(transport);
+
+  return {
+    async listTools() {
+      try {
+        const response = await client.listTools();
+        return response.tools.map(tool => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema
+        }));
+      } catch (error) {
+        console.error('Failed to list MCP tools (HTTP):', error);
         return [];
       }
     },
