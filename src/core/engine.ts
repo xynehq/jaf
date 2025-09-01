@@ -310,7 +310,7 @@ async function runInternal<Ctx, Out>(
 
     const interruptions = toolResults
       .map(r => r.interruption)
-      .filter(Boolean) as Interruption<Ctx>[];
+      .filter((interruption): interruption is Interruption<Ctx> => interruption !== undefined);
     if (interruptions.length > 0) {
       return {
         finalState: {
@@ -566,8 +566,15 @@ async function executeToolCalls<Ctx>(
           };
         }
 
+        let needsApproval = false;
+        if (typeof tool.needsApproval === 'function') {
+          needsApproval = await tool.needsApproval(state.context, parseResult.data);
+        } else {
+          needsApproval = !!tool.needsApproval;
+        }
+
         const approvalStatus = state.approvals.get(toolCall.id);
-        if (tool.needsApproval && approvalStatus === undefined) {
+        if (needsApproval && approvalStatus === undefined) {
           return {
             interruption: {
               type: 'tool_approval',

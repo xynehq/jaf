@@ -194,12 +194,15 @@ export const convertCoreStateToAdkSession = (state: RunState<any>): Session => {
 export const convertAdkAgentToCoreAgent = (adkAgent: Agent): CoreAgent<any, any> => {
   return {
     name: adkAgent.config.name,
-    instructions: () => adkAgent.config.instruction,
-    tools: adkAgent.config.tools.map(convertAdkToolToCoreTool),
-    outputCodec: z.string(),
+    instructions: (state: any) => adkAgent.config.instruction,
+    tools: adkAgent.config.tools?.map(convertAdkToolToCoreTool) || [],
     modelConfig: {
-      name: 'default'
-    }
+      name: convertAdkModelToCoreModel(adkAgent.config.model),
+      temperature: 0.7,
+      maxTokens: 2000
+    },
+    handoffs: [],
+    outputCodec: adkAgent.config.outputSchema ? createZodFromAdkSchema(adkAgent.config.outputSchema) : undefined
   };
 };
 
