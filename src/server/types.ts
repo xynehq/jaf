@@ -17,6 +17,15 @@ export const httpMessageSchema = z.object({
   content: z.string()
 });
 
+// Approval message schema for HITL
+export const approvalMessageSchema = z.object({
+  type: z.literal('approval'),
+  sessionId: z.string(),
+  toolCallId: z.string(),
+  approved: z.boolean(),
+  additionalContext: z.record(z.any()).optional()
+});
+
 export const chatRequestSchema = z.object({
   messages: z.array(httpMessageSchema),
   agentName: z.string(),
@@ -28,11 +37,13 @@ export const chatRequestSchema = z.object({
     autoStore: z.boolean().default(true),
     maxMessages: z.number().optional(),
     compressionThreshold: z.number().optional()
-  }).optional()
+  }).optional(),
+  approval: approvalMessageSchema.optional()
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 export type HttpMessage = z.infer<typeof httpMessageSchema>;
+export type ApprovalMessage = z.infer<typeof approvalMessageSchema>;
 
 // Extended message schema that includes tool calls and responses
 export const fullMessageSchema = z.union([
@@ -66,7 +77,19 @@ export const chatResponseSchema = z.object({
       outcome: z.object({
         status: z.enum(['completed', 'error', 'max_turns', 'interrupted']),
         output: z.string().optional(),
-      error: z.any().optional()
+      error: z.any().optional(),
+        interruptions: z.array(z.object({
+          type: z.literal('tool_approval'),
+          toolCall: z.object({
+            id: z.string(),
+            type: z.literal('function'),
+            function: z.object({
+              name: z.string(),
+              arguments: z.string()
+            })
+          }),
+          sessionId: z.string()
+        })).optional()
       }),
       turnCount: z.number(),
     executionTimeMs: z.number()

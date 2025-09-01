@@ -71,7 +71,7 @@ export type RunState<Ctx> = {
   readonly currentAgentName: string;
   readonly context: Readonly<Ctx>;
   readonly turnCount: number;
-  readonly approvals: ReadonlyMap<string, boolean>;
+  readonly approvals: ReadonlyMap<string, boolean | { approved: boolean; additionalContext?: Record<string, any> }>;
 };
 
 export type JAFError =
@@ -88,6 +88,7 @@ export type ToolApprovalInterruption<Ctx> = {
   readonly type: 'tool_approval';
   readonly toolCall: ToolCall;
   readonly agent: Agent<Ctx, any>;
+  readonly sessionId?: string;
 };
 
 export type Interruption<Ctx> = ToolApprovalInterruption<Ctx>;

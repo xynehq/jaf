@@ -72,6 +72,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
+    "demo": "tsx examples/hitl-demo/index.ts",
     "test": "jest",
     "test:db:start": "./scripts/setup-test-db.sh",
     "test:db:stop": "./scripts/teardown-test-db.sh",

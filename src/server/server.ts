@@ -159,14 +159,43 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         // Generate conversationId if not provided
         const conversationId = validatedRequest.conversationId || `conv-${uuidv4()}`;
         
+        // Handle approval message if present
+        const initialApprovals = new Map();
+        let initialStateMessages = jafMessages;
+        
+        if (validatedRequest.approval) {
+          const approval = validatedRequest.approval;
+          
+          // Check if this is for the current session
+          if (approval.sessionId) {
+            // Load previous state if this is an approval for an existing session
+            if (config.defaultMemoryProvider) {
+              try {
+                const previousConversation = await config.defaultMemoryProvider.getConversation(conversationId);
+                if (previousConversation.success && previousConversation.data) {
+                  initialStateMessages = [...previousConversation.data.messages];
+                }
+              } catch (e) {
+                // Continue with current messages if memory loading fails
+              }
+            }
+            
+            // Apply the approval
+            initialApprovals.set(approval.toolCallId, {
+              approved: approval.approved,
+              additionalContext: approval.additionalContext
+            });
+          }
+        }
+        
         const initialState: RunState<Ctx> = {
           runId,
           traceId,
-          messages: jafMessages,
+          messages: initialStateMessages,
           currentAgentName: validatedRequest.agentName,
           context: validatedRequest.context || ({} as Ctx),
           turnCount: 0,
-          approvals: new Map(),
+          approvals: initialApprovals,
         };
 
         // Create run config with memory configuration
@@ -287,7 +316,14 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
             outcome: {
               status: result.outcome.status,
               output: result.outcome.status === 'completed' ? String(result.outcome.output) : undefined,
-              error: result.outcome.status === 'error' ? result.outcome.error : undefined
+              error: result.outcome.status === 'error' ? result.outcome.error : undefined,
+              interruptions: result.outcome.status === 'interrupted' 
+                ? result.outcome.interruptions.map(interruption => ({
+                    type: interruption.type,
+                    toolCall: interruption.toolCall,
+                    sessionId: interruption.sessionId || result.finalState.runId
+                  }))
+                : undefined
             },
             turnCount: result.finalState.turnCount,
             executionTimeMs: executionTime
