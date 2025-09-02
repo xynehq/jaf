@@ -708,12 +708,15 @@ async function executeToolCalls<Ctx>(
         const additionalContext = typeof approvalStatus === 'object' ? approvalStatus.additionalContext : undefined;
 
         if (isApproved === false) {
+          const rejectionReason = additionalContext?.rejectionReason || 'User declined the action';
           return {
             message: {
               role: 'tool',
               content: JSON.stringify({
                 error: 'approval_denied',
-                message: `Tool ${toolCall.function.name} was denied.`,
+                message: `Action was not approved. ${rejectionReason}. Please ask if you can help with something else or suggest an alternative approach.`,
+                tool_name: toolCall.function.name,
+                rejection_reason: rejectionReason,
                 additionalContext,
               }),
               tool_call_id: toolCall.id,

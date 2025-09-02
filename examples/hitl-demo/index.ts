@@ -210,7 +210,7 @@ async function runInteractiveDemo() {
       };
 
       console.log(colors.dim(`Debug: Current approvals count: ${currentApprovals.size}`));
-      console.log(colors.dim(`Debug: Approvals:`, Array.from(currentApprovals.entries())));
+      console.log(colors.dim(`Debug: Approvals:`), Array.from(currentApprovals.entries()));
 
       console.log(colors.dim('⏳ Processing...\n'));
       

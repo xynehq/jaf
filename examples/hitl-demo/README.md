@@ -1,12 +1,22 @@
 # JAF Human-in-the-Loop (HITL) Demo
 
-This demo showcases the new HITL implementation in JAF where:
+This directory contains two demos showcasing JAF's Human-in-the-Loop capability:
 
-- ✅ Tools can require user approval before execution
-- ✅ LLM remains completely unaware of the approval process  
-- ✅ Frontend can provide additional context during approval
-- ✅ Single endpoint handles both chat and approvals
-- ✅ Session continuity through runId/conversationId
+## 1. Interactive Terminal Demo (`index.ts`)
+
+- ✅ Interactive chat session in your terminal
+- ✅ Tools requiring approval interrupt execution  
+- ✅ Manual approval/rejection via keyboard input
+- ✅ LLM remains completely unaware of the approval process
+- ✅ Real-time tool execution after approval
+
+## 2. API-Based Demo (`api-demo.ts`) 🆕
+
+- ✅ Same interactive chat session PLUS HTTP API
+- ✅ Approval via terminal OR curl commands
+- ✅ RESTful endpoints for remote approval
+- ✅ Real-time coordination between interfaces
+- ✅ External system integration support
 
 ## 🚀 Quick Start
 
@@ -34,28 +44,90 @@ LITELLM_MODEL=gpt-3.5-turbo
 3. **Configuration Required**:
    - **LiteLLM Setup**: Set up your LiteLLM server and configure the environment variables
 
-### Run the Interactive Demo
+### Run the Demos
 
-#### 🎯 Main Interactive Demo (Recommended)
+#### 🎯 Terminal Demo (Original)
 ```bash
 pnpm run demo
 ```
-or 
-```bash
-npm run demo
-```
 
-This runs a **development server-like** interactive demo where you can:
+This runs the interactive terminal demo where you can:
 - Chat with the AI assistant in real-time
 - See tool approval requests as they happen
-- Manually approve or reject each tool call
-- Experience the complete HITL flow yourself
-- Use commands like "redirect me to dashboard" or "send my data"
+- Manually approve or reject each tool call via keyboard
+- Experience the complete HITL flow
+
+#### 🌐 API Demo (New with curl support)
+```bash
+pnpm run demo:api
+```
+
+This runs both the terminal interface AND HTTP API server where you can:
+- Chat normally in the terminal
+- Approve/reject via terminal OR curl commands
+- See real-time coordination between both interfaces
+- Integrate with external systems
 
 #### 📚 Alternative: Direct Execution
-If you prefer to run directly:
 ```bash
-npx tsx examples/hitl-demo/index.ts
+npx tsx examples/hitl-demo/index.ts        # Terminal only
+npx tsx examples/hitl-demo/api-demo.ts     # Terminal + API
+```
+
+## 🌐 API Demo Usage
+
+When running `pnpm run demo:api`, you get both terminal interaction AND HTTP endpoints:
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/pending` | List all pending tool approvals |
+| `POST` | `/approve/:sessionId/:toolCallId` | Approve a specific tool call |
+| `POST` | `/reject/:sessionId/:toolCallId` | Reject a specific tool call |
+| `GET` | `/health` | Health check and pending count |
+
+### Example Workflow
+
+1. **Start the API demo:**
+   ```bash
+   pnpm run demo:api
+   ```
+
+2. **Chat with the AI:**
+   ```
+   You: redirect me to the dashboard
+   ```
+
+3. **Check pending approvals via curl:**
+   ```bash
+   curl http://localhost:3001/pending
+   ```
+
+4. **Approve via curl:**
+   ```bash
+   curl -X POST http://localhost:3001/approve/api-demo/call_abc123
+   ```
+
+5. **Or reject with reason:**
+   ```bash
+   curl -X POST http://localhost:3001/reject/api-demo/call_abc123 \
+        -H "Content-Type: application/json" \
+        -d '{"reason": "Not authorized"}'
+   ```
+
+6. **Approve with additional context:**
+   ```bash
+   curl -X POST http://localhost:3001/approve/api-demo/call_abc123 \
+        -H "Content-Type: application/json" \
+        -d '{"additionalContext": {"priority": "high"}}'
+   ```
+
+### Configuration
+
+Additional API demo configuration in `.env`:
+```bash
+API_PORT=3001  # Port for HTTP API server
 ```
 
 ## 🎯 What You'll See
