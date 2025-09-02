@@ -64,6 +64,11 @@ export type Guardrail<I> = (
   input: I
 ) => Promise<ValidationResult> | ValidationResult;
 
+export type ApprovalValue = {
+  readonly approved: boolean;
+  readonly additionalContext?: Record<string, any>;
+};
+
 export type RunState<Ctx> = {
   readonly runId: RunId;
   readonly traceId: TraceId;
@@ -71,7 +76,7 @@ export type RunState<Ctx> = {
   readonly currentAgentName: string;
   readonly context: Readonly<Ctx>;
   readonly turnCount: number;
-  readonly approvals: ReadonlyMap<string, boolean | { approved: boolean; additionalContext?: Record<string, any> }>;
+  readonly approvals: ReadonlyMap<string, ApprovalValue>;
 };
 
 export type JAFError =

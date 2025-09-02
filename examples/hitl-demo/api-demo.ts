@@ -20,8 +20,9 @@ import { z } from 'zod';
 import * as readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 import * as path from 'path';
-const express = require('express');
+import express from 'express';
 import { createServer } from 'http';
+import dotenv from 'dotenv';
 
 import {
   Agent,
@@ -37,10 +38,14 @@ import { makeLiteLLMProvider } from '../../src/providers/model';
 
 // Load environment variables from .env file if it exists
 try {
-  require('dotenv').config({ path: path.join(process.cwd(), 'examples/hitl-demo/.env') });
+  dotenv.config({ path: path.join(process.cwd(), 'examples/hitl-demo/.env') });
 } catch {
   // dotenv not available or .env file doesn't exist
 }
+
+// Set default values if not provided
+process.env.LITELLM_URL = process.env.LITELLM_URL || 'http://localhost:4000';
+process.env.LITELLM_MODEL = process.env.LITELLM_MODEL || 'gpt-3.5-turbo';
 
 // Simple color utility
 const colors = {

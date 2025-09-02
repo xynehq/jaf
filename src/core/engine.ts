@@ -557,7 +557,7 @@ async function runInternal<Ctx, Out>(
           const result = await guardrail(llmResponse.message.content);
           if (!result.isValid) {
             // Emit guardrail violation (output)
-            const errorMessage = !result.isValid ? result.errorMessage : '';
+            const errorMessage = result.errorMessage;
             config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: errorMessage } });
             // End of turn
             config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -703,9 +703,9 @@ async function executeToolCalls<Ctx>(
           };
         }
 
-        // Handle both boolean and object approval status for backward compatibility
-        const isApproved = typeof approvalStatus === 'boolean' ? approvalStatus : approvalStatus?.approved;
-        const additionalContext = typeof approvalStatus === 'object' ? approvalStatus.additionalContext : undefined;
+        // Extract approval information from consistent object type
+        const isApproved = approvalStatus?.approved;
+        const additionalContext = approvalStatus?.additionalContext;
 
         if (isApproved === false) {
           const rejectionReason = additionalContext?.rejectionReason || 'User declined the action';
