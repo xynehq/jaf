@@ -887,6 +887,60 @@ const mcpAgent: Agent<MyContext, string> = {
 };
 ```
 
+#### Streamable HTTP (SSE) MCP — Cloudflare Docs Server
+
+You can connect to a remote MCP server that implements the Streamable HTTP transport with SSE. For example, the Cloudflare Docs MCP server:
+
+```typescript
+import { makeMCPClientSSE } from '@xynehq/jaf'
+
+const endpoint = 'https://docs.mcp.cloudflare.com/sse'
+const mcpClient = await makeMCPClientSSE(endpoint)
+const tools = await mcpClient.listTools()
+console.log('Cloudflare Docs MCP tools:', tools.map(t => t.name))
+await mcpClient.close()
+```
+
+See a runnable demo in `examples/mcp-sse-demo/` that lists all available tools from the remote server.
+
+#### Streamable HTTP MCP — Full Featured Remote Servers
+
+For production MCP servers that need session management, authentication, and bidirectional communication, use the full Streamable HTTP transport:
+
+```typescript
+import { makeMCPClientHTTP } from '@xynehq/jaf'
+
+const endpoint = 'https://your-mcp-server.com/mcp'
+const mcpClient = await makeMCPClientHTTP(endpoint, {
+  headers: {
+    Authorization: `Bearer ${process.env.MCP_API_TOKEN}`,
+  },
+  sessionId: 'my-session-123', // Optional: custom session ID
+  requestInit: {
+    // Optional: additional fetch options
+    timeout: 30000,
+  }
+})
+
+const tools = await mcpClient.listTools()
+console.log('MCP tools:', tools.map(t => t.name))
+
+// Use tools in conversations...
+const result = await mcpClient.callTool('search', { query: 'hello' })
+console.log('Tool result:', result)
+
+await mcpClient.close()
+```
+
+This transport uses HTTP POST for sending messages and HTTP GET with Server-Sent Events for receiving messages. It supports:
+
+- **Session Management**: Maintains server-side state with session IDs
+- **Authentication**: Custom headers for API tokens and OAuth
+- **Reconnection**: Automatic reconnection with exponential backoff
+- **Custom Fetch**: Support for proxies and middleware
+
+See a runnable demo in `examples/mcp-http-demo/`.
+
 #### MCP Tool Validation
 
 ```typescript
