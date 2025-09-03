@@ -11,9 +11,13 @@ export type ValidationResult =
   | { readonly isValid: true }
   | { readonly isValid: false; readonly errorMessage: string };
 
+export type MessageContentPart = 
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'image_url'; readonly image_url: { readonly url: string; readonly detail?: 'low' | 'high' | 'auto' } };
+
 export type Message = {
   readonly role: 'user' | 'assistant' | 'tool';
-  readonly content: string;
+  readonly content: string | readonly MessageContentPart[];
   readonly tool_call_id?: string;
   readonly tool_calls?: readonly {
     readonly id: string;
@@ -24,6 +28,17 @@ export type Message = {
     };
   }[];
 };
+
+export function getTextContent(content: string | readonly MessageContentPart[]): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  
+  return content
+    .filter(part => part.type === 'text')
+    .map(part => (part as { text: string }).text)
+    .join(' ');
+}
 
 export type ModelConfig = {
   readonly name?: string;

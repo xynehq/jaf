@@ -8,6 +8,7 @@ import {
   TraceEvent,
   Agent,
   Tool,
+  getTextContent,
 } from './types.js';
 
 export async function run<Ctx, Out>(
@@ -151,7 +152,7 @@ async function runInternal<Ctx, Out>(
     const firstUserMessage = state.messages.find(m => m.role === 'user');
     if (firstUserMessage && config.initialInputGuardrails) {
       for (const guardrail of config.initialInputGuardrails) {
-        const result = await guardrail(firstUserMessage.content);
+        const result = await guardrail(getTextContent(firstUserMessage.content));
         if (!result.isValid) {
           // Emit guardrail violation for input stage
           config.onEvent?.({
@@ -668,9 +669,9 @@ async function loadConversationHistory<Ctx>(
   const combinedMessages = [...memoryMessages, ...initialState.messages];
   
   console.log(`[JAF:MEMORY] Loaded ${memoryMessages.length} messages from memory for conversation ${config.conversationId}`);
-  console.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
-  console.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
-  console.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
+  console.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+  console.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+  console.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
   
   return {
     ...initialState,

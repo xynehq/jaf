@@ -10,7 +10,7 @@ import {
   chatRequestSchema
 } from './types';
 import { run, runStream } from '../core/engine';
-import { RunState, Message, createRunId, createTraceId } from '../core/types';
+import { RunState, Message, createRunId, createTraceId, getTextContent } from '../core/types';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -26,6 +26,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
   
   const app = Fastify({ 
     logger: true,
+    bodyLimit: 50 * 1024 * 1024, // 50MB limit for base64 images
     ajv: {
       customOptions: {
         removeAdditional: false,
@@ -108,7 +109,41 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
                 type: 'object',
                 properties: {
                   role: { type: 'string', enum: ['user', 'assistant', 'system'] },
-                  content: { type: 'string' }
+                  content: {
+                    oneOf: [
+                      { type: 'string' },
+                      {
+                        type: 'array',
+                        items: {
+                          oneOf: [
+                            {
+                              type: 'object',
+                              properties: {
+                                type: { type: 'string', enum: ['text'] },
+                                text: { type: 'string' }
+                              },
+                              required: ['type', 'text']
+                            },
+                            {
+                              type: 'object',
+                              properties: {
+                                type: { type: 'string', enum: ['image_url'] },
+                                image_url: {
+                                  type: 'object',
+                                  properties: {
+                                    url: { type: 'string' },
+                                    detail: { type: 'string', enum: ['low', 'high', 'auto'] }
+                                  },
+                                  required: ['url']
+                                }
+                              },
+                              required: ['type', 'image_url']
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
                 },
                 required: ['role', 'content']
               }
@@ -332,7 +367,41 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
                 type: 'object',
                 properties: {
                   role: { type: 'string', enum: ['user', 'assistant', 'system'] },
-                  content: { type: 'string' }
+                  content: {
+                    oneOf: [
+                      { type: 'string' },
+                      {
+                        type: 'array',
+                        items: {
+                          oneOf: [
+                            {
+                              type: 'object',
+                              properties: {
+                                type: { type: 'string', enum: ['text'] },
+                                text: { type: 'string' }
+                              },
+                              required: ['type', 'text']
+                            },
+                            {
+                              type: 'object',
+                              properties: {
+                                type: { type: 'string', enum: ['image_url'] },
+                                image_url: {
+                                  type: 'object',
+                                  properties: {
+                                    url: { type: 'string' },
+                                    detail: { type: 'string', enum: ['low', 'high', 'auto'] }
+                                  },
+                                  required: ['url']
+                                }
+                              },
+                              required: ['type', 'image_url']
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
                 },
                 required: ['role', 'content']
               }

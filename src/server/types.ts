@@ -12,9 +12,23 @@ export interface ServerConfig<Ctx> {
 }
 
 // Request/Response schemas
+const messageContentPartSchema = z.union([
+  z.object({
+    type: z.literal('text'),
+    text: z.string()
+  }),
+  z.object({
+    type: z.literal('image_url'),
+    image_url: z.object({
+      url: z.string(),
+      detail: z.enum(['low', 'high', 'auto']).optional()
+    })
+  })
+]);
+
 export const httpMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
-  content: z.string()
+  content: z.union([z.string(), z.array(messageContentPartSchema)])
 });
 
 export const chatRequestSchema = z.object({
