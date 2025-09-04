@@ -139,8 +139,14 @@ export class ConsoleTraceCollector implements TraceCollector {
         const outcome = event.data.outcome;
         if (outcome.status === 'completed') {
           console.log(`${prefix} Run completed successfully`);
+        } else if (outcome.status === 'error') {
+          console.error(
+            `${prefix} Run failed:`,
+            outcome.error._tag,
+            outcome.error,
+          );
         } else {
-          console.error(`${prefix} Run failed:`, outcome.error._tag, outcome.error);
+          console.warn(`${prefix} Run interrupted`);
         }
         break;
       }

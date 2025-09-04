@@ -8,6 +8,8 @@ import {
   TraceEvent,
   Agent,
   Tool,
+  ToolCall,
+  Interruption,
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
 
@@ -37,14 +39,26 @@ export async function run<Ctx, Out>(
       console.log(`[JAF:ENGINE] Skipping memory load - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}`);
     }
 
+    // Load approvals from storage if configured
+    if (config.approvalStorage) {
+      console.log(`[JAF:ENGINE] Loading approvals for runId ${stateWithMemory.runId}`);
+      const { loadApprovalsIntoState } = await import('./state');
+      stateWithMemory = await loadApprovalsIntoState(stateWithMemory, config);
+    }
+
     const result = await runInternal<Ctx, Out>(stateWithMemory, config);
+    // console.log("RESULT", result)
     
-    // Store conversation history to memory if configured
-    if (config.memory?.autoStore && config.conversationId && result.finalState.messages.length > initialState.messages.length) {
-      console.log(`[JAF:ENGINE] Storing conversation history for ${config.conversationId}`);
+    // Store conversation history only if this is a final completion of the entire conversation
+    // For HITL scenarios, storage happens on interruption (line 261) to allow resumption
+    // We only store on completion if explicitly indicated this is the end of the conversation
+    if (config.memory?.autoStore && config.conversationId && result.outcome.status === 'completed' && config.memory.storeOnCompletion) {
+      console.log(`[JAF:ENGINE] Storing final completed conversation for ${config.conversationId}`);
       await storeConversationHistory(result.finalState, config);
+    } else if (result.outcome.status === 'interrupted') {
+      console.log(`[JAF:ENGINE] Conversation interrupted - storage already handled during interruption`);
     } else {
-      console.log(`[JAF:ENGINE] Skipping memory store - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}, messageChange: ${result.finalState.messages.length > initialState.messages.length}`);
+      console.log(`[JAF:ENGINE] Skipping memory store - status: ${result.outcome.status}, storeOnCompletion: ${config.memory?.storeOnCompletion}`);
     }
 
     config.onEvent?.({
@@ -162,9 +176,10 @@ async function runInternal<Ctx, Out>(
         const result = await guardrail(firstUserMessage.content);
         if (!result.isValid) {
           // Emit guardrail violation for input stage
+          const errorMessage = !result.isValid ? result.errorMessage : '';
           config.onEvent?.({
             type: 'guardrail_violation',
-            data: { stage: 'input', reason: result.errorMessage }
+            data: { stage: 'input', reason: errorMessage }
           });
           return {
             finalState: state,
@@ -172,7 +187,7 @@ async function runInternal<Ctx, Out>(
               status: 'error',
               error: {
                 _tag: 'InputGuardrailTripwire',
-                reason: result.errorMessage
+                reason: errorMessage
               }
             }
           };
@@ -241,6 +256,157 @@ async function runInternal<Ctx, Out>(
       }
     }
   });
+
+  // Check if there are existing tool calls to execute from previous assistant message
+  const lastMessage = state.messages[state.messages.length - 1];
+  if (lastMessage?.role === 'assistant' && lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
+    console.log(`[JAF:ENGINE] Found existing tool calls to execute:`, lastMessage.tool_calls.map(tc => tc.function.name));
+    
+    // Check if any of these tool calls are unanswered (no corresponding completed tool message)
+    // Note: halted messages don't count as "answered" - tool still needs execution
+    const answeredIds = state.messages
+      .filter(m => {
+        if (m.role !== 'tool') return false;
+        try {
+          const content = JSON.parse(m.content);
+          // Don't consider halted as "answered" - tool still needs execution
+          return content.status !== 'halted';
+        } catch {
+          // If content isn't JSON, treat as answered
+          return true;
+        }
+      })
+      .map(m => m.tool_call_id)
+      .filter(id => id !== undefined);
+    
+    const unansweredToolCalls = lastMessage.tool_calls.filter(tc => !answeredIds.includes(tc.id));
+    
+    if (unansweredToolCalls.length > 0) {
+      console.log(`[JAF:ENGINE] Executing ${unansweredToolCalls.length} unanswered tool calls`);
+      
+      // Turn lifecycle start (before tool execution)
+      const turnNumber = state.turnCount + 1;
+      config.onEvent?.({ type: 'turn_start', data: { turn: turnNumber, agentName: currentAgent.name } });
+
+      const toolResults = await executeToolCalls(
+        unansweredToolCalls,
+        currentAgent,
+        state,
+        config,
+      );
+
+      const interruptions = toolResults
+        .map(r => r.interruption)
+        .filter((interruption): interruption is Interruption<Ctx> => interruption !== undefined);
+      if (interruptions.length > 0) {
+        // Add pending approvals to state.approvals
+        const updatedApprovals = new Map(state.approvals);
+        for (const interruption of interruptions) {
+          if (interruption.type === 'tool_approval') {
+            updatedApprovals.set(interruption.toolCall.id, {
+              approved: false,
+              additionalContext: { status: 'pending', timestamp: new Date().toISOString() }
+            });
+          }
+        }
+        
+        const interruptedState = {
+          ...state,
+          messages: [...state.messages, ...toolResults.map(r => r.message)],
+          turnCount: turnNumber,
+          approvals: updatedApprovals,
+        };
+
+        // Store conversation state when interrupted (for HITL scenarios)
+        if (config.memory?.autoStore && config.conversationId) {
+          console.log(`[JAF:ENGINE] Storing conversation state due to interruption for ${config.conversationId}`);
+          await storeConversationHistory(interruptedState, config);
+        }
+
+        return {
+          finalState: interruptedState,
+          outcome: {
+            status: 'interrupted',
+            interruptions,
+          },
+        };
+      }
+      
+      console.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
+
+      // Emit tool results being added
+      config.onEvent?.({
+        type: 'tool_results_to_llm',
+        data: { results: toolResults.map(r => r.message) }
+      });
+
+      if (toolResults.some(r => r.isHandoff)) {
+        const handoffResult = toolResults.find(r => r.isHandoff);
+        if (handoffResult) {
+          const targetAgent = handoffResult.targetAgent!;
+          
+          if (!currentAgent.handoffs?.includes(targetAgent)) {
+            // Emit handoff denied event for observability
+            config.onEvent?.({
+              type: 'handoff_denied',
+              data: { from: currentAgent.name, to: targetAgent, reason: `Agent ${currentAgent.name} cannot handoff to ${targetAgent}` }
+            });
+            return {
+              finalState: { ...state, messages: [...state.messages, ...toolResults.map(r => r.message)], turnCount: turnNumber },
+              outcome: {
+                status: 'error',
+                error: {
+                  _tag: 'HandoffError',
+                  detail: `Agent ${currentAgent.name} cannot handoff to ${targetAgent}`
+                }
+              }
+            };
+          }
+
+          config.onEvent?.({
+            type: 'handoff',
+            data: { from: currentAgent.name, to: targetAgent }
+          });
+
+          const nextState: RunState<Ctx> = {
+            ...state,
+            messages: [...state.messages, ...toolResults.map(r => r.message)],
+            currentAgentName: targetAgent,
+            turnCount: turnNumber,
+            approvals: state.approvals,
+          };
+          // End of turn before handing off to next agent
+          config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+          return runInternal(nextState, config);
+        }
+      }
+
+      // Remove any halted messages that are being replaced by actual execution results
+      const cleanedMessages = state.messages.filter(msg => {
+        if (msg.role !== 'tool') return true;
+        try {
+          const content = JSON.parse(msg.content);
+          if (content.status === 'halted') {
+            // Remove this halted message if we have a new result for the same tool_call_id
+            return !toolResults.some(result => result.message.tool_call_id === msg.tool_call_id);
+          }
+          return true;
+        } catch {
+          return true;
+        }
+      });
+
+      const nextState: RunState<Ctx> = {
+        ...state,
+        messages: [...cleanedMessages, ...toolResults.map(r => r.message)],
+        turnCount: turnNumber,
+        approvals: state.approvals,
+      };
+      // End of this turn before next model call
+      config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+      return runInternal(nextState, config);
+    }
+  }
 
   const model = config.modelOverride ?? currentAgent.modelConfig?.name;
 
@@ -375,8 +541,54 @@ async function runInternal<Ctx, Out>(
       llmResponse.message.tool_calls,
       currentAgent,
       state,
-      config
+      config,
     );
+
+    const interruptions = toolResults
+      .map(r => r.interruption)
+      .filter((interruption): interruption is Interruption<Ctx> => interruption !== undefined);
+    if (interruptions.length > 0) {
+      // Separate completed tool results from approval-required messages
+      const completedToolResults = toolResults.filter(r => !r.interruption);
+      const approvalRequiredResults = toolResults.filter(r => r.interruption);
+      
+      // Add pending approvals to state.approvals
+      const updatedApprovals = new Map(state.approvals);
+      for (const interruption of interruptions) {
+        if (interruption.type === 'tool_approval') {
+          updatedApprovals.set(interruption.toolCall.id, {
+            approved: false,
+            additionalContext: { status: 'pending', timestamp: new Date().toISOString() }
+          });
+        }
+      }
+      
+      // Create state with only completed tool results (for LLM context)
+      const interruptedState = {
+        ...state,
+        messages: [...newMessages, ...completedToolResults.map(r => r.message)],
+        turnCount: updatedTurnCount,
+        approvals: updatedApprovals,
+      };
+
+      // Store conversation state with ALL messages including approval-required (for database records)
+      if (config.memory?.autoStore && config.conversationId) {
+        console.log(`[JAF:ENGINE] Storing conversation state due to interruption for ${config.conversationId}`);
+        const stateForStorage = {
+          ...interruptedState,
+          messages: [...interruptedState.messages, ...approvalRequiredResults.map(r => r.message)]
+        };
+        await storeConversationHistory(stateForStorage, config);
+      }
+
+      return {
+        finalState: interruptedState,
+        outcome: {
+          status: 'interrupted',
+          interruptions,
+        },
+      };
+    }
     
     console.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
 
@@ -414,11 +626,27 @@ async function runInternal<Ctx, Out>(
           data: { from: currentAgent.name, to: targetAgent }
         });
 
+        // Remove any halted messages that are being replaced by actual execution results
+        const cleanedNewMessages = newMessages.filter(msg => {
+          if (msg.role !== 'tool') return true;
+          try {
+            const content = JSON.parse(msg.content);
+            if (content.status === 'halted') {
+              // Remove this halted message if we have a new result for the same tool_call_id
+              return !toolResults.some(result => result.message.tool_call_id === msg.tool_call_id);
+            }
+            return true;
+          } catch {
+            return true;
+          }
+        });
+
         const nextState: RunState<Ctx> = {
           ...state,
-          messages: [...newMessages, ...toolResults.map(r => r.message)],
+          messages: [...cleanedNewMessages, ...toolResults.map(r => r.message)],
           currentAgentName: targetAgent,
-          turnCount: updatedTurnCount
+          turnCount: updatedTurnCount,
+          approvals: state.approvals,
         };
         // End of turn before handing off to next agent
         config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -426,10 +654,26 @@ async function runInternal<Ctx, Out>(
       }
     }
 
+    // Remove any halted messages that are being replaced by actual execution results
+    const cleanedNewMessages = newMessages.filter(msg => {
+      if (msg.role !== 'tool') return true;
+      try {
+        const content = JSON.parse(msg.content);
+        if (content.status === 'halted') {
+          // Remove this halted message if we have a new result for the same tool_call_id
+          return !toolResults.some(result => result.message.tool_call_id === msg.tool_call_id);
+        }
+        return true;
+      } catch {
+        return true;
+      }
+    });
+
     const nextState: RunState<Ctx> = {
       ...state,
-      messages: [...newMessages, ...toolResults.map(r => r.message)],
-      turnCount: updatedTurnCount
+      messages: [...cleanedNewMessages, ...toolResults.map(r => r.message)],
+      turnCount: updatedTurnCount,
+      approvals: state.approvals,
     };
     // End of this turn before next model call
     config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -464,7 +708,8 @@ async function runInternal<Ctx, Out>(
           const result = await guardrail(parseResult.data);
           if (!result.isValid) {
             // Emit guardrail violation (output)
-            config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: result.errorMessage } });
+            const errorMessage = !result.isValid ? result.errorMessage : '';
+            config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: errorMessage } });
             // End of turn
             config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
             return {
@@ -473,7 +718,7 @@ async function runInternal<Ctx, Out>(
                 status: 'error',
                 error: {
                   _tag: 'OutputGuardrailTripwire',
-                  reason: result.errorMessage
+                  reason: errorMessage
                 }
               }
             };
@@ -499,7 +744,8 @@ async function runInternal<Ctx, Out>(
           const result = await guardrail(llmResponse.message.content);
           if (!result.isValid) {
             // Emit guardrail violation (output)
-            config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: result.errorMessage } });
+            const errorMessage = result.errorMessage;
+            config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: errorMessage } });
             // End of turn
             config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
             return {
@@ -508,7 +754,7 @@ async function runInternal<Ctx, Out>(
                 status: 'error',
                 error: {
                   _tag: 'OutputGuardrailTripwire',
-                  reason: result.errorMessage
+                  reason: errorMessage
                 }
               }
             };
@@ -551,17 +797,11 @@ type ToolCallResult = {
   message: Message;
   isHandoff?: boolean;
   targetAgent?: string;
+  interruption?: Interruption<any>;
 };
 
 async function executeToolCalls<Ctx>(
-  toolCalls: Array<{
-    id: string;
-    type: 'function';
-    function: {
-      name: string;
-      arguments: string;
-    };
-  }>,
+  toolCalls: readonly ToolCall[],
   agent: Agent<Ctx, any>,
   state: RunState<Ctx>,
   config: RunConfig<Ctx>
@@ -593,7 +833,7 @@ async function executeToolCalls<Ctx>(
       try {
         if (!tool) {
           const errorResult = JSON.stringify({
-            error: "tool_not_found",
+            status: "tool_not_found",
             message: `Tool ${toolCall.function.name} not found`,
             tool_name: toolCall.function.name,
           });
@@ -626,7 +866,7 @@ async function executeToolCalls<Ctx>(
 
         if (!parseResult.success) {
           const errorResult = JSON.stringify({
-            error: "validation_error",
+            status: "validation_error",
             message: `Invalid arguments for ${toolCall.function.name}: ${parseResult.error.message}`,
             tool_name: toolCall.function.name,
             validation_errors: parseResult.error.issues
@@ -655,11 +895,64 @@ async function executeToolCalls<Ctx>(
           };
         }
 
+        let needsApproval = false;
+        if (typeof tool.needsApproval === 'function') {
+          needsApproval = await tool.needsApproval(state.context, parseResult.data);
+        } else {
+          needsApproval = !!tool.needsApproval;
+        }
+
+        const approvalStatus = state.approvals.get(toolCall.id);
+        if (needsApproval && approvalStatus === undefined) {
+          return {
+            interruption: {
+              type: 'tool_approval',
+              toolCall,
+              agent,
+              sessionId: state.runId,
+            },
+            message: {
+              role: 'tool',
+              content: JSON.stringify({
+                status: 'halted',
+                message: `Tool ${toolCall.function.name} requires approval.`,
+              }),
+              tool_call_id: toolCall.id,
+            },
+          };
+        }
+
+        // Extract approval information from consistent object type
+        const isApproved = approvalStatus?.approved;
+        const additionalContext = approvalStatus?.additionalContext;
+
+        if (isApproved === false) {
+          const rejectionReason = additionalContext?.rejectionReason || 'User declined the action';
+          return {
+            message: {
+              role: 'tool',
+              content: JSON.stringify({
+                status: 'approval_denied',
+                message: `Action was not approved. ${rejectionReason}. Please ask if you can help with something else or suggest an alternative approach.`,
+                tool_name: toolCall.function.name,
+                rejection_reason: rejectionReason,
+                additionalContext,
+              }),
+              tool_call_id: toolCall.id,
+            },
+          };
+        }
+
         console.log(`[JAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
         console.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
         console.log(`[JAF:ENGINE] Tool context:`, state.context);
         
-        const toolResult = await tool.execute(parseResult.data, state.context);
+        // Merge additional context if provided through approval
+        const contextWithAdditional = additionalContext 
+          ? { ...state.context, ...additionalContext }
+          : state.context;
+        
+        const toolResult = await tool.execute(parseResult.data, contextWithAdditional);
         
         // Handle both string and ToolResult formats
         let resultString: string;
@@ -709,17 +1002,43 @@ async function executeToolCalls<Ctx>(
           };
         }
 
+        // Wrap tool result with consistent status field
+        let finalContent;
+        if (additionalContext && Object.keys(additionalContext).length > 0) {
+          finalContent = JSON.stringify({
+            status: 'approved_and_executed',
+            result: resultString,
+            tool_name: toolCall.function.name,
+            approval_context: additionalContext,
+            message: 'Tool was approved and executed successfully with additional context.'
+          });
+        } else if (needsApproval) {
+          finalContent = JSON.stringify({
+            status: 'approved_and_executed',
+            result: resultString,
+            tool_name: toolCall.function.name,
+            message: 'Tool was approved and executed successfully.'
+          });
+        } else {
+          finalContent = JSON.stringify({
+            status: 'executed',
+            result: resultString,
+            tool_name: toolCall.function.name,
+            message: 'Tool executed successfully.'
+          });
+        }
+
         return {
           message: {
             role: 'tool',
-            content: resultString,
+            content: finalContent,
             tool_call_id: toolCall.id
           }
         };
 
       } catch (error) {
         const errorResult = JSON.stringify({
-          error: "execution_error",
+          status: "execution_error",
           message: error instanceof Error ? error.message : String(error),
           tool_name: toolCall.function.name,
         });
@@ -777,7 +1096,7 @@ async function loadConversationHistory<Ctx>(
 
   const result = await config.memory.provider.getConversation(config.conversationId);
   if (!result.success) {
-    console.warn(`[JAF:MEMORY] Failed to load conversation history: ${result.error.message}`);
+    console.warn(`[JAF:MEMORY] Failed to load conversation history: ${result.error}`);
     return initialState;
   }
 
@@ -788,19 +1107,49 @@ async function loadConversationHistory<Ctx>(
 
   // Apply memory limits if configured
   const maxMessages = config.memory.maxMessages || result.data.messages.length;
-  const memoryMessages = result.data.messages.slice(-maxMessages);
+  const allMemoryMessages = result.data.messages.slice(-maxMessages);
   
-  // Merge existing messages with new messages, avoiding duplicates
-  const combinedMessages = [...memoryMessages, ...initialState.messages];
+  // Filter out halted messages - they're for audit/database only, not for LLM context
+  const memoryMessages = allMemoryMessages.filter(msg => {
+    if (msg.role !== 'tool') return true;
+    try {
+      const content = JSON.parse(msg.content);
+      return content.status !== 'halted';
+    } catch {
+      return true; // Keep non-JSON tool messages
+    }
+  });
   
-  console.log(`[JAF:MEMORY] Loaded ${memoryMessages.length} messages from memory for conversation ${config.conversationId}`);
+  // For HITL scenarios, append new messages to memory messages
+  // This prevents duplication when resuming from interruptions
+  const combinedMessages = memoryMessages.length > 0 
+    ? [...memoryMessages, ...initialState.messages.filter(msg => 
+        !memoryMessages.some(memMsg => 
+          memMsg.role === msg.role && 
+          memMsg.content === msg.content && 
+          JSON.stringify(memMsg.tool_calls) === JSON.stringify(msg.tool_calls)
+        )
+      )]
+    : initialState.messages;
+  
+  // Load approvals from conversation metadata if available
+  const storedApprovals = result.data.metadata?.approvals;
+  const approvalsMap = storedApprovals 
+    ? new Map(Object.entries(storedApprovals) as [string, any][])
+    : initialState.approvals;
+
+  console.log(`[JAF:MEMORY] Loaded ${allMemoryMessages.length} messages from memory, filtered to ${memoryMessages.length} for LLM context (removed halted messages)`);
+  if (storedApprovals) {
+    console.log(`[JAF:MEMORY] Loaded ${Object.keys(storedApprovals).length} approvals from memory`);
+  }
   console.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
   console.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
   console.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
   
   return {
     ...initialState,
-    messages: combinedMessages
+    messages: combinedMessages,
+    approvals: approvalsMap
   };
 }
 
@@ -835,12 +1184,13 @@ async function storeConversationHistory<Ctx>(
     traceId: finalState.traceId,
     runId: finalState.runId,
     agentName: finalState.currentAgentName,
-    turnCount: finalState.turnCount
+    turnCount: finalState.turnCount,
+    approvals: Object.fromEntries(finalState.approvals) // Store approvals in metadata
   };
 
   const result = await config.memory.provider.storeMessages(config.conversationId, messagesToStore, metadata);
   if (!result.success) {
-    console.warn(`[JAF:MEMORY] Failed to store conversation history: ${result.error.message}`);
+    console.warn(`[JAF:MEMORY] Failed to store conversation history: ${JSON.stringify(result.error)}`);
     return;
   }
   

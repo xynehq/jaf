@@ -91,13 +91,28 @@ export interface Tool {
   description: string;
   parameters: ToolParameter[];
   execute: ToolExecutor;
+  needsApproval?:
+    | boolean
+    | ((
+        context: ToolContext,
+        params: Record<string, unknown>,
+      ) => Promise<boolean>);
   metadata?: ToolMetadata;
 }
 
 export interface FunctionToolConfig {
   name: string;
   description: string;
-  execute: (params: Record<string, unknown>, context: ToolContext) => unknown | Promise<unknown>;
+  execute: (
+    params: Record<string, unknown>,
+    context: ToolContext,
+  ) => unknown | Promise<unknown>;
+  needsApproval?:
+    | boolean
+    | ((
+        context: ToolContext,
+        params: Record<string, unknown>,
+      ) => Promise<boolean>);
   parameters?: ToolParameter[];
   metadata?: Partial<ToolMetadata>;
 }

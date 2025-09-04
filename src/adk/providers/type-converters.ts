@@ -166,7 +166,8 @@ export const convertAdkSessionToCoreState = (session: Session, newMessage?: Cont
       artifacts: session.artifacts,
       ...session.metadata.properties
     },
-    turnCount: session.messages.length
+    turnCount: session.messages.length,
+    approvals: new Map(),
   };
 };
 
@@ -197,8 +198,8 @@ export const convertAdkAgentToCoreAgent = (adkAgent: Agent): CoreAgent<any, any>
     tools: adkAgent.config.tools?.map(convertAdkToolToCoreTool) || [],
     modelConfig: {
       name: convertAdkModelToCoreModel(adkAgent.config.model),
-      temperature: 0.7, // Default, can be overridden
-      maxTokens: 2000   // Default, can be overridden
+      temperature: 0.7,
+      maxTokens: 2000
     },
     handoffs: [],
     outputCodec: adkAgent.config.outputSchema ? createZodFromAdkSchema(adkAgent.config.outputSchema) : undefined
