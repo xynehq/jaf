@@ -1,26 +1,25 @@
 #!/usr/bin/env tsx
 
 /**
- * Interactive HITL Demo - Run like a development server
+ * File System HITL Demo - Recursive conversation pattern
  * 
- * This demo creates an interactive chat session where you can:
- * 1. Chat with the AI assistant
- * 2. See tools requiring approval in real-time
- * 3. Approve or reject tool calls manually
- * 4. Experience the complete HITL flow
+ * This demo showcases the HITL (Human-in-the-Loop) system with file operations:
+ * - listFile, readFile: No approval required
+ * - deleteFile, editFile: Require approval
+ * - Uses memory providers from environment
+ * - Uses approval storage for persistence
+ * - Recursive conversation pattern (no while loops)
  * 
- * Usage: pnpm run demo
+ * Usage: npx tsx examples/hitl-demo/index.ts
  */
 
-import { z } from 'zod';
 import * as readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
-import path from 'path';
-
+import * as path from 'path';
+import * as fs from 'fs/promises';
+import { existsSync } from 'fs';
 import {
-  Agent,
   RunState,
-  Tool,
   RunConfig,
   createRunId,
   createTraceId,
@@ -28,16 +27,13 @@ import {
 import { run } from '../../src/core/engine';
 import { approve, reject } from '../../src/core/state';
 import { makeLiteLLMProvider } from '../../src/providers/model';
+import { createInMemoryApprovalStorage } from '../../src/memory/approval-storage';
+import { fileSystemAgent, LITELLM_BASE_URL, LITELLM_API_KEY, LITELLM_MODEL } from './shared/agent';
+import { FileSystemContext, DEMO_DIR } from './shared/tools';
+import { setupMemoryProvider } from './shared/memory';
 
-// Load environment variables from .env file if it exists
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  require('dotenv').config({ path: path.join(process.cwd(), 'examples/hitl-demo/.env') });
-} catch {
-  // dotenv not available or .env file doesn't exist
-}
 
-// Simple color utility
+// Color utilities
 const colors = {
   bold: (text: string) => `\x1b[1m${text}\x1b[0m`,
   blue: (text: string) => `\x1b[34m${text}\x1b[0m`,
@@ -50,248 +46,273 @@ const colors = {
   dim: (text: string) => `\x1b[2m${text}\x1b[0m`,
 };
 
-// Load environment configuration
-const LITELLM_BASE_URL = process.env.LITELLM_URL || process.env.LITELLM_BASE_URL || 'http://localhost:4000';
-const LITELLM_API_KEY = process.env.LITELLM_API_KEY || 'sk-demo';
-const LITELLM_MODEL = process.env.LITELLM_MODEL || 'gpt-3.5-turbo';
-
-// Demo tools that require approval
-const redirectTool: Tool<{ url: string; reason?: string }, any> = {
-  schema: {
-    name: 'redirectUser',
-    description: 'Redirect user to a different screen/page',
-    parameters: z.object({
-      url: z.string().describe('The URL to redirect to'),
-      reason: z.string().optional().describe('Reason for redirect')
-    }) as z.ZodType<{ url: string; reason?: string }>,
-  },
-  needsApproval: true,
-  execute: async ({ url, reason }, context) => {
-    console.log(colors.cyan(`🔄 Executing redirect to: ${url}`));
-    if (reason) console.log(colors.cyan(`   Reason: ${reason}`));
-    
-    if (context.currentScreen) {
-      console.log(colors.cyan(`   Previous screen: ${context.currentScreen}`));
-      console.log(colors.cyan(`   New screen context:`), context.newScreenData || 'No additional data');
-    }
-    
-    return `Successfully redirected user to ${url}. Context updated with new screen data.`;
-  },
-};
-
-const sendDataTool: Tool<{ data: string; recipient: string }, any> = {
-  schema: {
-    name: 'sendSensitiveData',
-    description: 'Send sensitive data to a recipient',
-    parameters: z.object({
-      data: z.string().describe('The sensitive data to send'),
-      recipient: z.string().describe('Who to send the data to')
-    }) as z.ZodType<{ data: string; recipient: string }>,
-  },
-  needsApproval: true,
-  execute: async ({ data, recipient }, context) => {
-    console.log(colors.cyan(`📤 Sending data to: ${recipient}`));
-    console.log(colors.cyan(`   Data: ${data.substring(0, 20)}...`));
-    
-    if (context.encryptionLevel) {
-      console.log(colors.cyan(`   Using encryption level: ${context.encryptionLevel}`));
-    }
-    
-    return `Data sent securely to ${recipient} with appropriate encryption.`;
-  },
-};
-
-const demoAgent: Agent<any, any> = {
-  name: 'HITL Demo Agent',
-  instructions: () => `You are a helpful assistant that can help users with navigation and data operations.
-
-Available tools:
-- redirectUser: Redirect user to a different screen/page (requires approval)
-- sendSensitiveData: Send sensitive data to a recipient (requires approval)
-
-When a user asks for navigation or redirection, use the redirectUser tool.
-When a user asks to send data, use the sendSensitiveData tool.
-Always be helpful and explain what you're doing.`,
-  tools: [redirectTool, sendDataTool],
-  modelConfig: {
-    name: LITELLM_MODEL,
-    temperature: 0.1,
-  },
-};
-
 
 /**
  * Create model provider - requires LiteLLM configuration
  */
 const createModelProvider = () => {
-  // Check if LiteLLM is properly configured
-  if (!LITELLM_BASE_URL || !LITELLM_API_KEY || LITELLM_API_KEY === 'sk-demo') {
+  // Check if we have environment variables set (not using defaults)
+  const hasEnvConfig = process.env.LITELLM_BASE_URL || process.env.LITELLM_URL;
+  const hasApiKey = process.env.LITELLM_API_KEY;
+  
+  if (!hasEnvConfig || !hasApiKey) {
     console.log(colors.red(`❌ No LiteLLM configuration found`));
-    console.log(colors.yellow(`   Please set LITELLM_URL and LITELLM_API_KEY environment variables`));
-    console.log(colors.dim(`   Copy examples/hitl-demo/.env.example to .env and configure your LiteLLM server`));
+    console.log(colors.yellow(`   Please set LITELLM_BASE_URL and LITELLM_API_KEY environment variables`));
+    console.log(colors.yellow(`   Example: LITELLM_BASE_URL=http://localhost:4000 LITELLM_API_KEY=your-key npx tsx examples/hitl-demo/index.ts`));
+    console.log(colors.dim(`   Or copy examples/hitl-demo/.env.example to .env and configure your LiteLLM server`));
     process.exit(1);
   }
 
   console.log(colors.green(`🤖 Using LiteLLM: ${LITELLM_BASE_URL} (${LITELLM_MODEL})`));
-  return makeLiteLLMProvider(LITELLM_BASE_URL, LITELLM_API_KEY);
+  return makeLiteLLMProvider(LITELLM_BASE_URL, LITELLM_API_KEY) as any;
 };
 
 /**
- * Display welcome message and instructions
+ * Setup demo sandbox directory
+ */
+async function setupSandbox() {
+  try {
+    await fs.mkdir(DEMO_DIR, { recursive: true });
+    
+    // Create some demo files
+    const demoFiles = [
+      { name: 'README.txt', content: 'Welcome to the File System HITL Demo!\nThis is a sample file for testing.' },
+      { name: 'config.json', content: '{\n  "app": "filesystem-demo",\n  "version": "1.0.0"\n}' },
+      { name: 'notes.md', content: '# Demo Notes\n\n- This is a markdown file\n- You can edit or delete it\n- Operations require approval' }
+    ];
+
+    for (const file of demoFiles) {
+      const filePath = path.join(DEMO_DIR, file.name);
+      if (!existsSync(filePath)) {
+        await fs.writeFile(filePath, file.content);
+      }
+    }
+    
+    console.log(colors.green(`📁 Sandbox directory ready: ${DEMO_DIR}`));
+  } catch (error) {
+    console.error(colors.red(`Failed to setup sandbox: ${error}`));
+    process.exit(1);
+  }
+}
+
+/**
+ * Display welcome message
  */
 function displayWelcome() {
   console.clear();
-  console.log(colors.bold(colors.blue('🚀 JAF Human-in-the-Loop Interactive Demo')));
-  console.log(colors.blue('============================================\n'));
+  console.log(colors.bold(colors.blue('🗂️  JAF File System Human-in-the-Loop Demo')));
+  console.log(colors.blue('================================================\n'));
   
-  console.log(colors.green('This demo shows the HITL (Human-in-the-Loop) system where:'));
-  console.log(colors.green('• Tools can require approval before execution'));
-  console.log(colors.green('• You manually approve or reject tool calls'));
-  console.log(colors.green('• LLM remains unaware of the approval process'));
-  console.log(colors.green('• Frontend can provide additional context'));
-  console.log(colors.green('• Everything happens through the same chat endpoint\n'));
+  console.log(colors.green('This demo showcases HITL approval for file operations:'));
+  console.log(colors.green('• Safe operations: listFiles, readFile (no approval)'));
+  console.log(colors.green('• Dangerous operations: deleteFile, editFile (require approval)'));
+  console.log(colors.green('• Approval state persists using memory providers'));
+  console.log(colors.green('• Conversation history is maintained across sessions\n'));
 
   console.log(colors.cyan('Try these commands:'));
-  console.log(colors.white('• "redirect me to the dashboard"'));
-  console.log(colors.white('• "send my data to the team"'));
-  console.log(colors.white('• "navigate to settings"'));
-  console.log(colors.white('• Or ask anything else!\n'));
+  console.log(colors.white('• "list files in the current directory"'));
+  console.log(colors.white('• "read the README file"'));
+  console.log(colors.white('• "edit the config file to add a new field"'));
+  console.log(colors.white('• "delete the notes file"\n'));
 
   console.log(colors.dim('Commands: type "exit" to quit, "clear" to clear screen\n'));
 }
 
 /**
- * Main interactive chat loop
+ * Handle approval request interactively
  */
-async function runInteractiveDemo() {
+async function handleApproval(interruption: any, rl: readline.Interface): Promise<any> {
+  const toolCall = interruption.toolCall;
+  const args = JSON.parse(toolCall.function.arguments);
+  
+  console.log(colors.red('🛑 APPROVAL REQUIRED\n'));
+  console.log(colors.yellow(`Tool: ${colors.bold(toolCall.function.name)}`));
+  console.log(colors.yellow(`Arguments:`));
+  Object.entries(args).forEach(([key, value]) => {
+    console.log(colors.yellow(`  ${key}: ${value}`));
+  });
+  console.log(colors.yellow(`Session ID: ${interruption.sessionId}\n`));
+
+  const approval = await rl.question(colors.bold(colors.magenta('Do you approve this action? (y/n): ')));
+  
+  if (approval.toLowerCase() === 'y' || approval.toLowerCase() === 'yes') {
+    console.log(colors.green('\n✅ Approved! Providing additional context...\n'));
+    
+    // Provide additional context based on the tool
+    let additionalContext: any = {};
+    
+    if (toolCall.function.name === 'deleteFile') {
+      additionalContext = {
+        deletionConfirmed: {
+          confirmedBy: 'demo-user',
+          timestamp: new Date().toISOString(),
+          backupCreated: true
+        }
+      };
+    } else if (toolCall.function.name === 'editFile') {
+      additionalContext = {
+        editingApproved: {
+          approvedBy: 'demo-user',
+          timestamp: new Date().toISOString(),
+          safetyLevel: 'standard'
+        }
+      };
+    }
+    
+    return { approved: true, additionalContext };
+  } else {
+    console.log(colors.red('\n❌ Rejected!\n'));
+    return { 
+      approved: false, 
+      additionalContext: { 
+        rejectionReason: 'User declined the action',
+        rejectedBy: 'demo-user',
+        timestamp: new Date().toISOString()
+      } 
+    };
+  }
+}
+
+/**
+ * Process a single conversation turn
+ */
+async function processConversation(
+  userInput: string,
+  conversationHistory: any[],
+  config: RunConfig<FileSystemContext>,
+  rl: readline.Interface
+): Promise<{ newHistory: any[]; shouldContinue: boolean }> {
+  
+  // Add user message to conversation
+  const newHistory = [...conversationHistory, { role: 'user', content: userInput }];
+  
+  const context: FileSystemContext = {
+    userId: 'demo-user',
+    workingDirectory: DEMO_DIR,
+    permissions: ['read', 'write', 'delete']
+  };
+
+  let state: RunState<FileSystemContext> = {
+    runId: createRunId('filesystem-demo'),
+    traceId: createTraceId('fs-trace'),
+    messages: newHistory,
+    currentAgentName: 'FileSystemAgent',
+    context,
+    turnCount: 0,
+    approvals: new Map(),
+  };
+
+  console.log(colors.dim('⏳ Processing...\n'));
+  
+  // Process with the engine
+  for (;;) {
+    const result = await run(state, config);
+
+    if (result.outcome.status === 'interrupted') {
+      const interruption = result.outcome.interruptions[0];
+      
+      if (interruption.type === 'tool_approval') {
+        const approvalResult = await handleApproval(interruption, rl);
+        
+        if (approvalResult.approved) {
+          state = await approve(state, interruption, approvalResult.additionalContext, config);
+        } else {
+          state = await reject(state, interruption, approvalResult.additionalContext, config);
+        }
+        
+        // Continue processing with the approval decision
+        continue;
+      }
+    } else if (result.outcome.status === 'completed') {
+      // Add assistant response to conversation history
+      const finalHistory = [...newHistory, { role: 'assistant', content: result.outcome.output }];
+      
+      console.log(colors.bold(colors.blue('Assistant: ')) + result.outcome.output + '\n');
+      return { newHistory: finalHistory, shouldContinue: true };
+    } else if (result.outcome.status === 'error') {
+      console.log(colors.red('❌ Error:'), JSON.stringify(result.outcome.error, null, 2) + '\n');
+      return { newHistory, shouldContinue: true };
+    }
+  }
+}
+
+/**
+ * Main conversation loop (recursive pattern)
+ */
+async function conversationLoop(
+  conversationHistory: any[],
+  config: RunConfig<FileSystemContext>,
+  rl: readline.Interface
+): Promise<void> {
+  // Get user input
+  const userInput = await rl.question(colors.bold(colors.green('You: ')));
+  
+  if (userInput.toLowerCase() === 'exit') {
+    console.log(colors.yellow('👋 Goodbye!'));
+    return;
+  }
+  
+  if (userInput.toLowerCase() === 'clear') {
+    displayWelcome();
+    return conversationLoop(conversationHistory, config, rl);
+  }
+
+  if (!userInput.trim()) {
+    return conversationLoop(conversationHistory, config, rl);
+  }
+
+  // Process the conversation turn
+  const result = await processConversation(userInput, conversationHistory, config, rl);
+  
+  if (result.shouldContinue) {
+    // Recursive call to continue the conversation
+    return conversationLoop(result.newHistory, config, rl);
+  }
+}
+
+/**
+ * Main demo function
+ */
+async function runFileSystemDemo() {
   displayWelcome();
+  await setupSandbox();
+  
   
   const rl = readline.createInterface({ input, output });
   const modelProvider = createModelProvider();
   
-  const runConfig: RunConfig<any> = {
-    agentRegistry: new Map([['HITL Demo Agent', demoAgent]]),
+  // Set up memory provider from environment
+  const memoryProvider = await setupMemoryProvider();
+  
+  // Set up approval storage
+  console.log(colors.cyan('🔐 Setting up approval storage...'));
+  const approvalStorage = createInMemoryApprovalStorage();
+  console.log(colors.green('✅ Approval storage initialized'));
+
+  const config: RunConfig<FileSystemContext> = {
+    agentRegistry: new Map([['FileSystemAgent', fileSystemAgent]]),
     modelProvider,
+    memory: {
+      provider: memoryProvider,
+      autoStore: true,
+      maxMessages: 50,
+      storeOnCompletion: true,
+    },
+    conversationId: `filesystem-demo-${Date.now()}`,
+    approvalStorage,
   };
 
-  const conversationHistory: any[] = [];
-  let currentApprovals = new Map(); // Persist approvals across turns
-  const sessionRunId = createRunId('interactive-demo'); // Single runId for entire session
-
   try {
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      // Get user input
-      const userInput = await rl.question(colors.bold(colors.green('You: ')));
-      
-      if (userInput.toLowerCase() === 'exit') {
-        console.log(colors.yellow('👋 Goodbye!'));
-        break;
-      }
-      
-      if (userInput.toLowerCase() === 'clear') {
-        displayWelcome();
-        continue;
-      }
-
-      if (!userInput.trim()) continue;
-
-      // Add user message to conversation
-      conversationHistory.push({ role: 'user', content: userInput });
-
-      let state: RunState<any> = {
-        runId: sessionRunId, // Use consistent runId for the session
-        traceId: createTraceId('interactive-trace'),
-        messages: [...conversationHistory],
-        currentAgentName: 'HITL Demo Agent',
-        context: { userId: 'demo-user', currentScreen: '/home' },
-        turnCount: conversationHistory.length,
-        approvals: currentApprovals, // Use persistent approvals map
-      };
-
-      console.log(colors.dim(`Debug: Current approvals count: ${currentApprovals.size}`));
-      console.log(colors.dim(`Debug: Approvals:`), Array.from(currentApprovals.entries()));
-
-      console.log(colors.dim('⏳ Processing...\n'));
-      
-      // Process the conversation
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const result = await run(state, runConfig);
-
-        if (result.outcome.status === 'interrupted') {
-          const interruption = result.outcome.interruptions[0];
-          
-          if (interruption.type === 'tool_approval') {
-            const toolCall = interruption.toolCall;
-            const args = JSON.parse(toolCall.function.arguments);
-            
-            console.log(colors.red('🛑 APPROVAL REQUIRED\n'));
-            console.log(colors.yellow(`Tool: ${colors.bold(toolCall.function.name)}`));
-            console.log(colors.yellow(`Arguments:`));
-            Object.entries(args).forEach(([key, value]) => {
-              console.log(colors.yellow(`  ${key}: ${value}`));
-            });
-            console.log(colors.yellow(`Session ID: ${interruption.sessionId}\n`));
-
-            const approval = await rl.question(colors.bold(colors.magenta('Do you approve this action? (y/n): ')));
-            
-            if (approval.toLowerCase() === 'y' || approval.toLowerCase() === 'yes') {
-              console.log(colors.green('\n✅ Approved! Providing additional context...\n'));
-              
-              // Simulate additional context from frontend
-              let additionalContext: any = {};
-              
-              if (toolCall.function.name === 'redirectUser') {
-                additionalContext = {
-                  currentScreen: '/dashboard',
-                  newScreenData: {
-                    widgets: ['analytics', 'reports', 'settings'],
-                    userPermissions: ['read', 'write']
-                  }
-                };
-              } else if (toolCall.function.name === 'sendSensitiveData') {
-                additionalContext = {
-                  encryptionLevel: 'AES-256',
-                  auditLog: true,
-                  requireReceipt: true
-                };
-              }
-
-              state = approve(result.finalState, interruption, additionalContext);
-              currentApprovals = new Map(state.approvals); // Update the persistent approvals
-              console.log(colors.dim(`   Approval recorded for tool call ID: ${interruption.toolCall.id}`));
-              console.log(colors.dim(`   State approvals:`), Array.from(state.approvals.entries()));
-              // Continue with the approved state instead of restarting the conversation
-              continue;
-            } else {
-              console.log(colors.red('\n❌ Rejected!\n'));
-              state = reject(result.finalState, interruption, { rejectionReason: 'User declined' });
-              currentApprovals = new Map(state.approvals); // Update the persistent approvals
-              // Continue with the rejected state
-              continue;
-            }
-          }
-        } else if (result.outcome.status === 'completed') {
-          // Add assistant response to conversation history
-          conversationHistory.push({ role: 'assistant', content: result.outcome.output });
-          
-          console.log(colors.bold(colors.blue('Assistant: ')) + result.outcome.output + '\n');
-          break;
-        } else if (result.outcome.status === 'error') {
-          console.log(colors.red('❌ Error:'), result.outcome.error + '\n');
-          break;
-        }
-      }
-    }
+    // Start the recursive conversation loop
+    await conversationLoop([], config, rl);
   } finally {
     rl.close();
   }
 }
 
-// Run the interactive demo
+// Run the demo
 if (require.main === module) {
-  runInteractiveDemo().catch(console.error);
+  runFileSystemDemo().catch(console.error);
 }
 
-export { runInteractiveDemo };
+export { runFileSystemDemo };

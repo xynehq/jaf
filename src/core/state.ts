@@ -1,16 +1,34 @@
-import { RunState, Interruption } from './types';
+import { RunState, Interruption, RunConfig } from './types';
 
-export function approve<Ctx>(
+export async function approve<Ctx>(
   state: RunState<Ctx>,
   interruption: Interruption<Ctx>,
-  additionalContext?: Record<string, any>
-): RunState<Ctx> {
+  additionalContext?: Record<string, any>,
+  config?: RunConfig<Ctx>
+): Promise<RunState<Ctx>> {
   if (interruption.type === 'tool_approval') {
-    const newApprovals = new Map(state.approvals);
-    newApprovals.set(interruption.toolCall.id, { 
+    const approvalValue = { 
       approved: true, 
       additionalContext 
-    });
+    };
+
+    // Store in approval storage if available
+    if (config?.approvalStorage) {
+      const result = await config.approvalStorage.storeApproval(
+        state.runId,
+        interruption.toolCall.id,
+        approvalValue
+      );
+      if (!result.success) {
+        console.warn('Failed to store approval:', result.error);
+        // Continue with in-memory fallback
+      }
+    }
+
+    // Update in-memory state
+    const newApprovals = new Map(state.approvals);
+    newApprovals.set(interruption.toolCall.id, approvalValue);
+    
     return {
       ...state,
       approvals: newApprovals,
@@ -19,21 +37,60 @@ export function approve<Ctx>(
   return state;
 }
 
-export function reject<Ctx>(
+export async function reject<Ctx>(
   state: RunState<Ctx>,
   interruption: Interruption<Ctx>,
-  additionalContext?: Record<string, any>
-): RunState<Ctx> {
+  additionalContext?: Record<string, any>,
+  config?: RunConfig<Ctx>
+): Promise<RunState<Ctx>> {
   if (interruption.type === 'tool_approval') {
-    const newApprovals = new Map(state.approvals);
-    newApprovals.set(interruption.toolCall.id, { 
+    const approvalValue = { 
       approved: false, 
       additionalContext 
-    });
+    };
+
+    // Store in approval storage if available
+    if (config?.approvalStorage) {
+      const result = await config.approvalStorage.storeApproval(
+        state.runId,
+        interruption.toolCall.id,
+        approvalValue
+      );
+      if (!result.success) {
+        console.warn('Failed to store approval:', result.error);
+        // Continue with in-memory fallback
+      }
+    }
+
+    // Update in-memory state
+    const newApprovals = new Map(state.approvals);
+    newApprovals.set(interruption.toolCall.id, approvalValue);
+    
     return {
       ...state,
       approvals: newApprovals,
     };
   }
   return state;
+}
+
+// Helper function to load approvals from storage into state
+export async function loadApprovalsIntoState<Ctx>(
+  state: RunState<Ctx>,
+  config?: RunConfig<Ctx>
+): Promise<RunState<Ctx>> {
+  if (!config?.approvalStorage) {
+    return state;
+  }
+
+  const result = await config.approvalStorage.getRunApprovals(state.runId);
+  if (result.success) {
+    return {
+      ...state,
+      approvals: result.data,
+    };
+  } else {
+    console.warn('Failed to load approvals:', result.error);
+    return state;
+  }
 }

@@ -1,33 +1,26 @@
 #!/usr/bin/env tsx
 
 /**
- * HITL API Demo - Interactive chat with curl-based approval API
+ * File System HITL API Demo - With HTTP endpoints for approval
  * 
- * This demo creates:
- * 1. An interactive chat session (like the original demo)
- * 2. An HTTP API server for handling approvals via curl
- * 3. Real-time coordination between chat and API
+ * This demo extends the file system HITL demo with HTTP API endpoints
+ * for remote approval/rejection via curl commands:
+ * - All file operations from the main demo
+ * - HTTP API server for approval management
+ * - curl-based approval/rejection support
+ * - Real-time coordination between terminal and API
  * 
- * Usage: pnpm run demo:api
- * 
- * API Endpoints:
- * - GET /pending - List pending approvals
- * - POST /approve/:sessionId/:toolCallId - Approve a tool call
- * - POST /reject/:sessionId/:toolCallId - Reject a tool call
+ * Usage: npx tsx examples/hitl-demo/api-demo.ts
  */
 
-import { z } from 'zod';
 import * as readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 import * as path from 'path';
-import express from 'express';
-import { createServer } from 'http';
-import dotenv from 'dotenv';
+import * as fs from 'fs/promises';
+import { existsSync } from 'fs';
 
 import {
-  Agent,
   RunState,
-  Tool,
   RunConfig,
   createRunId,
   createTraceId,
@@ -35,19 +28,13 @@ import {
 import { run } from '../../src/core/engine';
 import { approve, reject } from '../../src/core/state';
 import { makeLiteLLMProvider } from '../../src/providers/model';
+import { createInMemoryApprovalStorage } from '../../src/memory/approval-storage';
+import { fileSystemAgent, LITELLM_BASE_URL, LITELLM_API_KEY, LITELLM_MODEL } from './shared/agent';
+import { FileSystemContext, DEMO_DIR } from './shared/tools';
+import { setupMemoryProvider } from './shared/memory';
 
-// Load environment variables from .env file if it exists
-try {
-  dotenv.config({ path: path.join(process.cwd(), 'examples/hitl-demo/.env') });
-} catch {
-  // dotenv not available or .env file doesn't exist
-}
 
-// Set default values if not provided
-process.env.LITELLM_URL = process.env.LITELLM_URL || 'http://localhost:4000';
-process.env.LITELLM_MODEL = process.env.LITELLM_MODEL || 'gpt-3.5-turbo';
-
-// Simple color utility
+// Color utilities
 const colors = {
   bold: (text: string) => `\x1b[1m${text}\x1b[0m`,
   blue: (text: string) => `\x1b[34m${text}\x1b[0m`,
@@ -60,416 +47,406 @@ const colors = {
   dim: (text: string) => `\x1b[2m${text}\x1b[0m`,
 };
 
-// Load environment configuration
-const LITELLM_BASE_URL = process.env.LITELLM_URL || process.env.LITELLM_BASE_URL || 'http://localhost:4000';
-const LITELLM_API_KEY = process.env.LITELLM_API_KEY || 'sk-demo';
-const LITELLM_MODEL = process.env.LITELLM_MODEL || 'gpt-3.5-turbo';
-const API_PORT = process.env.API_PORT || 3001;
+// Configuration
+const API_PORT = parseInt(process.env.API_PORT || '3001');
 
-// Global state for pending approvals and sessions
-interface PendingApproval {
-  sessionId: string;
-  toolCallId: string;
-  toolName: string;
-  args: any;
-  timestamp: Date;
-  resolve: (decision: { approved: boolean; additionalContext?: any }) => void;
-}
+// Global state for pending approvals
+const pendingApprovals = new Map<string, {
+  interruption: any;
+  resolve: (value: any) => void;
+  metadata: {
+    sessionId: string;
+    toolCallId: string;
+    toolName: string;
+    arguments: any;
+    timestamp: Date;
+  };
+}>();
 
-const pendingApprovals = new Map<string, PendingApproval>();
-const activeSessions = new Map<string, any>();
-
-// Demo tools that require approval
-const redirectTool: Tool<{ url: string; reason?: string }, any> = {
-  schema: {
-    name: 'redirectUser',
-    description: 'Redirect user to a different screen/page',
-    parameters: z.object({
-      url: z.string().describe('The URL to redirect to'),
-      reason: z.string().optional().describe('Reason for redirect')
-    }) as z.ZodType<{ url: string; reason?: string }>,
-  },
-  needsApproval: true,
-  execute: async ({ url, reason }, context) => {
-    console.log(colors.cyan(`🔄 Executing redirect to: ${url}`));
-    if (reason) console.log(colors.cyan(`   Reason: ${reason}`));
-    
-    if (context.currentScreen) {
-      console.log(colors.cyan(`   Previous screen: ${context.currentScreen}`));
-      console.log(colors.cyan(`   New screen context:`), context.newScreenData || 'No additional data');
-    }
-    
-    return `Successfully redirected user to ${url}. Context updated with new screen data.`;
-  },
-};
-
-const sendDataTool: Tool<{ data: string; recipient: string }, any> = {
-  schema: {
-    name: 'sendSensitiveData',
-    description: 'Send sensitive data to a recipient',
-    parameters: z.object({
-      data: z.string().describe('The sensitive data to send'),
-      recipient: z.string().describe('Who to send the data to')
-    }) as z.ZodType<{ data: string; recipient: string }>,
-  },
-  needsApproval: true,
-  execute: async ({ data, recipient }, context) => {
-    console.log(colors.cyan(`📤 Sending data to: ${recipient}`));
-    console.log(colors.cyan(`   Data: ${data.substring(0, 20)}...`));
-    
-    if (context.encryptionLevel) {
-      console.log(colors.cyan(`   Using encryption level: ${context.encryptionLevel}`));
-    }
-    
-    return `Data sent securely to ${recipient} with appropriate encryption.`;
-  },
-};
-
-const demoAgent: Agent<any, any> = {
-  name: 'HITL Demo Agent',
-  instructions: () => `You are a helpful assistant that can help users with navigation and data operations.
-
-Available tools:
-- redirectUser: Redirect user to a different screen/page (requires approval)
-- sendSensitiveData: Send sensitive data to a recipient (requires approval)
-
-When a user asks for navigation or redirection, use the redirectUser tool.
-When a user asks to send data, use the sendSensitiveData tool.
-Always be helpful and explain what you're doing.`,
-  tools: [redirectTool, sendDataTool],
-  modelConfig: {
-    name: LITELLM_MODEL,
-    temperature: 0.1,
-  },
-};
 
 /**
- * Create model provider - requires LiteLLM configuration
+ * Create model provider
  */
 const createModelProvider = () => {
-  // Check if LiteLLM is properly configured
-  if (!LITELLM_BASE_URL || !LITELLM_API_KEY || LITELLM_API_KEY === 'sk-demo') {
+  // Check if we have environment variables set (not using defaults)
+  const hasEnvConfig = process.env.LITELLM_BASE_URL || process.env.LITELLM_URL;
+  const hasApiKey = process.env.LITELLM_API_KEY;
+  
+  if (!hasEnvConfig || !hasApiKey) {
     console.log(colors.red(`❌ No LiteLLM configuration found`));
-    console.log(colors.yellow(`   Please set LITELLM_URL and LITELLM_API_KEY environment variables`));
-    console.log(colors.dim(`   Copy examples/hitl-demo/.env.example to .env and configure your LiteLLM server`));
+    console.log(colors.yellow(`   Please set LITELLM_BASE_URL and LITELLM_API_KEY environment variables`));
+    console.log(colors.yellow(`   Example: LITELLM_BASE_URL=http://localhost:4000 LITELLM_API_KEY=your-key npx tsx examples/hitl-demo/api-demo.ts`));
+    console.log(colors.dim(`   Or copy examples/hitl-demo/.env.example to .env and configure your LiteLLM server`));
     process.exit(1);
   }
 
   console.log(colors.green(`🤖 Using LiteLLM: ${LITELLM_BASE_URL} (${LITELLM_MODEL})`));
-  return makeLiteLLMProvider(LITELLM_BASE_URL, LITELLM_API_KEY);
+  return makeLiteLLMProvider(LITELLM_BASE_URL, LITELLM_API_KEY) as any;
 };
+/**
+ * Setup demo sandbox directory
+ */
+async function setupSandbox() {
+  try {
+    await fs.mkdir(DEMO_DIR, { recursive: true });
+    
+    const demoFiles = [
+      { name: 'README.txt', content: 'Welcome to the File System HITL API Demo!\nThis is a sample file for testing.' },
+      { name: 'config.json', content: '{\n  "app": "filesystem-api-demo",\n  "version": "1.0.0",\n  "api": true\n}' },
+      { name: 'notes.md', content: '# API Demo Notes\n\n- This is a markdown file\n- You can edit or delete it via terminal or API\n- Operations require approval' }
+    ];
+
+    for (const file of demoFiles) {
+      const filePath = path.join(DEMO_DIR, file.name);
+      if (!existsSync(filePath)) {
+        await fs.writeFile(filePath, file.content);
+      }
+    }
+    
+    console.log(colors.green(`📁 Sandbox directory ready: ${DEMO_DIR}`));
+  } catch (error) {
+    console.error(colors.red(`Failed to setup sandbox: ${error}`));
+    process.exit(1);
+  }
+}
 
 /**
- * Create Express API server for handling approvals
+ * Display welcome message
  */
-function createApiServer() {
+function displayWelcome() {
+  console.clear();
+  console.log(colors.bold(colors.blue('🌐 JAF File System HITL API Demo')));
+  console.log(colors.blue('====================================\n'));
+  
+  console.log(colors.green('This demo showcases HITL with curl-based approval only:'));
+  console.log(colors.green('• Safe operations: listFiles, readFile (no approval)'));
+  console.log(colors.green('• Dangerous operations: deleteFile, editFile (require approval)'));
+  console.log(colors.green('• Approve/reject ONLY via curl commands'));
+  console.log(colors.green('• No terminal approval - must use API endpoints\n'));
+
+  console.log(colors.cyan('Try these commands:'));
+  console.log(colors.white('• "list files in the current directory"'));
+  console.log(colors.white('• "read the README file"'));
+  console.log(colors.white('• "edit the config file to add api: true"'));
+  console.log(colors.white('• "delete the notes file"\n'));
+
+  console.log(colors.yellow('API Endpoints:'));
+  console.log(colors.white(`• GET http://localhost:${API_PORT}/pending - List pending approvals`));
+  console.log(colors.white(`• POST http://localhost:${API_PORT}/approve/:sessionId/:toolCallId - Approve`));
+  console.log(colors.white(`• POST http://localhost:${API_PORT}/reject/:sessionId/:toolCallId - Reject\n`));
+
+  console.log(colors.dim('Commands: type "exit" to quit, "clear" to clear screen\n'));
+}
+
+/**
+ * Handle approval request (curl-only)
+ */
+async function handleApproval(interruption: any): Promise<any> {
+  const toolCall = interruption.toolCall;
+  const args = JSON.parse(toolCall.function.arguments);
+  const approvalKey = `${interruption.sessionId}-${toolCall.id}`;
+  
+  console.log(colors.red('🛑 APPROVAL REQUIRED\n'));
+  console.log(colors.yellow(`Tool: ${colors.bold(toolCall.function.name)}`));
+  console.log(colors.yellow(`Arguments:`));
+  Object.entries(args).forEach(([key, value]) => {
+    console.log(colors.yellow(`  ${key}: ${value}`));
+  });
+  console.log(colors.yellow(`Session ID: ${interruption.sessionId}`));
+  console.log(colors.yellow(`Tool Call ID: ${toolCall.id}\n`));
+  
+  console.log(colors.cyan('💡 Use curl to approve/reject:'));
+  console.log(colors.white(`   Simple:  curl -X POST http://localhost:${API_PORT}/approve/${interruption.sessionId}/${toolCall.id}`));
+  console.log(colors.white(`   Context: curl -X POST http://localhost:${API_PORT}/approve/${interruption.sessionId}/${toolCall.id} \\`));
+  console.log(colors.white(`              -H "Content-Type: application/json" \\`));
+  console.log(colors.white(`              -d '{"additionalContext": {"message": "your-additional-context"}}'`));
+  console.log(colors.white(`   Reject:  curl -X POST http://localhost:${API_PORT}/reject/${interruption.sessionId}/${toolCall.id} \\`));
+  console.log(colors.white(`              -H "Content-Type: application/json" \\`));
+  console.log(colors.white(`              -d '{"reason": "not authorized", "additionalContext": {"rejectedBy": "your-name"}}'`));
+  console.log(colors.dim(`   Check:   curl http://localhost:${API_PORT}/pending\n`));
+
+  // Store pending approval for API access only
+  const approvalPromise = new Promise<any>((resolve) => {
+    pendingApprovals.set(approvalKey, {
+      interruption,
+      resolve,
+      metadata: {
+        sessionId: interruption.sessionId,
+        toolCallId: toolCall.id,
+        toolName: toolCall.function.name,
+        arguments: args,
+        timestamp: new Date()
+      }
+    });
+  });
+
+  console.log(colors.dim('⏳ Waiting for curl approval/rejection...\n'));
+
+  // Wait for API call only
+  const result = await approvalPromise;
+  
+  // Clean up pending approval
+  pendingApprovals.delete(approvalKey);
+  
+  if (result.approved) {
+    console.log(colors.green(`\n✅ Approved via curl! Providing additional context...\n`));
+  } else {
+    console.log(colors.red(`\n❌ Rejected via curl!\n`));
+  }
+  
+  return result;
+}
+
+/**
+ * Get additional context based on tool
+ */
+function getAdditionalContext(toolName: string): any {
+  if (toolName === 'deleteFile') {
+    return {
+      deletionConfirmed: {
+        confirmedBy: 'demo-user',
+        timestamp: new Date().toISOString(),
+        backupCreated: true
+      }
+    };
+  } else if (toolName === 'editFile') {
+    return {
+      editingApproved: {
+        approvedBy: 'demo-user',
+        timestamp: new Date().toISOString(),
+        safetyLevel: 'standard'
+      }
+    };
+  }
+  return {};
+}
+
+/**
+ * Setup HTTP API server
+ */
+function setupAPIServer() {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const express = require('express');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const cors = require('cors');
   const app = express();
+  app.use(cors());
   app.use(express.json());
-
-  // Enable CORS for testing
-  app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
-    next();
-  });
-
-  // Get all pending approvals
-  app.get('/pending', (req, res) => {
-    const pending = Array.from(pendingApprovals.values()).map(approval => ({
-      sessionId: approval.sessionId,
-      toolCallId: approval.toolCallId,
-      toolName: approval.toolName,
-      args: approval.args,
-      timestamp: approval.timestamp,
-    }));
-    res.json({ pending });
-  });
-
-  // Approve a tool call
-  app.post('/approve/:sessionId/:toolCallId', (req, res) => {
-    const { sessionId, toolCallId } = req.params;
-    const { additionalContext } = req.body;
-    
-    const key = `${sessionId}:${toolCallId}`;
-    const approval = pendingApprovals.get(key);
-    
-    if (!approval) {
-      return res.status(404).json({ 
-        error: 'Approval not found',
-        sessionId,
-        toolCallId 
-      });
-    }
-
-    console.log(colors.green(`\n🌐 API: Approved ${approval.toolName} for ${sessionId}`));
-    if (additionalContext) {
-      console.log(colors.green(`   Additional context provided via API`));
-    }
-
-    // Resolve the pending approval
-    approval.resolve({ approved: true, additionalContext });
-    pendingApprovals.delete(key);
-
-    res.json({ 
-      success: true, 
-      message: `Approved ${approval.toolName}`,
-      sessionId,
-      toolCallId 
-    });
-  });
-
-  // Reject a tool call
-  app.post('/reject/:sessionId/:toolCallId', (req, res) => {
-    const { sessionId, toolCallId } = req.params;
-    const { reason } = req.body;
-    
-    const key = `${sessionId}:${toolCallId}`;
-    const approval = pendingApprovals.get(key);
-    
-    if (!approval) {
-      return res.status(404).json({ 
-        error: 'Approval not found',
-        sessionId,
-        toolCallId 
-      });
-    }
-
-    console.log(colors.red(`\n🌐 API: Rejected ${approval.toolName} for ${sessionId}`));
-    if (reason) {
-      console.log(colors.red(`   Reason: ${reason}`));
-    }
-
-    // Resolve the pending approval
-    approval.resolve({ approved: false, additionalContext: { rejectionReason: reason } });
-    pendingApprovals.delete(key);
-
-    res.json({ 
-      success: true, 
-      message: `Rejected ${approval.toolName}`,
-      sessionId,
-      toolCallId 
-    });
-  });
 
   // Health check
   app.get('/health', (req, res) => {
-    res.json({ status: 'ok', pendingCount: pendingApprovals.size });
+    res.json({
+      status: 'healthy',
+      pendingApprovals: pendingApprovals.size,
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  // List pending approvals
+  app.get('/pending', (req, res) => {
+    const pending = Array.from(pendingApprovals.entries()).map(([key, data]) => ({
+      key,
+      ...data.metadata
+    }));
+    res.json(pending);
+  });
+
+  // Approve tool call
+  app.post('/approve/:sessionId/:toolCallId', (req, res) => {
+    const { sessionId, toolCallId } = req.params;
+    const { additionalContext } = req.body || {};
+    const approvalKey = `${sessionId}-${toolCallId}`;
+    
+    const pending = pendingApprovals.get(approvalKey);
+    if (!pending) {
+      return res.status(404).json({ error: 'Approval request not found' });
+    }
+
+    const result = {
+      approved: true,
+      source: 'API',
+      additionalContext: {
+        ...getAdditionalContext(pending.metadata.toolName),
+        ...additionalContext,
+        approvedViaAPI: true
+      }
+    };
+
+    pending.resolve(result);
+    res.json({ message: 'Approval recorded', sessionId, toolCallId });
+  });
+
+  // Reject tool call
+  app.post('/reject/:sessionId/:toolCallId', (req, res) => {
+    const { sessionId, toolCallId } = req.params;
+    const { reason } = req.body || {};
+    const approvalKey = `${sessionId}-${toolCallId}`;
+    
+    const pending = pendingApprovals.get(approvalKey);
+    if (!pending) {
+      return res.status(404).json({ error: 'Approval request not found' });
+    }
+
+    const result = {
+      approved: false,
+      source: 'API',
+      additionalContext: {
+        rejectionReason: reason || 'Rejected via API',
+        rejectedBy: 'api-user',
+        timestamp: new Date().toISOString(),
+        rejectedViaAPI: true
+      }
+    };
+
+    pending.resolve(result);
+    res.json({ message: 'Rejection recorded', sessionId, toolCallId });
   });
 
   return app;
 }
 
 /**
- * Display welcome message and instructions
+ * Process conversation turn
  */
-function displayWelcome() {
-  console.clear();
-  console.log(colors.bold(colors.blue('🚀 JAF Human-in-the-Loop API Demo')));
-  console.log(colors.blue('==========================================\n'));
+async function processConversation(
+  userInput: string,
+  conversationHistory: any[],
+  config: RunConfig<FileSystemContext>,
+  rl: readline.Interface
+): Promise<{ newHistory: any[]; shouldContinue: boolean }> {
   
-  console.log(colors.green('This demo shows the HITL system with both:'));
-  console.log(colors.green('• Interactive terminal approvals (like before)'));
-  console.log(colors.green('• RESTful API for remote approvals via curl'));
-  console.log(colors.green('• Real-time coordination between both interfaces\n'));
+  const newHistory = [...conversationHistory, { role: 'user', content: userInput }];
+  
+  const context: FileSystemContext = {
+    userId: 'api-demo-user',
+    workingDirectory: DEMO_DIR,
+    permissions: ['read', 'write', 'delete']
+  };
 
-  console.log(colors.cyan('Terminal Commands:'));
-  console.log(colors.white('• "redirect me to the dashboard"'));
-  console.log(colors.white('• "send my data to the team"'));
-  console.log(colors.white('• "api" to see API status'));
-  console.log(colors.white('• "exit" to quit\n'));
+  let state: RunState<FileSystemContext> = {
+    runId: createRunId('filesystem-api-demo'),
+    traceId: createTraceId('fs-api-trace'),
+    messages: newHistory,
+    currentAgentName: 'FileSystemAgent',
+    context,
+    turnCount: 0,
+    approvals: new Map(),
+  };
 
-  console.log(colors.cyan(`API Server running on http://localhost:${API_PORT}`));
-  console.log(colors.cyan('API Endpoints:'));
-  console.log(colors.white(`• GET  /pending - List pending approvals`));
-  console.log(colors.white(`• POST /approve/:sessionId/:toolCallId - Approve`));
-  console.log(colors.white(`• POST /reject/:sessionId/:toolCallId - Reject\n`));
+  console.log(colors.dim('⏳ Processing...\n'));
+  
+  for (;;) {
+    const result = await run(state, config);
 
-  console.log(colors.yellow('Example curl commands:'));
-  console.log(colors.dim(`curl http://localhost:${API_PORT}/pending`));
-  console.log(colors.dim(`curl -X POST http://localhost:${API_PORT}/approve/session-id/tool-call-id`));
-  console.log(colors.dim(`curl -X POST http://localhost:${API_PORT}/reject/session-id/tool-call-id \\`));
-  console.log(colors.dim(`     -H "Content-Type: application/json" \\`));
-  console.log(colors.dim(`     -d '{"reason": "Not authorized"}'`));
-  console.log('');
-}
-
-/**
- * Wait for approval via API only
- */
-async function waitForApproval(
-  sessionId: string,
-  toolCallId: string,
-  toolName: string,
-  args: any
-): Promise<{ approved: boolean; additionalContext?: any }> {
-  return new Promise((resolve) => {
-    const key = `${sessionId}:${toolCallId}`;
-    let resolved = false;
-    
-    // Store pending approval with resolve function
-    pendingApprovals.set(key, {
-      sessionId,
-      toolCallId,
-      toolName,
-      args,
-      timestamp: new Date(),
-      resolve: (decision) => {
-        if (resolved) return; // Prevent double resolution
-        resolved = true;
+    if (result.outcome.status === 'interrupted') {
+      const interruption = result.outcome.interruptions[0];
+      
+      if (interruption.type === 'tool_approval') {
+        const approvalResult = await handleApproval(interruption);
         
-        // Clean up
-        pendingApprovals.delete(key);
-        console.log(colors.green('\n🌐 API: Approved via API - continuing automatically\n'));
-        resolve(decision);
-      },
-    });
-
-    console.log(colors.red('🛑 APPROVAL REQUIRED\n'));
-    console.log(colors.yellow(`Tool: ${colors.bold(toolName)}`));
-    console.log(colors.yellow(`Arguments:`));
-    Object.entries(args).forEach(([key, value]) => {
-      console.log(colors.yellow(`  ${key}: ${value}`));
-    });
-    console.log(colors.yellow(`Session ID: ${sessionId}`));
-    console.log(colors.yellow(`Tool Call ID: ${toolCallId}\n`));
-    
-    console.log(colors.magenta('⏳ Waiting for API approval...'));
-    console.log(colors.white(`💡 Approve: curl -X POST http://localhost:3001/approve/${sessionId}/${toolCallId}`));
-    console.log(colors.white(`💡 Reject:  curl -X POST http://localhost:3001/reject/${sessionId}/${toolCallId}`));
-    console.log(colors.dim(`💡 Check:   curl http://localhost:3001/pending`));
-    console.log('');
-    console.log(colors.cyan('🔄 Tool execution will continue automatically once approved via API...'));
-    console.log('');
-
-    // No terminal input - purely API-driven
-    // The promise will only resolve when API approval comes through
-  });
+        if (approvalResult.approved) {
+          state = await approve(state, interruption, approvalResult.additionalContext, config);
+        } else {
+          state = await reject(state, interruption, approvalResult.additionalContext, config);
+        }
+        
+        continue;
+      }
+    } else if (result.outcome.status === 'completed') {
+      const finalHistory = [...newHistory, { role: 'assistant', content: result.outcome.output }];
+      console.log(colors.bold(colors.blue('Assistant: ')) + result.outcome.output + '\n');
+      return { newHistory: finalHistory, shouldContinue: true };
+    } else if (result.outcome.status === 'error') {
+      console.log(colors.red('❌ Error:'), JSON.stringify(result.outcome.error, null, 2) + '\n');
+      return { newHistory, shouldContinue: true };
+    }
+  }
 }
 
 /**
- * Main interactive chat loop with API integration
+ * Conversation loop
  */
-async function runApiDemo() {
-  // Start API server
-  const app = createApiServer();
-  const server = createServer(app);
+async function conversationLoop(
+  conversationHistory: any[],
+  config: RunConfig<FileSystemContext>,
+  rl: readline.Interface
+): Promise<void> {
+  const userInput = await rl.question(colors.bold(colors.green('You: ')));
   
-  server.listen(API_PORT, () => {
-    console.log(colors.green(`🌐 API Server started on http://localhost:${API_PORT}`));
-  });
+  if (userInput.toLowerCase() === 'exit') {
+    console.log(colors.yellow('👋 Goodbye!'));
+    return;
+  }
+  
+  if (userInput.toLowerCase() === 'clear') {
+    displayWelcome();
+    return conversationLoop(conversationHistory, config, rl);
+  }
 
+  if (!userInput.trim()) {
+    return conversationLoop(conversationHistory, config, rl);
+  }
+
+  const result = await processConversation(userInput, conversationHistory, config, rl);
+  
+  if (result.shouldContinue) {
+    return conversationLoop(result.newHistory, config, rl);
+  }
+}
+
+/**
+ * Main demo function
+ */
+async function runFileSystemAPIDemo() {
   displayWelcome();
+  await setupSandbox();
+  
+  // Setup API server
+  const app = setupAPIServer();
+  const server = app.listen(API_PORT, () => {
+    console.log(colors.green(`🌐 API server running on http://localhost:${API_PORT}`));
+    console.log(colors.dim(`   Health: http://localhost:${API_PORT}/health`));
+    console.log(colors.dim(`   Pending: http://localhost:${API_PORT}/pending\n`));
+  });
   
   const rl = readline.createInterface({ input, output });
   const modelProvider = createModelProvider();
   
-  const runConfig: RunConfig<any> = {
-    agentRegistry: new Map([['HITL Demo Agent', demoAgent]]),
+  // Generate session ID for this demo run
+  const sessionId = `api-demo-${Date.now()}`;
+  console.log(colors.cyan(`🔗 Session ID: ${colors.bold(sessionId)}\n`));
+
+  // Setup memory and approval storage
+  const memoryProvider = await setupMemoryProvider();
+  
+  console.log(colors.cyan('🔐 Setting up approval storage...'));
+  const approvalStorage = createInMemoryApprovalStorage();
+  console.log(colors.green('✅ Approval storage initialized\n'));
+
+  const config: RunConfig<FileSystemContext> = {
+    agentRegistry: new Map([['FileSystemAgent', fileSystemAgent]]),
     modelProvider,
+    memory: {
+      provider: memoryProvider,
+      autoStore: true,
+      maxMessages: 50,
+      storeOnCompletion: true,
+    },
+    conversationId: `filesystem-api-demo-${Date.now()}`,
+    approvalStorage,
   };
 
-  const conversationHistory: any[] = [];
-  let currentApprovals = new Map();
-  const sessionRunId = createRunId('api-demo');
-
   try {
-    while (true) {
-      // Get user input
-      const userInput = await rl.question(colors.bold(colors.green('You: ')));
-      
-      if (userInput.toLowerCase() === 'exit') {
-        console.log(colors.yellow('👋 Goodbye!'));
-        break;
-      }
-      
-      if (userInput.toLowerCase() === 'clear') {
-        displayWelcome();
-        continue;
-      }
-
-      if (userInput.toLowerCase() === 'api') {
-        console.log(colors.cyan(`📊 API Status:`));
-        console.log(colors.white(`• Server: http://localhost:${API_PORT}`));
-        console.log(colors.white(`• Pending approvals: ${pendingApprovals.size}`));
-        if (pendingApprovals.size > 0) {
-          console.log(colors.white(`• IDs: ${Array.from(pendingApprovals.keys()).join(', ')}`));
-        }
-        console.log('');
-        continue;
-      }
-
-      if (!userInput.trim()) continue;
-
-      // Add user message to conversation
-      conversationHistory.push({ role: 'user', content: userInput });
-
-      let state: RunState<any> = {
-        runId: sessionRunId,
-        traceId: createTraceId('api-trace'),
-        messages: [...conversationHistory],
-        currentAgentName: 'HITL Demo Agent',
-        context: { userId: 'api-user', currentScreen: '/home' },
-        turnCount: conversationHistory.length,
-        approvals: currentApprovals,
-      };
-
-      console.log(colors.dim('⏳ Processing...\n'));
-      
-      // Process the conversation
-      while (true) {
-        const result = await run(state, runConfig);
-
-        if (result.outcome.status === 'interrupted') {
-          const interruption = result.outcome.interruptions[0];
-          
-          if (interruption.type === 'tool_approval') {
-            const toolCall = interruption.toolCall;
-            const args = JSON.parse(toolCall.function.arguments);
-            
-            // Wait for approval (terminal or API)
-            const decision = await waitForApproval(
-              interruption.sessionId || sessionRunId,
-              toolCall.id,
-              toolCall.function.name,
-              args
-            );
-
-            if (decision.approved) {
-              state = approve(result.finalState, interruption, decision.additionalContext);
-              currentApprovals = new Map(state.approvals);
-              console.log(colors.dim(`   Approval recorded for tool call ID: ${toolCall.id}`));
-              // Continue with the approved state
-              continue;
-            } else {
-              state = reject(result.finalState, interruption, decision.additionalContext);
-              currentApprovals = new Map(state.approvals);
-              console.log(colors.dim(`   Rejection recorded for tool call ID: ${toolCall.id}`));
-              // Continue with the rejected state
-              continue;
-            }
-          }
-        } else if (result.outcome.status === 'completed') {
-          // Add assistant response to conversation history
-          conversationHistory.push({ role: 'assistant', content: result.outcome.output });
-          
-          console.log(colors.bold(colors.blue('Assistant: ')) + result.outcome.output + '\n');
-          break;
-        } else if (result.outcome.status === 'error') {
-          console.log(colors.red('❌ Error:'), result.outcome.error + '\n');
-          break;
-        }
-      }
-    }
+    await conversationLoop([], config, rl);
   } finally {
     rl.close();
     server.close();
   }
 }
 
-// Run the API demo
+// Run the demo
 if (require.main === module) {
-  runApiDemo().catch(console.error);
+  runFileSystemAPIDemo().catch(console.error);
 }
 
-export { runApiDemo };
+export { runFileSystemAPIDemo };

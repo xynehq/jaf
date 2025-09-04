@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MemoryConfig } from '../memory/types';
+import type { ApprovalStorage } from '../memory/approval-storage';
 
 export type TraceId = string & { readonly _brand: 'TraceId' };
 export type RunId = string & { readonly _brand: 'RunId' };
@@ -151,4 +152,5 @@ export type RunConfig<Ctx> = {
   readonly onEvent?: (event: TraceEvent) => void;
   readonly memory?: MemoryConfig;
   readonly conversationId?: string;
+  readonly approvalStorage?: ApprovalStorage;
 };
