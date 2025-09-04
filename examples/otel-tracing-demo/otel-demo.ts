@@ -1,35 +1,29 @@
 import { z } from 'zod';
 import { config } from 'dotenv';
-import { run, createRunId, createTraceId } from '../../src/index.js';
-import { OpenTelemetryTraceCollector } from '../../src/core/tracing.js';
-import { makeLiteLLMProvider } from '../../src/providers/model.js';
+import { run, createRunId, createTraceId, OpenTelemetryTraceCollector, makeLiteLLMProvider } from '@xynehq/jaf';
 
 // Load environment variables
 config();
 
 // Set up OpenTelemetry to export to Jaeger
-process.env.TRACE_COLLECTOR_URL = 'http://localhost:4318/v1/traces';
+// process.env.TRACE_COLLECTOR_URL = 'http://localhost:4318/v1/traces';
 // Set up OpenTelemetry to export to Langfuse via OTLP
 // // Langfuse OTLP endpoint is different from the regular API endpoint
-// process.env.TRACE_COLLECTOR_URL = process.env.LANGFUSE_HOST 
-//   ? `${process.env.LANGFUSE_HOST}/api/public/otel/v1/traces`
-//   : 'https://cloud.langfuse.com/api/public/otel';
+process.env.TRACE_COLLECTOR_URL = process.env.LANGFUSE_HOST 
+  ? `${process.env.LANGFUSE_HOST}/api/public/otel/v1/traces`
+  : 'https://cloud.langfuse.com/api/public/otel';
 
 // // Set OTLP headers for Langfuse authentication
 // // Langfuse expects the public and secret keys in specific headers
-// process.env.OTEL_EXPORTER_OTLP_HEADERS = `Authorization=Basic ${Buffer.from(
-//   `${process.env.LANGFUSE_PUBLIC_KEY}:${process.env.LANGFUSE_SECRET_KEY}`
-// ).toString('base64')}`;
+process.env.OTEL_EXPORTER_OTLP_HEADERS = `Authorization=Basic ${Buffer.from(
+  `${process.env.LANGFUSE_PUBLIC_KEY}:${process.env.LANGFUSE_SECRET_KEY}`
+).toString('base64')}`;
 
 // Enhanced context type with comprehensive user information
 type DemoContext = {
   userId: string;
   sessionId: string;
   query: string;
-  combined_history: Array<{
-    role: 'user' | 'assistant' | 'tool';
-    content: string;
-  }>;
   token_response: {
     email: string;
     username: string;
@@ -80,7 +74,7 @@ const calculatorTool = {
 
 // Analytics agent with comprehensive instructions
 const analyticsAgent = {
-  name: 'analytics_agent_jaf',
+  name: 'jaf_otel_demo_agent',
   instructions: (state: any) => `You are an advanced analytics assistant with access to weather and calculation tools.
 
 Current context:
@@ -111,20 +105,6 @@ async function runOtelDemo() {
     userId: 'user_12345',
     sessionId: 'session_abc123',
     query: 'What is the weather like in San Francisco and what is 25 * 4?',
-    combined_history: [
-      {
-        role: 'user',
-        content: 'Hello, I need help with some information.'
-      },
-      {
-        role: 'assistant', 
-        content: 'Hello! I\'m here to help you with weather information and calculations. What would you like to know?'
-      },
-      {
-        role: 'user',
-        content: 'What is the weather like in San Francisco and what is 25 * 4?'
-      }
-    ],
     token_response: {
       email: 'user@example.com',
       username: 'demo_user'
@@ -166,7 +146,6 @@ async function runOtelDemo() {
   console.log(`- User Query: ${context.query}`);
   console.log(`- Email: ${context.token_response.email}`);
   console.log(`- Username: ${context.token_response.username}`);
-  console.log(`- History Messages: ${context.combined_history.length}`);
   console.log('');
 
   // Run configuration with enhanced tracing
@@ -179,7 +158,6 @@ async function runOtelDemo() {
       if (event.type === 'run_start') {
         console.log('🎯 [TRACE] Run started with comprehensive context');
       } else if (event.type === 'llm_call_start') {
-        event.data.model = 'gemini-2.5-flash';
         console.log(`🤖 [TRACE] LLM call started - Model: ${event.data.model}`);
       } else if (event.type === 'llm_call_end') {
         console.log(`✅ [TRACE] LLM call completed - Usage: ${JSON.stringify(event.data.usage)}`);

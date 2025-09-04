@@ -1,11 +1,11 @@
 {
-  "name": "jaf-otel-tracing-demo",
+  "name": "otel-tracing-demo",
   "version": "1.0.0",
-  "description": "JAF OpenTelemetry tracing demo",
-  "main": "index.ts",
+  "description": "JAF OTEL tracing demo",
+  "main": "otel-demo.ts",
   "scripts": {
-    "start": "tsx index.ts",
-    "dev": "tsx watch index.ts"
+    "start": "tsx otel-demo.ts",
+    "dev": "tsx watch otel-demo.ts"
   },
   "dependencies": {
     "@xynehq/jaf": "workspace:*",
