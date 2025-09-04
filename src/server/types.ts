@@ -12,9 +12,19 @@ export interface ServerConfig<Ctx> {
 }
 
 // Request/Response schemas
+export const attachmentSchema = z.object({
+  kind: z.enum(['image', 'audio', 'video', 'document', 'file']),
+  mimeType: z.string().optional(),
+  name: z.string().optional(),
+  url: z.string().url().optional(),
+  data: z.string().optional(),
+  format: z.string().optional()
+});
+
 export const httpMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
-  content: z.string()
+  content: z.string(),
+  attachments: z.array(attachmentSchema).optional()
 });
 
 // Approval message schema for HITL

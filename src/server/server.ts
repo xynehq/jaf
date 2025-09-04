@@ -175,7 +175,21 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
                 type: 'object',
                 properties: {
                   role: { type: 'string', enum: ['user', 'assistant', 'system'] },
-                  content: { type: 'string' }
+                  content: { type: 'string' },
+                  attachments: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        kind: { type: 'string', enum: ['image', 'audio', 'video', 'document', 'file'] },
+                        mimeType: { type: 'string' },
+                        name: { type: 'string' },
+                        url: { type: 'string' },
+                        data: { type: 'string' },
+                        format: { type: 'string' }
+                      }
+                    }
+                  }
                 },
                 required: ['role', 'content']
               }
@@ -216,7 +230,8 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         // Convert HTTP messages to JAF messages
         const jafMessages: Message[] = validatedRequest.messages.map(msg => ({
           role: msg.role === 'system' ? 'user' : msg.role as 'user' | 'assistant',
-          content: msg.content
+          content: msg.content,
+          attachments: (msg as any).attachments
         }));
 
         // Create initial state
@@ -518,7 +533,8 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
             // Regular user/assistant messages
             return {
               role: msg.role as 'user' | 'assistant',
-              content: msg.content
+              content: msg.content,
+              ...(msg.attachments ? { attachments: msg.attachments } : {})
             };
           }
         });
@@ -606,7 +622,21 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
                 type: 'object',
                 properties: {
                   role: { type: 'string', enum: ['user', 'assistant', 'system'] },
-                  content: { type: 'string' }
+                  content: { type: 'string' },
+                  attachments: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        kind: { type: 'string', enum: ['image', 'audio', 'video', 'document', 'file'] },
+                        mimeType: { type: 'string' },
+                        name: { type: 'string' },
+                        url: { type: 'string' },
+                        data: { type: 'string' },
+                        format: { type: 'string' }
+                      }
+                    }
+                  }
                 },
                 required: ['role', 'content']
               }

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { ModelProvider, RunState, Agent, RunConfig, Message } from '../core/types.js';
+import { ModelProvider, Message } from '../core/types.js';
 
 export const makeLiteLLMProvider = <Ctx>(
   baseURL: string,
@@ -69,16 +69,9 @@ export const makeLiteLLMProvider = <Ctx>(
 function convertMessage(msg: Message): OpenAI.Chat.Completions.ChatCompletionMessageParam {
   switch (msg.role) {
     case 'user':
-      return {
-        role: 'user',
-        content: msg.content
-      };
+      return buildChatMessageWithAttachments('user', msg);
     case 'assistant':
-      return {
-        role: 'assistant',
-        content: msg.content,
-        tool_calls: msg.tool_calls as any
-      };
+      return buildChatMessageWithAttachments('assistant', msg);
     case 'tool':
       return {
         role: 'tool',
@@ -88,6 +81,59 @@ function convertMessage(msg: Message): OpenAI.Chat.Completions.ChatCompletionMes
     default:
       throw new Error(`Unknown message role: ${(msg as any).role}`);
   }
+}
+
+/**
+ * If attachments exist, build multi-part content for Chat Completions.
+ * Currently supports images via `image_url`. Falls back to plain text otherwise.
+ */
+function buildChatMessageWithAttachments(
+  role: 'user' | 'assistant',
+  msg: Message
+): OpenAI.Chat.Completions.ChatCompletionMessageParam {
+  const hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
+  if (!hasAttachments) {
+    if (role === 'assistant') {
+      return { role: 'assistant', content: msg.content, tool_calls: msg.tool_calls as any };
+    }
+    return { role: 'user', content: msg.content };
+  }
+
+  const parts: any[] = [];
+  if (msg.content && msg.content.trim().length > 0) {
+    parts.push({ type: 'text', text: msg.content });
+  }
+
+  for (const att of msg.attachments || []) {
+    if (att.kind === 'image') {
+      // Prefer explicit URL; otherwise construct a data URL from base64
+      const url = att.url
+        ? att.url
+        : (att.data && att.mimeType)
+          ? `data:${att.mimeType};base64,${att.data}`
+          : undefined;
+      if (url) {
+        parts.push({ type: 'image_url', image_url: { url } });
+      }
+    } else if (att.kind === 'document' || att.kind === 'file') {
+      // Chat Completions API doesn't accept arbitrary docs. Surface a short text hint.
+      const label = att.name || att.format || att.mimeType || 'attachment';
+      parts.push({
+        type: 'text',
+        text: `Attached ${att.kind}: ${label}${att.url ? ` (${att.url})` : ''}`
+      });
+    } else if (att.kind === 'audio' || att.kind === 'video') {
+      // Not supported as native inputs in Chat Completions; add textual placeholder.
+      const label = att.name || att.mimeType || att.kind;
+      parts.push({ type: 'text', text: `Attached ${att.kind}: ${label}` });
+    }
+  }
+
+  const base: any = { role, content: parts };
+  if (role === 'assistant' && msg.tool_calls) {
+    base.tool_calls = msg.tool_calls as any;
+  }
+  return base as OpenAI.Chat.Completions.ChatCompletionMessageParam;
 }
 
 function zodSchemaToJsonSchema(zodSchema: any): any {
