@@ -54,7 +54,14 @@ export const makeLiteLLMProvider = <Ctx>(
       console.log(`📞 Calling model: ${model} with params: ${JSON.stringify(requestParams, null, 2)}`);
       const resp = await client.chat.completions.create(requestParams);
 
-      return resp.choices[0];
+      // Return the choice with usage data attached for tracing
+      return {
+        ...resp.choices[0],
+        usage: resp.usage,
+        model: resp.model,
+        id: resp.id,
+        created: resp.created
+      };
     },
   };
 };

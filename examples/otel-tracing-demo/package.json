@@ -1,0 +1,19 @@
+{
+  "name": "otel-tracing-demo",
+  "version": "1.0.0",
+  "description": "JAF OTEL tracing demo",
+  "main": "otel-demo.ts",
+  "scripts": {
+    "start": "tsx otel-demo.ts",
+    "dev": "tsx watch otel-demo.ts"
+  },
+  "dependencies": {
+    "@xynehq/jaf": "workspace:*",
+    "dotenv": "^16.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

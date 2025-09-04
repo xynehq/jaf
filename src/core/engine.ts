@@ -18,7 +18,14 @@ export async function run<Ctx, Out>(
   try {
     config.onEvent?.({
       type: 'run_start',
-      data: { runId: initialState.runId, traceId: initialState.traceId }
+      data: { 
+        runId: initialState.runId, 
+        traceId: initialState.traceId,
+        context: initialState.context,
+        userId: (initialState.context as any)?.userId,
+        sessionId: (initialState.context as any)?.sessionId || (initialState.context as any)?.conversationId,
+        messages: initialState.messages
+      }
     });
 
     // Load conversation history from memory if configured
@@ -42,7 +49,7 @@ export async function run<Ctx, Out>(
 
     config.onEvent?.({
       type: 'run_end',
-      data: { outcome: result.outcome }
+      data: { outcome: result.outcome, traceId: initialState.traceId, runId: initialState.runId }
     });
 
     return result;
@@ -60,7 +67,7 @@ export async function run<Ctx, Out>(
 
     config.onEvent?.({
       type: 'run_end',
-      data: { outcome: errorResult.outcome }
+      data: { outcome: errorResult.outcome, traceId: initialState.traceId, runId: initialState.runId }
     });
 
     return errorResult;
@@ -208,6 +215,33 @@ async function runInternal<Ctx, Out>(
     console.log(`[JAF:ENGINE] Available tools:`, currentAgent.tools.map(t => t.schema.name));
   }
 
+  // Emit agent processing event with complete state information
+  config.onEvent?.({
+    type: 'agent_processing',
+    data: {
+      agentName: currentAgent.name,
+      traceId: state.traceId,
+      runId: state.runId,
+      turnCount: state.turnCount,
+      messageCount: state.messages.length,
+      toolsAvailable: currentAgent.tools?.map(t => ({
+        name: t.schema.name,
+        description: t.schema.description
+      })) || [],
+      handoffsAvailable: currentAgent.handoffs || [],
+      modelConfig: currentAgent.modelConfig,
+      hasOutputCodec: !!currentAgent.outputCodec,
+      context: state.context,
+      currentState: {
+        messages: state.messages.map(m => ({
+          role: m.role,
+          contentLength: m.content?.length || 0,
+          hasToolCalls: !!m.tool_calls?.length
+        }))
+      }
+    }
+  });
+
   const model = config.modelOverride ?? currentAgent.modelConfig?.name;
 
   if (!model) {
@@ -227,16 +261,53 @@ async function runInternal<Ctx, Out>(
   const turnNumber = state.turnCount + 1;
   config.onEvent?.({ type: 'turn_start', data: { turn: turnNumber, agentName: currentAgent.name } });
 
+  // Prepare complete LLM call data for tracing
+  const llmCallData = {
+    agentName: currentAgent.name,
+    model,
+    traceId: state.traceId,
+    runId: state.runId,
+    messages: state.messages,
+    tools: currentAgent.tools?.map(tool => ({
+      name: tool.schema.name,
+      description: tool.schema.description,
+      parameters: tool.schema.parameters
+    })),
+    modelConfig: {
+      ...currentAgent.modelConfig,
+      modelOverride: config.modelOverride
+    },
+    turnCount: state.turnCount,
+    context: state.context
+  };
+
   config.onEvent?.({
     type: 'llm_call_start',
-    data: { agentName: currentAgent.name, model }
+    data: llmCallData
   });
 
   const llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
   
+  // Extract usage data for enhanced events
+  const usage = (llmResponse as any)?.usage;
+  const prompt = (llmResponse as any)?.prompt;
+  
   config.onEvent?.({
     type: 'llm_call_end',
-    data: { choice: llmResponse }
+    data: { 
+      choice: llmResponse,
+      fullResponse: llmResponse, // Include complete response
+      prompt: prompt, // Include the prompt that was sent
+      traceId: state.traceId, 
+      runId: state.runId,
+      agentName: currentAgent.name,
+      model,
+      usage: usage ? {
+        prompt_tokens: usage.prompt_tokens,
+        completion_tokens: usage.completion_tokens,
+        total_tokens: usage.total_tokens
+      } : undefined
+    }
   });
 
   // Emit token usage if provider supplied it
@@ -499,17 +570,27 @@ async function executeToolCalls<Ctx>(
   try { setToolRuntime(state.context, { state, config }); } catch { /* ignore */ }
   const results = await Promise.all(
     toolCalls.map(async (toolCall): Promise<ToolCallResult> => {
+      const tool = agent.tools?.find(t => t.schema.name === toolCall.function.name);
+      const startTime = Date.now();
+      
       config.onEvent?.({
         type: 'tool_call_start',
         data: {
           toolName: toolCall.function.name,
-          args: tryParseJSON(toolCall.function.arguments)
+          args: tryParseJSON(toolCall.function.arguments),
+          traceId: state.traceId,
+          runId: state.runId,
+          toolSchema: tool ? {
+            name: tool.schema.name,
+            description: tool.schema.description,
+            parameters: tool.schema.parameters
+          } : undefined,
+          context: state.context,
+          agentName: agent.name
         }
       });
 
       try {
-        const tool = agent.tools?.find(t => t.schema.name === toolCall.function.name);
-        
         if (!tool) {
           const errorResult = JSON.stringify({
             error: "tool_not_found",
@@ -519,7 +600,16 @@ async function executeToolCalls<Ctx>(
 
           config.onEvent?.({
             type: 'tool_call_end',
-            data: { toolName: toolCall.function.name, result: errorResult }
+            data: { 
+              toolName: toolCall.function.name, 
+              result: errorResult,
+              traceId: state.traceId,
+              runId: state.runId,
+              status: 'error',
+              toolResult: { error: 'tool_not_found' },
+              executionTime: Date.now() - startTime,
+              error: { type: 'tool_not_found', message: `Tool ${toolCall.function.name} not found` }
+            }
           });
 
           return {
@@ -544,7 +634,16 @@ async function executeToolCalls<Ctx>(
 
           config.onEvent?.({
             type: 'tool_call_end',
-            data: { toolName: toolCall.function.name, result: errorResult }
+            data: { 
+              toolName: toolCall.function.name, 
+              result: errorResult,
+              traceId: state.traceId,
+              runId: state.runId,
+              status: 'error',
+              toolResult: { error: 'validation_error', details: parseResult.error.issues },
+              executionTime: Date.now() - startTime,
+              error: { type: 'validation_error', message: `Invalid arguments for ${toolCall.function.name}`, details: parseResult.error.issues }
+            }
           });
 
           return {
@@ -583,8 +682,17 @@ async function executeToolCalls<Ctx>(
           data: { 
             toolName: toolCall.function.name, 
             result: resultString,
+            traceId: state.traceId,
+            runId: state.runId,
             toolResult: toolResultObj,
-            status: toolResultObj?.status || 'success'
+            status: toolResultObj?.status || 'success',
+            executionTime: Date.now() - startTime,
+            metadata: {
+              agentName: agent.name,
+              parsedArgs: parseResult.data,
+              context: state.context,
+              resultType: typeof toolResult === 'string' ? 'string' : 'object'
+            }
           }
         });
 
@@ -618,7 +726,20 @@ async function executeToolCalls<Ctx>(
 
         config.onEvent?.({
           type: 'tool_call_end',
-          data: { toolName: toolCall.function.name, result: errorResult }
+          data: { 
+            toolName: toolCall.function.name, 
+            result: errorResult,
+            traceId: state.traceId,
+            runId: state.runId,
+            status: 'error',
+            toolResult: { error: 'execution_error', detail: error instanceof Error ? error.message : String(error) },
+            executionTime: Date.now() - startTime,
+            error: { 
+              type: 'execution_error', 
+              message: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined
+            }
+          }
         });
 
         return {
