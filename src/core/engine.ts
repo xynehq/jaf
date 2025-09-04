@@ -9,6 +9,7 @@ import {
   Agent,
   Tool,
 } from './types.js';
+import { setToolRuntime } from './tool-runtime.js';
 
 export async function run<Ctx, Out>(
   initialState: RunState<Ctx>,
@@ -492,6 +493,8 @@ async function executeToolCalls<Ctx>(
   state: RunState<Ctx>,
   config: RunConfig<Ctx>
 ): Promise<ToolCallResult[]> {
+  // Install runtime for tools that need access to current state/config (e.g., agent-as-tool)
+  try { setToolRuntime(state.context, { state, config }); } catch { /* ignore */ }
   const results = await Promise.all(
     toolCalls.map(async (toolCall): Promise<ToolCallResult> => {
       config.onEvent?.({
