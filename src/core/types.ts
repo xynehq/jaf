@@ -11,9 +11,19 @@ export type ValidationResult =
   | { readonly isValid: true }
   | { readonly isValid: false; readonly errorMessage: string };
 
+export type Attachment = {
+  readonly kind: 'image' | 'audio' | 'video' | 'document' | 'file';
+  readonly mimeType?: string; // e.g. image/png, application/pdf
+  readonly name?: string;     // Optional filename
+  readonly url?: string;      // Remote URL or data URL
+  readonly data?: string;     // Base64 without data: prefix
+  readonly format?: string;   // Optional short format like 'pdf', 'txt'
+};
+
 export type Message = {
   readonly role: 'user' | 'assistant' | 'tool';
   readonly content: string;
+  readonly attachments?: readonly Attachment[]; // Optional structured attachments
   readonly tool_call_id?: string;
   readonly tool_calls?: readonly {
     readonly id: string;
