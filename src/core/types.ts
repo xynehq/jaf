@@ -80,7 +80,7 @@ export type RunResult<Out> = {
 };
 
 export type TraceEvent =
-  | { type: 'run_start'; data: { runId: RunId; traceId: TraceId; context?: any; userId?: string; sessionId?: string; } }
+  | { type: 'run_start'; data: { runId: RunId; traceId: TraceId; context?: any; userId?: string; sessionId?: string; messages?: readonly Message[]; } }
   | { type: 'turn_start'; data: { turn: number; agentName: string } }
   | { type: 'llm_call_start'; data: { agentName: string; model: string; traceId: TraceId; runId: RunId; messages?: readonly Message[]; tools?: any[]; modelConfig?: any; turnCount?: number; context?: any; } }
   | { type: 'llm_call_end'; data: { choice: any; fullResponse?: any; prompt?: any; traceId: TraceId; runId: RunId; agentName?: string; model?: string; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; }; estimatedCost?: { promptCost: number; completionCost: number; totalCost: number; }; } }

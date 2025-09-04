@@ -22,7 +22,8 @@ export async function run<Ctx, Out>(
         traceId: initialState.traceId,
         context: initialState.context,
         userId: (initialState.context as any)?.userId,
-        sessionId: (initialState.context as any)?.sessionId || (initialState.context as any)?.conversationId
+        sessionId: (initialState.context as any)?.sessionId || (initialState.context as any)?.conversationId,
+        messages: initialState.messages
       }
     });
 
@@ -304,12 +305,6 @@ async function runInternal<Ctx, Out>(
         prompt_tokens: usage.prompt_tokens,
         completion_tokens: usage.completion_tokens,
         total_tokens: usage.total_tokens
-      } : undefined,
-      // Calculate estimated cost (rough estimates)
-      estimatedCost: usage ? {
-        promptCost: (usage.prompt_tokens || 0) * 0.000001, // $1 per 1M tokens estimate
-        completionCost: (usage.completion_tokens || 0) * 0.000002, // $2 per 1M tokens estimate
-        totalCost: ((usage.prompt_tokens || 0) * 0.000001) + ((usage.completion_tokens || 0) * 0.000002)
       } : undefined
     }
   });
