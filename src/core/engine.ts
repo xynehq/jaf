@@ -462,6 +462,8 @@ async function runInternal<Ctx, Out>(
 
   // End of turn due to error
   config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+  
+  console.error(`[JAF:ENGINE] No tool calls or content returned by model. LLMResponse: `, llmResponse);
   return {
     finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
     outcome: {
