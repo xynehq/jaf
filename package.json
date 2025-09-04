@@ -1,6 +1,6 @@
 {
   "name": "@xynehq/jaf",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Juspay Agent Framework - A purely functional agent framework with immutable state and composable tools",
   "packageManager": "pnpm@9.0.0",
   "main": "dist/index.js",
@@ -114,7 +114,8 @@
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
-    "@modelcontextprotocol/sdk": "^0.4.0",
+    "@modelcontextprotocol/sdk": "^1.17.4",
+    "eventsource": "^2.0.2",
     "fastify": "^4.29.1",
     "langfuse": "^3.26.0",
     "mathjs": "^14.6.0",

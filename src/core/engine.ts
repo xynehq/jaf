@@ -9,6 +9,7 @@ import {
   Agent,
   Tool,
 } from './types.js';
+import { setToolRuntime } from './tool-runtime.js';
 
 export async function run<Ctx, Out>(
   initialState: RunState<Ctx>,
@@ -532,6 +533,8 @@ async function runInternal<Ctx, Out>(
 
   // End of turn due to error
   config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+  
+  console.error(`[JAF:ENGINE] No tool calls or content returned by model. LLMResponse: `, llmResponse);
   return {
     finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
     outcome: {
@@ -563,6 +566,8 @@ async function executeToolCalls<Ctx>(
   state: RunState<Ctx>,
   config: RunConfig<Ctx>
 ): Promise<ToolCallResult[]> {
+  // Install runtime for tools that need access to current state/config (e.g., agent-as-tool)
+  try { setToolRuntime(state.context, { state, config }); } catch { /* ignore */ }
   const results = await Promise.all(
     toolCalls.map(async (toolCall): Promise<ToolCallResult> => {
       const tool = agent.tools?.find(t => t.schema.name === toolCall.function.name);

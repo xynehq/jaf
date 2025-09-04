@@ -1,0 +1,22 @@
+{
+  "name": "mcp-sse-demo",
+  "version": "1.0.0",
+  "description": "Demo connecting to a Streamable HTTP (SSE) MCP server (Cloudflare Docs)",
+  "main": "index.ts",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx --watch index.ts",
+    "build": "tsc",
+    "server": "tsx run-server.ts",
+    "dev:server": "tsx --watch run-server.ts"
+  },
+  "dependencies": {
+    "@xynehq/jaf": "workspace:*",
+    "dotenv": "^17.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

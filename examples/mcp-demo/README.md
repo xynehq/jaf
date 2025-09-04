@@ -315,3 +315,47 @@ This demo shows how JAF integrates with MCP:
 ---
 
 **Ready to explore AI agents with real filesystem capabilities!** 🗂️
+### Connecting to a Remote MCP Server (SSE)
+
+You can also connect to a remote MCP server that implements the Streamable HTTP transport with Server‑Sent Events (SSE):
+
+```ts
+import { makeMCPClientSSE } from '../../src/providers/mcp'
+
+const mcpClient = await makeMCPClientSSE('https://your-remote-mcp.example.com/mcp', {
+  headers: {
+    // Optional: include auth or custom headers for the remote MCP server
+    Authorization: `Bearer ${process.env.MCP_API_TOKEN ?? ''}`,
+  },
+})
+
+const tools = await mcpClient.listTools()
+console.log('Remote MCP tools:', tools)
+```
+
+This uses the official `@modelcontextprotocol/sdk` SSE client to connect to remote servers per the MCP 2025‑06‑18 spec.
+
+### Connecting to a Remote MCP Server (Streamable HTTP)
+
+For production MCP servers that need session management, authentication, and bidirectional communication, use the full Streamable HTTP transport:
+
+```ts
+import { makeMCPClientHTTP } from '../../src/providers/mcp'
+
+const mcpClient = await makeMCPClientHTTP('https://your-mcp-server.com/mcp', {
+  headers: {
+    // Include auth or custom headers for the remote MCP server
+    Authorization: `Bearer ${process.env.MCP_API_TOKEN ?? ''}`,
+  },
+  sessionId: 'my-session-123', // Optional: custom session ID for state management
+  requestInit: {
+    // Optional: additional fetch options
+    timeout: 30000,
+  }
+})
+
+const tools = await mcpClient.listTools()
+console.log('Remote MCP tools:', tools)
+```
+
+This uses the official `@modelcontextprotocol/sdk` Streamable HTTP client with features like automatic reconnection, session management, and OAuth support. See `examples/mcp-http-demo/` for a complete example.
