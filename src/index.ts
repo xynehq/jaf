@@ -3,6 +3,7 @@ export * from './core/engine';
 export * from './core/tracing';
 export * from './core/errors';
 export * from './core/tool-results';
+export * from './core/agent-as-tool';
 
 export * from './providers/model';
 // export * from './providers/mcp'; // Commented out for test compatibility

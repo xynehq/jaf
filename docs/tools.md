@@ -575,6 +575,8 @@ const fileProcessingTool: Tool<{ filePath: string }, MyContext> = {
 
 ## Advanced Patterns
 
+See also: [Agents as Tools](agents-as-tools.md) for composing agents by wrapping them as callable tools.
+
 ### 1. Tool Composition
 
 Combine multiple tools for complex operations:

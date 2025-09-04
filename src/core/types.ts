@@ -111,13 +111,14 @@ export type RunResult<Out> = {
 };
 
 export type TraceEvent =
-  | { type: 'run_start'; data: { runId: RunId; traceId: TraceId; } }
+  | { type: 'run_start'; data: { runId: RunId; traceId: TraceId; context?: any; userId?: string; sessionId?: string; messages?: readonly Message[]; } }
   | { type: 'turn_start'; data: { turn: number; agentName: string } }
-  | { type: 'llm_call_start'; data: { agentName: string; model: string; } }
-  | { type: 'llm_call_end'; data: { choice: any; } }
+  | { type: 'llm_call_start'; data: { agentName: string; model: string; traceId: TraceId; runId: RunId; messages?: readonly Message[]; tools?: any[]; modelConfig?: any; turnCount?: number; context?: any; } }
+  | { type: 'llm_call_end'; data: { choice: any; fullResponse?: any; prompt?: any; traceId: TraceId; runId: RunId; agentName?: string; model?: string; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; }; estimatedCost?: { promptCost: number; completionCost: number; totalCost: number; }; } }
   | { type: 'token_usage'; data: { prompt?: number; completion?: number; total?: number; model?: string } }
-  | { type: 'tool_call_start'; data: { toolName: string; args: any; } }
-  | { type: 'tool_call_end'; data: { toolName: string; result: string; toolResult?: any; status?: string; } }
+  | { type: 'tool_call_start'; data: { toolName: string; args: any; traceId: TraceId; runId: RunId; toolSchema?: any; context?: any; agentName?: string; } }
+  | { type: 'tool_call_end'; data: { toolName: string; result: string; toolResult?: any; status?: string; traceId: TraceId; runId: RunId; executionTime?: number; error?: any; metadata?: any; } }
+  | { type: 'agent_processing'; data: { agentName: string; traceId: TraceId; runId: RunId; turnCount: number; messageCount: number; toolsAvailable: Array<{ name: string; description: string }>; handoffsAvailable: readonly string[]; modelConfig?: any; hasOutputCodec: boolean; context: any; currentState: any; } }
   | { type: 'handoff'; data: { from: string; to: string; } }
   | { type: 'tool_requests'; data: { toolCalls: Array<{ id: string; name: string; args: any }>; } }
   | { type: 'tool_results_to_llm'; data: { results: Message[] } }
@@ -125,9 +126,12 @@ export type TraceEvent =
   | { type: 'final_output'; data: { output: any } }
   | { type: 'handoff_denied'; data: { from: string; to: string; reason: string } }
   | { type: 'guardrail_violation'; data: { stage: 'input' | 'output'; reason: string } }
+  | { type: 'guardrail_check'; data: { guardrailName: string; content: any; isValid?: boolean; errorMessage?: string; } }
+  | { type: 'memory_operation'; data: { operation: 'load' | 'store'; conversationId: string; status: 'start' | 'end' | 'fail'; error?: string; messageCount?: number; } }
+  | { type: 'output_parse'; data: { content: string; status: 'start' | 'end' | 'fail'; parsedOutput?: any; error?: string; } }
   | { type: 'decode_error'; data: { errors: z.ZodIssue[] } }
   | { type: 'turn_end'; data: { turn: number; agentName: string } }
-  | { type: 'run_end'; data: { outcome: RunResult<any>['outcome'] } };
+  | { type: 'run_end'; data: { outcome: RunResult<any>['outcome']; traceId: TraceId; runId: RunId; } };
 
 export interface ModelProvider<Ctx> {
   getCompletion: (

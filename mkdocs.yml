@@ -138,6 +138,7 @@ nav:
   - Agent Development:
     - ADK Layer: adk-layer.md
     - Tools: tools.md
+    - Agents as Tools: agents-as-tools.md
     - Memory System: memory-system.md
     - Model Providers: model-providers.md
   - A2A Protocol:
