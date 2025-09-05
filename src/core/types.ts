@@ -22,7 +22,7 @@ export type ToolCall = {
 };
 
 export type Attachment = {
-  readonly kind: 'image' | 'audio' | 'video' | 'document' | 'file';
+  readonly kind: 'image' | 'document' | 'file';
   readonly mimeType?: string; // e.g. image/png, application/pdf
   readonly name?: string;     // Optional filename
   readonly url?: string;      // Remote URL or data URL
@@ -30,13 +30,28 @@ export type Attachment = {
   readonly format?: string;   // Optional short format like 'pdf', 'txt'
 };
 
+export type MessageContentPart = 
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'image_url'; readonly image_url: { readonly url: string; readonly detail?: 'low' | 'high' | 'auto' } };
+
 export type Message = {
   readonly role: 'user' | 'assistant' | 'tool';
-  readonly content: string;
+  readonly content: string | readonly MessageContentPart[];
   readonly attachments?: readonly Attachment[]; // Optional structured attachments
   readonly tool_call_id?: string;
   readonly tool_calls?: readonly ToolCall[];
 };
+
+export function getTextContent(content: string | readonly MessageContentPart[]): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  
+  return content
+    .filter(part => part.type === 'text')
+    .map(part => (part as { text: string }).text)
+    .join(' ');
+}
 
 export type ModelConfig = {
   readonly name?: string;

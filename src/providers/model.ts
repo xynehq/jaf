@@ -1,5 +1,6 @@
 import OpenAI from "openai";
-import { ModelProvider, Message } from '../core/types.js';
+import { ModelProvider, Message, MessageContentPart, getTextContent } from '../core/types.js';
+import { extractDocumentContent, isDocumentSupported, getDocumentDescription } from '../utils/document-processor.js';
 
 export const makeLiteLLMProvider = <Ctx>(
   baseURL: string,
@@ -19,14 +20,30 @@ export const makeLiteLLMProvider = <Ctx>(
         throw new Error(`Model not specified for agent ${agent.name}`);
       }
 
+      // Check if any message contains image content or image attachments
+      const hasImageContent = state.messages.some(msg => 
+        (Array.isArray(msg.content) && 
+         msg.content.some(part => part.type === 'image_url')) ||
+        (msg.attachments && 
+         msg.attachments.some(att => att.kind === 'image'))
+      );
+
+      if (hasImageContent) {
+        const supportsVision = await isVisionModel(model, baseURL);
+        if (!supportsVision) {
+          throw new Error(`Model ${model} does not support vision capabilities. Please use a vision-capable model like gpt-4o, claude-3-5-sonnet, or gemini-1.5-pro.`);
+        }
+      }
+
       const systemMessage: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
         role: "system",
         content: agent.instructions(state)
       };
 
+      const convertedMessages = await Promise.all(state.messages.map(convertMessage));
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         systemMessage,
-        ...state.messages.map(convertMessage)
+        ...convertedMessages
       ];
 
       const tools = agent.tools?.map(t => ({
@@ -66,16 +83,109 @@ export const makeLiteLLMProvider = <Ctx>(
   };
 };
 
-function convertMessage(msg: Message): OpenAI.Chat.Completions.ChatCompletionMessageParam {
+// Cache for vision model capabilities
+const visionModelCache = new Map<string, { supports: boolean; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const API_TIMEOUT = 3000; // 3 second timeout for API calls
+
+async function isVisionModel(model: string, baseURL: string): Promise<boolean> {
+  const cacheKey = `${baseURL}:${model}`;
+  const cached = visionModelCache.get(cacheKey);
+  
+  // Return cached result if still valid
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.supports;
+  }
+  try {
+    // Try to call LiteLLM's model info API to check vision support with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+    
+    const response = await fetch(`${baseURL}/model_group/info`, {
+      headers: {
+        'accept': 'application/json'
+      },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      const data: any = await response.json();
+      const modelInfo = data.data?.find((m: any) => 
+        m.model_group === model || model.includes(m.model_group)
+      );
+      
+      if (modelInfo?.supports_vision !== undefined) {
+        const result = modelInfo.supports_vision;
+        // Cache the API result
+        visionModelCache.set(cacheKey, { supports: result, timestamp: Date.now() });
+        console.log(`[JAF:VISION] API confirmed ${model} vision support: ${result}`);
+        return result;
+      }
+    } else {
+      console.warn(`[JAF:VISION] API returned status ${response.status} for model info`);
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        console.warn(`[JAF:VISION] API timeout checking vision support for ${model}`);
+      } else {
+        console.warn(`[JAF:VISION] API error checking vision support: ${error.message}`);
+      }
+    } else {
+      console.warn(`[JAF:VISION] Unknown error checking vision support via API`);
+    }
+  }
+
+  // Fallback to known vision models list
+  const knownVisionModels = [
+    'gpt-4-vision-preview',
+    'gpt-4o',
+    'gpt-4o-mini', 
+    'claude-sonnet-4',          
+    'claude-sonnet-4-20250514', 
+    'gemini-2.5-flash',
+    'gemini-2.5-pro'      
+  ];
+  
+  const isKnownVisionModel = knownVisionModels.some(visionModel => 
+    model.toLowerCase().includes(visionModel.toLowerCase())
+  );
+  
+  // Cache the fallback result
+  visionModelCache.set(cacheKey, { supports: isKnownVisionModel, timestamp: Date.now() });
+  
+  if (isKnownVisionModel) {
+    console.log(`[JAF:VISION] Using fallback: ${model} is a known vision model`);
+  } else {
+    console.log(`[JAF:VISION] Model ${model} not recognized as vision-capable`);
+  }
+  
+  return isKnownVisionModel;
+}
+
+async function convertMessage(msg: Message): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam> {
   switch (msg.role) {
     case 'user':
-      return buildChatMessageWithAttachments('user', msg);
+      if (Array.isArray(msg.content)) {
+        return {
+          role: 'user',
+          content: msg.content.map(convertContentPart)
+        };
+      } else {
+        return await buildChatMessageWithAttachments('user', msg);
+      }
     case 'assistant':
-      return buildChatMessageWithAttachments('assistant', msg);
+      return {
+        role: 'assistant',
+        content: getTextContent(msg.content),
+        tool_calls: msg.tool_calls as any
+      };
     case 'tool':
       return {
         role: 'tool',
-        content: msg.content,
+        content: getTextContent(msg.content),
         tool_call_id: msg.tool_call_id!
       };
     default:
@@ -83,25 +193,46 @@ function convertMessage(msg: Message): OpenAI.Chat.Completions.ChatCompletionMes
   }
 }
 
+function convertContentPart(part: MessageContentPart): OpenAI.Chat.Completions.ChatCompletionContentPart {
+  switch (part.type) {
+    case 'text':
+      return {
+        type: 'text',
+        text: part.text
+      };
+    case 'image_url':
+      return {
+        type: 'image_url',
+        image_url: {
+          url: part.image_url.url,
+          detail: part.image_url.detail
+        }
+      };
+    default:
+      throw new Error(`Unknown content part type: ${(part as any).type}`);
+  }
+}
+
 /**
  * If attachments exist, build multi-part content for Chat Completions.
- * Currently supports images via `image_url`. Falls back to plain text otherwise.
+ * Supports images via `image_url` and documents via content extraction.
  */
-function buildChatMessageWithAttachments(
+async function buildChatMessageWithAttachments(
   role: 'user' | 'assistant',
   msg: Message
-): OpenAI.Chat.Completions.ChatCompletionMessageParam {
+): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam> {
   const hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
   if (!hasAttachments) {
     if (role === 'assistant') {
-      return { role: 'assistant', content: msg.content, tool_calls: msg.tool_calls as any };
+      return { role: 'assistant', content: getTextContent(msg.content), tool_calls: msg.tool_calls as any };
     }
-    return { role: 'user', content: msg.content };
+    return { role: 'user', content: getTextContent(msg.content) };
   }
 
   const parts: any[] = [];
-  if (msg.content && msg.content.trim().length > 0) {
-    parts.push({ type: 'text', text: msg.content });
+  const textContent = getTextContent(msg.content);
+  if (textContent && textContent.trim().length > 0) {
+    parts.push({ type: 'text', text: textContent });
   }
 
   for (const att of msg.attachments || []) {
@@ -116,16 +247,33 @@ function buildChatMessageWithAttachments(
         parts.push({ type: 'image_url', image_url: { url } });
       }
     } else if (att.kind === 'document' || att.kind === 'file') {
-      // Chat Completions API doesn't accept arbitrary docs. Surface a short text hint.
-      const label = att.name || att.format || att.mimeType || 'attachment';
-      parts.push({
-        type: 'text',
-        text: `Attached ${att.kind}: ${label}${att.url ? ` (${att.url})` : ''}`
-      });
-    } else if (att.kind === 'audio' || att.kind === 'video') {
-      // Not supported as native inputs in Chat Completions; add textual placeholder.
-      const label = att.name || att.mimeType || att.kind;
-      parts.push({ type: 'text', text: `Attached ${att.kind}: ${label}` });
+      // Extract document content if supported
+      if (isDocumentSupported(att.mimeType) && att.data) {
+        try {
+          const processed = await extractDocumentContent(att);
+          const fileName = att.name || 'document';
+          const description = getDocumentDescription(att.mimeType);
+          
+          parts.push({
+            type: 'text',
+            text: `📄 ${fileName} (${description}):\n\n${processed.content}`
+          });
+        } catch (error) {
+          // Fallback to filename if extraction fails
+          const label = att.name || att.format || att.mimeType || 'attachment';
+          parts.push({
+            type: 'text',
+            text: `❌ Failed to process ${att.kind}: ${label} (${error instanceof Error ? error.message : 'Unknown error'})`
+          });
+        }
+      } else {
+        // Unsupported document type - show placeholder
+        const label = att.name || att.format || att.mimeType || 'attachment';
+        parts.push({
+          type: 'text',
+          text: `📎 Attached ${att.kind}: ${label}${att.url ? ` (${att.url})` : ''}`
+        });
+      }
     }
   }
 
