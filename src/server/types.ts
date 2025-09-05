@@ -13,7 +13,7 @@ export interface ServerConfig<Ctx> {
 
 // Request/Response schemas
 export const attachmentSchema = z.object({
-  kind: z.enum(['image', 'audio', 'video', 'document', 'file']),
+  kind: z.enum(['image', 'document', 'file']),
   mimeType: z.string().optional(),
   name: z.string().optional(),
   url: z.string().url().optional(),
