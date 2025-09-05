@@ -102,6 +102,22 @@ export type TraceEvent =
   | { type: 'turn_end'; data: { turn: number; agentName: string } }
   | { type: 'run_end'; data: { outcome: RunResult<any>['outcome']; traceId: TraceId; runId: RunId; } };
 
+export type CompletionStreamChunk = {
+  readonly delta?: string;
+  readonly toolCallDelta?: {
+    readonly index: number;
+    readonly id?: string;
+    readonly type: 'function';
+    readonly function?: {
+      readonly name?: string;
+      readonly argumentsDelta?: string;
+    };
+  };
+  readonly isDone?: boolean;
+  readonly finishReason?: string | null;
+  readonly raw?: any;
+};
+
 export interface ModelProvider<Ctx> {
   getCompletion: (
     state: Readonly<RunState<Ctx>>,
@@ -120,6 +136,11 @@ export interface ModelProvider<Ctx> {
       }>;
     };
   }>;
+  getCompletionStream?: (
+    state: Readonly<RunState<Ctx>>,
+    agent: Readonly<Agent<Ctx, any>>,
+    config: Readonly<RunConfig<Ctx>>
+  ) => AsyncGenerator<CompletionStreamChunk, void, unknown>;
 }
 
 export type RunConfig<Ctx> = {

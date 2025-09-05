@@ -63,6 +63,99 @@ export const makeLiteLLMProvider = <Ctx>(
         created: resp.created
       };
     },
+
+    async *getCompletionStream(state, agent, config) {
+      const model = config.modelOverride ?? agent.modelConfig?.name;
+
+      if (!model) {
+        throw new Error(`Model not specified for agent ${agent.name}`);
+      }
+
+      const systemMessage: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
+        role: "system",
+        content: agent.instructions(state)
+      };
+
+      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+        systemMessage,
+        ...state.messages.map(convertMessage)
+      ];
+
+      const tools = agent.tools?.map(t => ({
+        type: "function" as const,
+        function: {
+          name: t.schema.name,
+          description: t.schema.description,
+          parameters: zodSchemaToJsonSchema(t.schema.parameters),
+        },
+      }));
+
+      const lastMessage = state.messages[state.messages.length - 1];
+      const isAfterToolCall = lastMessage?.role === 'tool';
+
+      const baseParams: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
+        model,
+        messages,
+        temperature: agent.modelConfig?.temperature,
+        max_tokens: agent.modelConfig?.maxTokens,
+        tools: tools && tools.length > 0 ? tools : undefined,
+        tool_choice: (tools && tools.length > 0) ? (isAfterToolCall ? "auto" : undefined) : undefined,
+        response_format: agent.outputCodec ? { type: "json_object" } : undefined,
+      };
+
+      console.log(`📡 Streaming model: ${model} with params: ${JSON.stringify(baseParams, null, 2)}`);
+
+      // Enable streaming on request
+      const stream = await client.chat.completions.create({
+        ...(baseParams as any),
+        stream: true,
+      } as any);
+
+      // Iterate OpenAI streaming chunks (choices[].delta.*)
+      for await (const chunk of stream as any) {
+        const choice = chunk?.choices?.[0];
+        const delta = choice?.delta;
+
+        if (!delta) {
+          // Some keep-alive frames may not contain deltas
+          const finish = choice?.finish_reason;
+          if (finish) {
+            yield { isDone: true, finishReason: finish, raw: chunk };
+          }
+          continue;
+        }
+
+        // Text content delta
+        if (delta.content) {
+          yield { delta: delta.content, raw: chunk };
+        }
+
+        // Tool call delta(s)
+        if (Array.isArray(delta.tool_calls)) {
+          for (const toolCall of delta.tool_calls) {
+            const fn = toolCall.function || {};
+            yield {
+              toolCallDelta: {
+                index: toolCall.index ?? 0,
+                id: toolCall.id,
+                type: 'function',
+                function: {
+                  name: fn.name,
+                  argumentsDelta: fn.arguments,
+                },
+              },
+              raw: chunk,
+            };
+          }
+        }
+
+        // Completion ended
+        const finish = choice?.finish_reason;
+        if (finish) {
+          yield { isDone: true, finishReason: finish, raw: chunk };
+        }
+      }
+    },
   };
 };
 
