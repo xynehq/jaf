@@ -7,6 +7,7 @@
     "dev": "tsx server.ts",
     "server": "tsx server.ts",
     "direct": "tsx stream-direct.ts",
+    "plain": "tsx stream-plain.ts",
     "build": "tsc",
     "start": "node dist/server.js"
   },
