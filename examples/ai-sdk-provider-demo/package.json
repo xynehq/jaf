@@ -1,0 +1,30 @@
+{
+  "name": "jaf-ai-sdk-provider-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Example with a real test exercising the AI SDK provider against OpenAI via the Vercel AI SDK",
+  "main": "test.ts",
+  "scripts": {
+    "pretest": "pnpm -w run build",
+    "test": "tsx test.ts",
+    "test:vertex": "tsx test-vertex.ts",
+    "dev": "tsx test.ts",
+    "server": "tsx server.ts",
+    "start": "tsx server.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "@xynehq/jaf": "workspace:*",
+    "ai": "^5.0.35",
+    "@ai-sdk/openai": "^2.0.26",
+    "@ai-sdk/google": "^2.0.13",
+    "@ai-sdk/google-vertex": "^3.0.24",
+    "fastify": "^5.1.0",
+    "@fastify/cors": "^10.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

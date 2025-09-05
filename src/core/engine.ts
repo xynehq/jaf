@@ -359,7 +359,8 @@ async function runInternal<Ctx, Out>(
 
   const model = config.modelOverride ?? currentAgent.modelConfig?.name;
 
-  if (!model) {
+  // Only check for model if not using the new AI SDK provider
+  if (!model && !(config.modelProvider as any).isAiSdkProvider) {
     return {
       finalState: state,
       outcome: {
@@ -379,7 +380,7 @@ async function runInternal<Ctx, Out>(
   // Prepare complete LLM call data for tracing
   const llmCallData = {
     agentName: currentAgent.name,
-    model,
+    model: model || 'unknown',
     traceId: state.traceId,
     runId: state.runId,
     messages: state.messages,
@@ -416,7 +417,7 @@ async function runInternal<Ctx, Out>(
       traceId: state.traceId, 
       runId: state.runId,
       agentName: currentAgent.name,
-      model,
+      model: model || 'unknown',
       usage: usage ? {
         prompt_tokens: usage.prompt_tokens,
         completion_tokens: usage.completion_tokens,
@@ -435,7 +436,7 @@ async function runInternal<Ctx, Out>(
           prompt: usage.prompt_tokens,
           completion: usage.completion_tokens,
           total: usage.total_tokens,
-          model
+          model: model || 'unknown'
         }
       });
     }
