@@ -3,4 +3,5 @@
 
 export * from './model';
 export * from './mcp';
+export * from './ai-sdk';
 
