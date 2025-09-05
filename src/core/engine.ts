@@ -332,7 +332,7 @@ async function runInternal<Ctx, Out>(
                 }
               : {})
           };
-          try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch { /* ignore */ }
+          try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { console.error('Error in config.onEvent:', err); }
         }
       }
 
