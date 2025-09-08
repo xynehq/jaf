@@ -9,7 +9,8 @@ import {
   createFailure,
   createMemoryConnectionError,
   createMemoryNotFoundError,
-  createMemoryStorageError
+  createMemoryStorageError,
+  ConversationStatus
 } from '../types';
 
 // PostgreSQL client interface - compatible with pg, postgres.js, etc.
@@ -596,5 +597,15 @@ async function initializeSchema(client: PostgresClient, config: PostgresConfig &
   `;
 
   await client.query(createTableSQL);
+  
+  // Drop status column if it exists (migration from older versions)
+  try {
+    await client.query(`ALTER TABLE ${config.tableName} DROP COLUMN IF EXISTS status`);
+    console.log(`[MEMORY:Postgres] Dropped status column if it existed`);
+  } catch (error) {
+    // Ignore errors if column doesn't exist
+    console.log(`[MEMORY:Postgres] Status column migration completed`);
+  }
+  
   console.log(`[MEMORY:Postgres] Schema initialized for table ${config.tableName}`);
 }

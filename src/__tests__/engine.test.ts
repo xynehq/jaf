@@ -38,6 +38,7 @@ describe('JAF Engine', () => {
       currentAgentName: 'TestAgent',
       context: mockContext,
       turnCount: 0,
+      approvals: new Map(),
     };
 
     const result = await run(initialState, config);
@@ -79,6 +80,7 @@ describe('JAF Engine', () => {
       currentAgentName: 'TestAgent',
       context: mockContext,
       turnCount: 0,
+      approvals: new Map(),
     };
 
     const result = await run(initialState, config);
@@ -103,6 +105,7 @@ describe('JAF Engine', () => {
       currentAgentName: 'NonexistentAgent',
       context: mockContext,
       turnCount: 0,
+      approvals: new Map(),
     };
 
     const result = await run(initialState, config);

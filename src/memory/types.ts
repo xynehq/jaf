@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { Message, TraceId, RunId } from '../core/types';
 
+// Conversation status types
+export type ConversationStatus = 
+  | 'completed'   // Conversation finished successfully
+  | 'halted';     // Stuck on approval/interruption (HITL)
+
 // Result type for functional error handling
 export type Result<T, E = MemoryErrorUnion> = 
   | { readonly success: true; readonly data: T }
@@ -107,6 +112,7 @@ export interface MemoryConfig {
   readonly maxMessages?: number; // Maximum messages to keep in memory
   readonly ttl?: number; // Time-to-live in seconds for conversations
   readonly compressionThreshold?: number; // Compress conversations after N messages
+  readonly storeOnCompletion?: boolean; // Store conversation on completion (in addition to interruptions)
 }
 
 // Configuration schemas for different providers
