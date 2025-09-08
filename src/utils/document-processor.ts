@@ -1,11 +1,29 @@
 import type { Attachment } from '../core/types.js';
-
-// Document processing libraries
 import pdfParse from 'pdf-parse';
 import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
 import Papa from 'papaparse';
 import yauzl from 'yauzl';
+
+const FETCH_TIMEOUT = 30000;
+const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
+const MAX_CSV_PREVIEW_ROWS = 10;
+const MAX_EXCEL_SHEETS = 3;
+const MAX_EXCEL_ROWS_PER_SHEET = 20;
+
+class DocumentProcessingError extends Error {
+  constructor(message: string, public readonly cause?: unknown) {
+    super(message);
+    this.name = 'DocumentProcessingError';
+  }
+}
+
+class NetworkError extends Error {
+  constructor(message: string, public readonly statusCode?: number) {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
 
 export interface ProcessedDocument {
   content: string;
@@ -28,11 +46,11 @@ async function fetchUrlContent(url: string): Promise<{ buffer: Buffer; contentTy
         'User-Agent': 'JAF-DocumentProcessor/1.0'
       },
       // 30 second timeout for large files
-      signal: AbortSignal.timeout(30000)
+      signal: AbortSignal.timeout(FETCH_TIMEOUT)
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      throw new NetworkError(`HTTP ${response.status}: ${response.statusText}`, response.status);
     }
 
     const arrayBuffer = await response.arrayBuffer();
@@ -41,16 +59,16 @@ async function fetchUrlContent(url: string): Promise<{ buffer: Buffer; contentTy
 
     // Basic size check (25MB limit)
     const maxSize = 25 * 1024 * 1024;
-    if (buffer.length > maxSize) {
-      throw new Error(`File size (${Math.round(buffer.length / 1024 / 1024)}MB) exceeds maximum allowed size (25MB)`);
+    if (buffer.length > MAX_DOCUMENT_SIZE) {
+      throw new DocumentProcessingError(`File size (${Math.round(buffer.length / 1024 / 1024)}MB) exceeds maximum allowed size (${Math.round(MAX_DOCUMENT_SIZE / 1024 / 1024)}MB)`);
     }
 
     return { buffer, contentType };
   } catch (error) {
     if (error instanceof Error) {
-      throw new Error(`Failed to fetch URL content: ${error.message}`);
+      throw new NetworkError(`Failed to fetch URL content: ${error.message}`);
     }
-    throw new Error('Failed to fetch URL content: Unknown error');
+    throw new NetworkError('Failed to fetch URL content: Unknown error');
   }
 }
 
@@ -77,7 +95,7 @@ export async function extractDocumentContent(attachment: Attachment): Promise<Pr
   } 
   // Error if neither URL nor data provided
   else {
-    throw new Error('No document data or URL provided');
+    throw new DocumentProcessingError('No document data or URL provided');
   }
 
   switch (mimeType) {
@@ -118,7 +136,7 @@ async function extractPdfContent(buffer: Buffer): Promise<ProcessedDocument> {
       }
     };
   } catch (error) {
-    throw new Error(`Failed to extract PDF content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new DocumentProcessingError(`Failed to extract PDF content: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
   }
 }
 
@@ -133,7 +151,7 @@ function extractTextContent(buffer: Buffer, mimeType: string): ProcessedDocument
       const columns = parsed.meta.fields?.length || 0;
       
       return {
-        content: `CSV File Content:\nRows: ${rows}, Columns: ${columns}\nColumns: ${parsed.meta.fields?.join(', ') || 'N/A'}\n\nFirst few rows:\n${content.split('\n').slice(0, 10).join('\n')}`,
+        content: `CSV File Content:\nRows: ${rows}, Columns: ${columns}\nColumns: ${parsed.meta.fields?.join(', ') || 'N/A'}\n\nFirst few rows:\n${content.split('\n').slice(0, MAX_CSV_PREVIEW_ROWS).join('\n')}`,
         metadata: {
           rows,
           columns,
@@ -158,12 +176,12 @@ function extractExcelContent(buffer: Buffer): ProcessedDocument {
     
     // Extract content from each sheet
     sheetNames.forEach((sheetName, index) => {
-      if (index < 3) { // Limit to first 3 sheets to avoid overwhelming
+      if (index < MAX_EXCEL_SHEETS) { // Limit to first 3 sheets to avoid overwhelming
         const worksheet = workbook.Sheets[sheetName];
         const csvContent = XLSX.utils.sheet_to_csv(worksheet);
         
         content += `Sheet: ${sheetName}\n`;
-        content += csvContent.split('\n').slice(0, 20).join('\n'); // First 20 rows
+        content += csvContent.split('\n').slice(0, MAX_EXCEL_ROWS_PER_SHEET).join('\n'); // First 20 rows
         content += '\n\n';
       }
     });
@@ -175,7 +193,7 @@ function extractExcelContent(buffer: Buffer): ProcessedDocument {
       }
     };
   } catch (error) {
-    throw new Error(`Failed to extract Excel content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new DocumentProcessingError(`Failed to extract Excel content: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
   }
 }
 
@@ -189,7 +207,7 @@ async function extractDocxContent(buffer: Buffer): Promise<ProcessedDocument> {
       }
     };
   } catch (error) {
-    throw new Error(`Failed to extract DOCX content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new DocumentProcessingError(`Failed to extract DOCX content: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
   }
 }
 
@@ -218,12 +236,12 @@ async function extractZipContent(buffer: Buffer): Promise<ProcessedDocument> {
   return new Promise((resolve, reject) => {
     yauzl.fromBuffer(buffer, { lazyEntries: true }, (err, zipfile) => {
       if (err) {
-        reject(new Error(`Failed to read ZIP file: ${err.message}`));
+        reject(new DocumentProcessingError(`Failed to read ZIP file: ${err.message}`, err));
         return;
       }
 
       if (!zipfile) {
-        reject(new Error('Failed to read ZIP file: No zipfile'));
+        reject(new DocumentProcessingError('Failed to read ZIP file: No zipfile'));
         return;
       }
 
@@ -236,12 +254,10 @@ async function extractZipContent(buffer: Buffer): Promise<ProcessedDocument> {
         files.push(entry.fileName);
         
         if (entry.fileName.endsWith('/')) {
-          // Directory entry
-          content += `📁 ${entry.fileName}\n`;
+          content += `DIR: ${entry.fileName}\n`;
         } else {
-          // File entry
           const size = entry.uncompressedSize;
-          content += `📄 ${entry.fileName} (${size} bytes)\n`;
+          content += `FILE: ${entry.fileName} (${size} bytes)\n`;
         }
         
         zipfile.readEntry();
@@ -258,7 +274,7 @@ async function extractZipContent(buffer: Buffer): Promise<ProcessedDocument> {
       });
 
       zipfile.on('error', (error) => {
-        reject(new Error(`Failed to process ZIP file: ${error.message}`));
+        reject(new DocumentProcessingError(`Failed to process ZIP file: ${error.message}`, error));
       });
     });
   });

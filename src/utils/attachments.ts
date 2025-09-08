@@ -1,10 +1,16 @@
 import type { Attachment } from '../core/types.js';
 
-// Lightweight helpers for constructing attachments consistently
-
-// Security constants
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB per attachment
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
 const MAX_FILENAME_LENGTH = 255;
+const BASE64_SIZE_RATIO = 3 / 4;
+const MAX_FORMAT_LENGTH = 10;
+
+class AttachmentValidationError extends Error {
+  constructor(message: string, public readonly field?: string) {
+    super(message);
+    this.name = 'AttachmentValidationError';
+  }
+}
 const ALLOWED_IMAGE_MIME_TYPES = [
   'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'
 ];
@@ -39,10 +45,9 @@ function validateBase64(data: string): boolean {
 
 function validateAttachmentSize(data?: string): void {
   if (data) {
-    // Estimate decoded size (base64 is ~4/3 the size of original)
-    const estimatedSize = (data.length * 3) / 4;
+    const estimatedSize = data.length * BASE64_SIZE_RATIO;
     if (estimatedSize > MAX_ATTACHMENT_SIZE) {
-      throw new Error(`Attachment size (${Math.round(estimatedSize / 1024 / 1024)}MB) exceeds maximum allowed size (${MAX_ATTACHMENT_SIZE / 1024 / 1024}MB)`);
+      throw new AttachmentValidationError(`Attachment size (${Math.round(estimatedSize / 1024 / 1024)}MB) exceeds maximum allowed size (${MAX_ATTACHMENT_SIZE / 1024 / 1024}MB)`);
     }
   }
 }
@@ -50,25 +55,25 @@ function validateAttachmentSize(data?: string): void {
 function validateFilename(name?: string): void {
   if (name) {
     if (name.length > MAX_FILENAME_LENGTH) {
-      throw new Error(`Filename length (${name.length}) exceeds maximum allowed length (${MAX_FILENAME_LENGTH})`);
+      throw new AttachmentValidationError(`Filename length (${name.length}) exceeds maximum allowed length (${MAX_FILENAME_LENGTH})`);
     }
     
     // Check for dangerous characters
     const dangerousChars = /[<>:"|?*\x00-\x1f]/;
     if (dangerousChars.test(name)) {
-      throw new Error('Filename contains invalid characters');
+      throw new AttachmentValidationError('Filename contains invalid characters');
     }
     
     // Check for path traversal attempts
     if (name.includes('..') || name.includes('/') || name.includes('\\')) {
-      throw new Error('Filename cannot contain path separators or traversal sequences');
+      throw new AttachmentValidationError('Filename cannot contain path separators or traversal sequences');
     }
   }
 }
 
 function validateMimeType(mimeType: string | undefined, allowedTypes: string[], kind: string): void {
   if (mimeType && !allowedTypes.includes(mimeType.toLowerCase())) {
-    throw new Error(`MIME type '${mimeType}' is not allowed for ${kind} attachments. Allowed types: ${allowedTypes.join(', ')}`);
+    throw new AttachmentValidationError(`MIME type '${mimeType}' is not allowed for ${kind} attachments. Allowed types: ${allowedTypes.join(', ')}`);
   }
 }
 
@@ -78,21 +83,21 @@ function validateUrl(url?: string): void {
       const urlObj = new URL(url);
       const allowedProtocols = ['http:', 'https:', 'data:'];
       if (!allowedProtocols.includes(urlObj.protocol)) {
-        throw new Error(`URL protocol '${urlObj.protocol}' is not allowed. Allowed protocols: ${allowedProtocols.join(', ')}`);
+        throw new AttachmentValidationError(`URL protocol '${urlObj.protocol}' is not allowed. Allowed protocols: ${allowedProtocols.join(', ')}`);
       }
       
       // Additional validation for data URLs
       if (urlObj.protocol === 'data:') {
         const dataUrlPattern = /^data:([^;]+)(;base64)?,(.+)$/;
         if (!dataUrlPattern.test(url)) {
-          throw new Error('Invalid data URL format');
+          throw new AttachmentValidationError('Invalid data URL format');
         }
       }
     } catch (error) {
       if (error instanceof Error) {
-        throw new Error(`Invalid URL: ${error.message}`);
+        throw new AttachmentValidationError(`Invalid URL: ${error.message}`);
       }
-      throw new Error('Invalid URL format');
+      throw new AttachmentValidationError('Invalid URL format');
     }
   }
 }
@@ -104,7 +109,7 @@ function processBase64Data(data?: Buffer | string): string | undefined {
   
   // Validate base64 format if it was provided as string
   if (typeof data === 'string' && !validateBase64(base64)) {
-    throw new Error('Invalid base64 data format');
+    throw new AttachmentValidationError('Invalid base64 data format');
   }
   
   return base64;
@@ -126,7 +131,7 @@ export function makeImageAttachment(params: {
   
   // Ensure at least one content source
   if (!params.url && !base64) {
-    throw new Error('Image attachment must have either url or data');
+    throw new AttachmentValidationError('Image attachment must have either url or data');
   }
 
   return {
@@ -154,12 +159,12 @@ export function makeFileAttachment(params: {
   
   // Ensure at least one content source
   if (!params.url && !base64) {
-    throw new Error('File attachment must have either url or data');
+    throw new AttachmentValidationError('File attachment must have either url or data');
   }
   
   // Validate format if provided
   if (params.format && params.format.length > 10) {
-    throw new Error('File format must be 10 characters or less');
+    throw new AttachmentValidationError('File format must be 10 characters or less');
   }
 
   return {
@@ -194,7 +199,7 @@ export function makeDocumentAttachment(params: {
 // Enhanced validation for existing attachments
 export function validateAttachment(att: Attachment): void {
   if (!att.url && !att.data) {
-    throw new Error('Attachment must have either url or data');
+    throw new AttachmentValidationError('Attachment must have either url or data');
   }
   
   validateFilename(att.name);
@@ -203,7 +208,7 @@ export function validateAttachment(att: Attachment): void {
   if (att.data) {
     validateAttachmentSize(att.data);
     if (!validateBase64(att.data)) {
-      throw new Error('Invalid base64 data in attachment');
+      throw new AttachmentValidationError('Invalid base64 data in attachment');
     }
   }
   
@@ -218,7 +223,7 @@ export function validateAttachment(att: Attachment): void {
     case 'file':
       // Files can have any MIME type, but still validate format
       if (att.format && att.format.length > 10) {
-        throw new Error('File format must be 10 characters or less');
+        throw new AttachmentValidationError('File format must be 10 characters or less');
       }
       break;
   }

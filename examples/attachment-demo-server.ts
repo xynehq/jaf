@@ -21,35 +21,42 @@ const agentRegistry = new Map([
   ['attachment-analyst', attachmentAgent]
 ]);
 
-const litellmBaseUrl = process.env.LITELLM_BASE_URL;
-const litellmApiKey = process.env.LITELLM_API_KEY;
+const DEFAULT_BASE_URL = 'https://api.openai.com/v1';
+const DEFAULT_API_KEY = 'your-api-key-here';
+const DEFAULT_PORT = 3002;
+const DEFAULT_HOST = 'localhost';
+const DEFAULT_MAX_BODY_SIZE = 25 * 1024 * 1024;
+const DEFAULT_MAX_TURNS = 5;
 
-if (!litellmBaseUrl || litellmBaseUrl === 'null') {
-  console.warn('⚠️  LITELLM_BASE_URL not set. Server will start but model calls will fail.');
-  console.warn('   Set LITELLM_BASE_URL environment variable to use a real LiteLLM endpoint.');
+function getRequiredEnvVar(name: string, defaultValue?: string): string {
+  const value = process.env[name];
+  if (!value || value === 'null') {
+    if (defaultValue) {
+      console.warn(`${name} not set. Using default value.`);
+      return defaultValue;
+    }
+    console.warn(`${name} not set. Server will start but may not function correctly.`);
+    return '';
+  }
+  return value;
 }
 
-if (!litellmApiKey || litellmApiKey === 'null') {
-  console.warn('⚠️  LITELLM_API_KEY not set. Server will start but model calls may fail.');
-  console.warn('   Set LITELLM_API_KEY environment variable if your LiteLLM endpoint requires authentication.');
-}
+const litellmBaseUrl = getRequiredEnvVar('LITELLM_BASE_URL', DEFAULT_BASE_URL);
+const litellmApiKey = getRequiredEnvVar('LITELLM_API_KEY', DEFAULT_API_KEY);
 
-const modelProvider = makeLiteLLMProvider(
-  litellmBaseUrl || 'https://api.openai.com/v1',
-  litellmApiKey || 'your-api-key-here'
-);
+const modelProvider = makeLiteLLMProvider(litellmBaseUrl, litellmApiKey);
 
 const serverConfig = {
-  port: 3002,
-  host: 'localhost',
-  maxBodySize: 25 * 1024 * 1024,
+  port: DEFAULT_PORT,
+  host: DEFAULT_HOST,
+  maxBodySize: DEFAULT_MAX_BODY_SIZE,
   runConfig: {
     agentRegistry,
     modelProvider,
-    maxTurns: 5
+    maxTurns: DEFAULT_MAX_TURNS
   },
   agentRegistry
-};
+} as const;
 
 const server = createJAFServer(serverConfig);
 
@@ -296,7 +303,7 @@ server.start().then(() => {
     ]
   }'\n`);
 
-  console.log('Notes:');
+  console.log('Configuration:');
   console.log('- Use Ctrl+C to stop the server');
   console.log('- Image attachments: Full visual analysis');
   console.log('- Document attachments: Text extraction and analysis for PDF, DOCX, XLSX, CSV, TXT, JSON, ZIP');

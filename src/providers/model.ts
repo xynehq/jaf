@@ -83,23 +83,20 @@ export const makeLiteLLMProvider = <Ctx>(
   };
 };
 
-// Cache for vision model capabilities
+const VISION_MODEL_CACHE_TTL = 5 * 60 * 1000;
+const VISION_API_TIMEOUT = 3000;
 const visionModelCache = new Map<string, { supports: boolean; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const API_TIMEOUT = 3000; // 3 second timeout for API calls
 
 async function isVisionModel(model: string, baseURL: string): Promise<boolean> {
   const cacheKey = `${baseURL}:${model}`;
   const cached = visionModelCache.get(cacheKey);
   
-  // Return cached result if still valid
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+  if (cached && Date.now() - cached.timestamp < VISION_MODEL_CACHE_TTL) {
     return cached.supports;
   }
   try {
-    // Try to call LiteLLM's model info API to check vision support with timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+    const timeoutId = setTimeout(() => controller.abort(), VISION_API_TIMEOUT);
     
     const response = await fetch(`${baseURL}/model_group/info`, {
       headers: {
@@ -118,49 +115,39 @@ async function isVisionModel(model: string, baseURL: string): Promise<boolean> {
       
       if (modelInfo?.supports_vision !== undefined) {
         const result = modelInfo.supports_vision;
-        // Cache the API result
         visionModelCache.set(cacheKey, { supports: result, timestamp: Date.now() });
-        console.log(`[JAF:VISION] API confirmed ${model} vision support: ${result}`);
         return result;
       }
     } else {
-      console.warn(`[JAF:VISION] API returned status ${response.status} for model info`);
+      console.warn(`Vision API returned status ${response.status} for model ${model}`);
     }
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
-        console.warn(`[JAF:VISION] API timeout checking vision support for ${model}`);
+        console.warn(`Vision API timeout for model ${model}`);
       } else {
-        console.warn(`[JAF:VISION] API error checking vision support: ${error.message}`);
+        console.warn(`Vision API error for model ${model}: ${error.message}`);
       }
     } else {
-      console.warn(`[JAF:VISION] Unknown error checking vision support via API`);
+      console.warn(`Unknown error checking vision support for model ${model}`);
     }
   }
 
-  // Fallback to known vision models list
   const knownVisionModels = [
     'gpt-4-vision-preview',
     'gpt-4o',
     'gpt-4o-mini', 
-    'claude-sonnet-4',          
+    'claude-sonnet-4',
     'claude-sonnet-4-20250514', 
     'gemini-2.5-flash',
-    'gemini-2.5-pro'      
+    'gemini-2.5-pro'
   ];
   
   const isKnownVisionModel = knownVisionModels.some(visionModel => 
     model.toLowerCase().includes(visionModel.toLowerCase())
   );
   
-  // Cache the fallback result
   visionModelCache.set(cacheKey, { supports: isKnownVisionModel, timestamp: Date.now() });
-  
-  if (isKnownVisionModel) {
-    console.log(`[JAF:VISION] Using fallback: ${model} is a known vision model`);
-  } else {
-    console.log(`[JAF:VISION] Model ${model} not recognized as vision-capable`);
-  }
   
   return isKnownVisionModel;
 }
@@ -215,7 +202,7 @@ function convertContentPart(part: MessageContentPart): OpenAI.Chat.Completions.C
           file_id: part.file.file_id,
           format: part.file.format
         }
-      } as any; // LiteLLM extension
+      } as any;
     default:
       throw new Error(`Unknown content part type: ${(part as any).type}`);
   }
@@ -280,14 +267,14 @@ async function buildChatMessageWithAttachments(
             
             parts.push({
               type: 'text',
-              text: `📄 ${fileName} (${description}):\n\n${processed.content}`
+              text: `DOCUMENT: ${fileName} (${description}):\n\n${processed.content}`
             });
           } catch (error) {
             // Fallback to filename if extraction fails
             const label = att.name || att.format || att.mimeType || 'attachment';
             parts.push({
               type: 'text',
-              text: `❌ Failed to process ${att.kind}: ${label} (${error instanceof Error ? error.message : 'Unknown error'})`
+              text: `ERROR: Failed to process ${att.kind}: ${label} (${error instanceof Error ? error.message : 'Unknown error'})`
             });
           }
         } else {
@@ -295,7 +282,7 @@ async function buildChatMessageWithAttachments(
           const label = att.name || att.format || att.mimeType || 'attachment';
           parts.push({
             type: 'text',
-            text: `📎 Attached ${att.kind}: ${label}${att.url ? ` (${att.url})` : ''}`
+            text: `ATTACHMENT: ${att.kind}: ${label}${att.url ? ` (${att.url})` : ''}`
           });
         }
       }
