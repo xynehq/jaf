@@ -7,10 +7,11 @@ export async function approve<Ctx>(
   config?: RunConfig<Ctx>
 ): Promise<RunState<Ctx>> {
   if (interruption.type === 'tool_approval') {
-    const approvalValue = { 
-      approved: true, 
-      additionalContext 
-    };
+    const approvalValue = {
+      status: 'approved',
+      approved: true,
+      additionalContext: { ...(additionalContext || {}), status: 'approved' },
+    } as const;
 
     // Store in approval storage if available
     if (config?.approvalStorage) {
@@ -28,7 +29,6 @@ export async function approve<Ctx>(
     // Update in-memory state
     const newApprovals = new Map(state.approvals);
     newApprovals.set(interruption.toolCall.id, approvalValue);
-    
     return {
       ...state,
       approvals: newApprovals,
@@ -44,10 +44,11 @@ export async function reject<Ctx>(
   config?: RunConfig<Ctx>
 ): Promise<RunState<Ctx>> {
   if (interruption.type === 'tool_approval') {
-    const approvalValue = { 
-      approved: false, 
-      additionalContext 
-    };
+    const approvalValue = {
+      status: 'rejected',
+      approved: false,
+      additionalContext: { ...(additionalContext || {}), status: 'rejected' },
+    } as const;
 
     // Store in approval storage if available
     if (config?.approvalStorage) {
@@ -65,7 +66,6 @@ export async function reject<Ctx>(
     // Update in-memory state
     const newApprovals = new Map(state.approvals);
     newApprovals.set(interruption.toolCall.id, approvalValue);
-    
     return {
       ...state,
       approvals: newApprovals,

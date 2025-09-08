@@ -1,0 +1,22 @@
+{
+  "name": "hitl-demo",
+  "version": "1.0.0",
+  "description": "Human-in-the-Loop demo server for JAF",
+  "main": "run-server.ts",
+  "scripts": {
+    "start": "tsx run-server.ts",
+    "dev": "tsx --watch run-server.ts",
+    "build": "tsc",
+    "server": "tsx run-server.ts",
+    "dev:server": "tsx --watch run-server.ts"
+  },
+  "dependencies": {
+    "@xynehq/jaf": "workspace:*",
+    "dotenv": "^17.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

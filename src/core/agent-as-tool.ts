@@ -74,6 +74,7 @@ export function agentAsTool<Ctx, Out = any>(
         currentAgentName: childAgent.name,
         context: parentState.context,
         turnCount: 0,
+        approvals: new Map(),
       };
 
       // Build child config derived from parent
@@ -119,8 +120,13 @@ export function agentAsTool<Ctx, Out = any>(
         }
 
         // Error path
-        const err = result.outcome.error;
-        const message = `${err._tag}${'detail' in err ? `: ${(err as any).detail}` : ''}`;
+        let message: string;
+        if (result.outcome.status === 'error') {
+          const err = result.outcome.error as any;
+          message = `${err._tag}${'detail' in err ? `: ${err.detail}` : ''}`;
+        } else {
+          message = 'Sub-agent interrupted';
+        }
         return ToolResponse.error('EXECUTION_FAILED', message, {
           toolName,
           childRunId,
@@ -136,4 +142,3 @@ export function agentAsTool<Ctx, Out = any>(
     }
   };
 }
-

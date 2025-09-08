@@ -38,7 +38,7 @@ export const chatRequestSchema = z.object({
     maxMessages: z.number().optional(),
     compressionThreshold: z.number().optional()
   }).optional(),
-  approval: approvalMessageSchema.optional()
+  approvals: z.array(approvalMessageSchema).optional()
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;

@@ -136,7 +136,7 @@ async function startServer() {
   const memoryType = process.env.JAF_MEMORY_TYPE || 'memory';
   console.log(`💾 Memory provider type: ${memoryType}`);
 
-  let externalClients: { redis?: any; postgres?: any } = {};
+  const externalClients: { redis?: any; postgres?: any } = {};
 
   // Set up external clients based on memory type
   if (memoryType === 'redis') {

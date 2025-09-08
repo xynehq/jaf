@@ -165,10 +165,107 @@ export async function* runStream<Ctx, Out>(
   }
 }
 
+async function tryResumePendingToolCalls<Ctx, Out>(
+  state: RunState<Ctx>,
+  config: RunConfig<Ctx>
+): Promise<RunResult<Out> | null> {
+  // If the last assistant message contained tool_calls and some of those
+  // calls have not yet produced tool results (e.g., approval pause),
+  // resume by executing the remaining tool calls directly without a new LLM call.
+  try {
+    const messages = state.messages;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'assistant' && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+        const ids = new Set(msg.tool_calls.map(tc => tc.id));
+
+        // Scan forward for tool results tied to these ids
+        const executed = new Set<string>();
+        for (let j = i + 1; j < messages.length; j++) {
+          const m = messages[j];
+          if (m.role === 'tool' && m.tool_call_id && ids.has(m.tool_call_id)) {
+            executed.add(m.tool_call_id);
+          }
+        }
+
+        const pendingToolCalls = msg.tool_calls.filter(tc => !executed.has(tc.id));
+        if (pendingToolCalls.length === 0) {
+          return null; // Nothing to resume
+        }
+
+        const currentAgent = config.agentRegistry.get(state.currentAgentName);
+        if (!currentAgent) {
+          return {
+            finalState: state,
+            outcome: {
+              status: 'error',
+              error: {
+                _tag: 'AgentNotFound',
+                agentName: state.currentAgentName,
+              }
+            }
+          } as RunResult<Out>;
+        }
+
+        // Emit tool_requests for the pending calls we're resuming
+        try {
+          const requests = pendingToolCalls.map(tc => ({
+            id: tc.id,
+            name: tc.function.name,
+            args: tryParseJSON(tc.function.arguments)
+          }));
+          config.onEvent?.({ type: 'tool_requests', data: { toolCalls: requests } });
+        } catch { /* ignore */ }
+
+        const toolResults = await executeToolCalls(pendingToolCalls, currentAgent, state, config);
+
+        const interruptions = toolResults
+          .map(r => r.interruption)
+          .filter((it): it is Interruption<Ctx> => it !== undefined);
+        if (interruptions.length > 0) {
+          const nonInterruptedResults = toolResults.filter(r => !r.interruption);
+          return {
+            finalState: {
+              ...state,
+              messages: [...state.messages, ...nonInterruptedResults.map(r => r.message)],
+              turnCount: state.turnCount,
+            },
+            outcome: {
+              status: 'interrupted',
+              interruptions,
+            },
+          } as RunResult<Out>;
+        }
+
+        // Emit tool results event as they will be sent back to the LLM on next turn
+        config.onEvent?.({
+          type: 'tool_results_to_llm',
+          data: { results: toolResults.map(r => r.message) }
+        });
+
+        const nextState: RunState<Ctx> = {
+          ...state,
+          messages: [...state.messages, ...toolResults.map(r => r.message)],
+          turnCount: state.turnCount,
+          approvals: state.approvals,
+        };
+        // Continue the normal loop with updated state
+        return await runInternal<Ctx, Out>(nextState, config);
+      }
+    }
+  } catch {
+    // best-effort resume; ignore and continue normal flow
+  }
+  return null;
+}
+
 async function runInternal<Ctx, Out>(
   state: RunState<Ctx>,
   config: RunConfig<Ctx>
 ): Promise<RunResult<Out>> {
+  const resumed = await tryResumePendingToolCalls<Ctx, Out>(state, config);
+  if (resumed) return resumed;
+
   if (state.turnCount === 0) {
     const firstUserMessage = state.messages.find(m => m.role === 'user');
     if (firstUserMessage && config.initialInputGuardrails) {
@@ -257,156 +354,7 @@ async function runInternal<Ctx, Out>(
     }
   });
 
-  // Check if there are existing tool calls to execute from previous assistant message
-  const lastMessage = state.messages[state.messages.length - 1];
-  if (lastMessage?.role === 'assistant' && lastMessage.tool_calls && lastMessage.tool_calls.length > 0) {
-    console.log(`[JAF:ENGINE] Found existing tool calls to execute:`, lastMessage.tool_calls.map(tc => tc.function.name));
-    
-    // Check if any of these tool calls are unanswered (no corresponding completed tool message)
-    // Note: halted messages don't count as "answered" - tool still needs execution
-    const answeredIds = state.messages
-      .filter(m => {
-        if (m.role !== 'tool') return false;
-        try {
-          const content = JSON.parse(m.content);
-          // Don't consider halted as "answered" - tool still needs execution
-          return content.status !== 'halted';
-        } catch {
-          // If content isn't JSON, treat as answered
-          return true;
-        }
-      })
-      .map(m => m.tool_call_id)
-      .filter(id => id !== undefined);
-    
-    const unansweredToolCalls = lastMessage.tool_calls.filter(tc => !answeredIds.includes(tc.id));
-    
-    if (unansweredToolCalls.length > 0) {
-      console.log(`[JAF:ENGINE] Executing ${unansweredToolCalls.length} unanswered tool calls`);
-      
-      // Turn lifecycle start (before tool execution)
-      const turnNumber = state.turnCount + 1;
-      config.onEvent?.({ type: 'turn_start', data: { turn: turnNumber, agentName: currentAgent.name } });
-
-      const toolResults = await executeToolCalls(
-        unansweredToolCalls,
-        currentAgent,
-        state,
-        config,
-      );
-
-      const interruptions = toolResults
-        .map(r => r.interruption)
-        .filter((interruption): interruption is Interruption<Ctx> => interruption !== undefined);
-      if (interruptions.length > 0) {
-        // Add pending approvals to state.approvals
-        const updatedApprovals = new Map(state.approvals);
-        for (const interruption of interruptions) {
-          if (interruption.type === 'tool_approval') {
-            updatedApprovals.set(interruption.toolCall.id, {
-              approved: false,
-              additionalContext: { status: 'pending', timestamp: new Date().toISOString() }
-            });
-          }
-        }
-        
-        const interruptedState = {
-          ...state,
-          messages: [...state.messages, ...toolResults.map(r => r.message)],
-          turnCount: turnNumber,
-          approvals: updatedApprovals,
-        };
-
-        // Store conversation state when interrupted (for HITL scenarios)
-        if (config.memory?.autoStore && config.conversationId) {
-          console.log(`[JAF:ENGINE] Storing conversation state due to interruption for ${config.conversationId}`);
-          await storeConversationHistory(interruptedState, config);
-        }
-
-        return {
-          finalState: interruptedState,
-          outcome: {
-            status: 'interrupted',
-            interruptions,
-          },
-        };
-      }
-      
-      console.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
-
-      // Emit tool results being added
-      config.onEvent?.({
-        type: 'tool_results_to_llm',
-        data: { results: toolResults.map(r => r.message) }
-      });
-
-      if (toolResults.some(r => r.isHandoff)) {
-        const handoffResult = toolResults.find(r => r.isHandoff);
-        if (handoffResult) {
-          const targetAgent = handoffResult.targetAgent!;
-          
-          if (!currentAgent.handoffs?.includes(targetAgent)) {
-            // Emit handoff denied event for observability
-            config.onEvent?.({
-              type: 'handoff_denied',
-              data: { from: currentAgent.name, to: targetAgent, reason: `Agent ${currentAgent.name} cannot handoff to ${targetAgent}` }
-            });
-            return {
-              finalState: { ...state, messages: [...state.messages, ...toolResults.map(r => r.message)], turnCount: turnNumber },
-              outcome: {
-                status: 'error',
-                error: {
-                  _tag: 'HandoffError',
-                  detail: `Agent ${currentAgent.name} cannot handoff to ${targetAgent}`
-                }
-              }
-            };
-          }
-
-          config.onEvent?.({
-            type: 'handoff',
-            data: { from: currentAgent.name, to: targetAgent }
-          });
-
-          const nextState: RunState<Ctx> = {
-            ...state,
-            messages: [...state.messages, ...toolResults.map(r => r.message)],
-            currentAgentName: targetAgent,
-            turnCount: turnNumber,
-            approvals: state.approvals,
-          };
-          // End of turn before handing off to next agent
-          config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
-          return runInternal(nextState, config);
-        }
-      }
-
-      // Remove any halted messages that are being replaced by actual execution results
-      const cleanedMessages = state.messages.filter(msg => {
-        if (msg.role !== 'tool') return true;
-        try {
-          const content = JSON.parse(msg.content);
-          if (content.status === 'halted') {
-            // Remove this halted message if we have a new result for the same tool_call_id
-            return !toolResults.some(result => result.message.tool_call_id === msg.tool_call_id);
-          }
-          return true;
-        } catch {
-          return true;
-        }
-      });
-
-      const nextState: RunState<Ctx> = {
-        ...state,
-        messages: [...cleanedMessages, ...toolResults.map(r => r.message)],
-        turnCount: turnNumber,
-        approvals: state.approvals,
-      };
-      // End of this turn before next model call
-      config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
-      return runInternal(nextState, config);
-    }
-  }
+  // Pending tool_call resume is handled by tryResumePendingToolCalls above.
 
   const model = config.modelOverride ?? currentAgent.modelConfig?.name;
 
@@ -557,6 +505,7 @@ async function runInternal<Ctx, Out>(
       for (const interruption of interruptions) {
         if (interruption.type === 'tool_approval') {
           updatedApprovals.set(interruption.toolCall.id, {
+            status: 'pending',
             approved: false,
             additionalContext: { status: 'pending', timestamp: new Date().toISOString() }
           });
@@ -903,7 +852,19 @@ async function executeToolCalls<Ctx>(
         }
 
         const approvalStatus = state.approvals.get(toolCall.id);
-        if (needsApproval && approvalStatus === undefined) {
+        // Derive a normalized status for backward compatibility
+        const derivedStatus: 'approved' | 'rejected' | 'pending' | undefined =
+          approvalStatus?.status ?? (
+            approvalStatus?.approved === true
+              ? 'approved'
+              : approvalStatus?.approved === false
+                ? ((approvalStatus?.additionalContext as any)?.status === 'pending' ? 'pending' : 'rejected')
+                : undefined
+          );
+
+        const isPending = derivedStatus === 'pending';
+
+        if (needsApproval && (approvalStatus === undefined || isPending)) {
           return {
             interruption: {
               type: 'tool_approval',
@@ -923,10 +884,10 @@ async function executeToolCalls<Ctx>(
         }
 
         // Extract approval information from consistent object type
-        const isApproved = approvalStatus?.approved;
         const additionalContext = approvalStatus?.additionalContext;
 
-        if (isApproved === false) {
+        // Only treat as rejected if explicitly rejected, not pending
+        if (derivedStatus === 'rejected') {
           const rejectionReason = additionalContext?.rejectionReason || 'User declined the action';
           return {
             message: {

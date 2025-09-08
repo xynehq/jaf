@@ -65,7 +65,19 @@ export type Guardrail<I> = (
   input: I
 ) => Promise<ValidationResult> | ValidationResult;
 
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
 export type ApprovalValue = {
+  /**
+   * Tri-state status of the approval lifecycle.
+   * - 'pending': decision not made yet
+   * - 'approved': explicitly approved
+   * - 'rejected': explicitly rejected
+   */
+  readonly status: ApprovalStatus;
+  /**
+   * Backward-compatible boolean. Prefer `status` for logic; this mirrors status.
+   */
   readonly approved: boolean;
   readonly additionalContext?: Record<string, any>;
 };

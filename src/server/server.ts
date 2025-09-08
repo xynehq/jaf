@@ -7,11 +7,40 @@ import {
   AgentListResponse,
   HealthResponse,
   HttpMessage,
-  chatRequestSchema
+  chatRequestSchema,
+  ApprovalMessage
 } from './types';
 import { run, runStream } from '../core/engine';
 import { RunState, Message, createRunId, createTraceId } from '../core/types';
 import { v4 as uuidv4 } from 'uuid';
+
+// Helper: stable stringify to create deterministic signatures
+function stableStringify(value: any): string {
+  const seen = new WeakSet();
+  const helper = (v: any): any => {
+    if (v === null || typeof v !== 'object') return v;
+    if (seen.has(v)) return '[Circular]';
+    seen.add(v);
+    if (Array.isArray(v)) return v.map(helper);
+    const keys = Object.keys(v).sort();
+    const obj: any = {};
+    for (const k of keys) obj[k] = helper(v[k]);
+    return obj;
+  };
+  try {
+    return JSON.stringify(helper(value));
+  } catch {
+    try { return JSON.stringify(value); } catch { return String(value); }
+  }
+}
+
+function tryParseJSON(str: string): any {
+  try { return JSON.parse(str); } catch { return str; }
+}
+
+function computeToolCallSignature(tc: { function: { name: string; arguments: string } }): string {
+  return `${tc.function.name}:${stableStringify(tryParseJSON(tc.function.arguments))}`;
+}
 
 /**
  * Create and configure a JAF server instance
@@ -23,6 +52,44 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
   stop: () => Promise<void>;
 } {
   const startTime = Date.now();
+  // SSE subscribers for approval-related events
+  const approvalSubscribers = new Set<{ res: any; filterConversationId?: string }>();
+
+  const sseSend = (res: any, event: string, data: any) => {
+    try {
+      res.write(`event: ${event}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    } catch { /* ignore */ }
+  };
+
+  const broadcastApprovalRequired = (payload: {
+    conversationId: string;
+    sessionId: string;
+    toolCallId: string;
+    toolName: string;
+    args: any;
+    signature?: string;
+    timestamp?: string;
+  }) => {
+    for (const client of approvalSubscribers) {
+      if (client.filterConversationId && client.filterConversationId !== payload.conversationId) continue;
+      sseSend(client.res, 'approval_required', { ...payload, timestamp: payload.timestamp || new Date().toISOString() });
+    }
+  };
+
+  const broadcastApprovalDecision = (payload: {
+    conversationId: string;
+    sessionId: string;
+    toolCallId: string;
+    status: 'approved' | 'rejected';
+    additionalContext?: any;
+    timestamp?: string;
+  }) => {
+    for (const client of approvalSubscribers) {
+      if (client.filterConversationId && client.filterConversationId !== payload.conversationId) continue;
+      sseSend(client.res, 'approval_decision', { ...payload, timestamp: payload.timestamp || new Date().toISOString() });
+    }
+  };
   
   const app = Fastify({ 
     logger: true,
@@ -145,7 +212,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
           };
           return reply.code(404).send(response);
         }
-
+        
         // Convert HTTP messages to JAF messages
         const jafMessages: Message[] = validatedRequest.messages.map(msg => ({
           role: msg.role === 'system' ? 'user' : msg.role as 'user' | 'assistant',
@@ -159,32 +226,161 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         // Generate conversationId if not provided
         const conversationId = validatedRequest.conversationId || `conv-${uuidv4()}`;
         
-        // Handle approval message if present
+        // Handle approval message(s) if present
         const initialApprovals = new Map();
-        let initialStateMessages = jafMessages;
-        
-        if (validatedRequest.approval) {
-          const approval = validatedRequest.approval;
-          
-          // Check if this is for the current session
-          if (approval.sessionId) {
-            // Load previous state if this is an approval for an existing session
-            if (config.defaultMemoryProvider) {
+        const initialStateMessages = jafMessages;
+
+        const approvalsList: ApprovalMessage[] = validatedRequest.approvals ?? [];
+
+        const persistApproval = async (convId: string, appr: ApprovalMessage): Promise<void> => {
+          if (!config.defaultMemoryProvider) return;
+          const provider = config.defaultMemoryProvider;
+          // Keyed by previous run/session id + toolCallId for uniqueness
+          const approvalKey = `${appr.sessionId}:${appr.toolCallId}`;
+          const baseEntry: any = {
+            approved: appr.approved,
+            status: appr.approved ? 'approved' : 'rejected',
+            additionalContext: appr.additionalContext,
+            sessionId: appr.sessionId,
+            toolCallId: appr.toolCallId,
+          };
+
+          try {
+            const existing = await provider.getConversation(convId);
+            if (existing.success && existing.data) {
+              // Try to enrich entry with tool name and signature for robust matching
               try {
-                const previousConversation = await config.defaultMemoryProvider.getConversation(conversationId);
-                if (previousConversation.success && previousConversation.data) {
-                  initialStateMessages = [...previousConversation.data.messages];
+                const msgs = existing.data.messages as Message[];
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                  const m = msgs[i];
+                  if (m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
+                    const match = m.tool_calls.find(tc => tc.id === appr.toolCallId);
+                    if (match) {
+                      baseEntry.toolName = match.function.name;
+                      baseEntry.signature = computeToolCallSignature(match as any);
+                      break;
+                    }
+                  }
                 }
-              } catch (e) {
-                // Continue with current messages if memory loading fails
+              } catch { /* best-effort */ }
+
+              const existingApprovals = (existing.data.metadata?.toolApprovals ?? {}) as Record<string, any>;
+              const prev = existingApprovals[approvalKey];
+
+              // Merge additionalContext shallowly and avoid regressions
+              const mergedAdditional = {
+                ...(prev?.additionalContext || {}),
+                ...(baseEntry.additionalContext || {}),
+              };
+
+              const nextEntry = {
+                ...prev,
+                ...baseEntry,
+                additionalContext: mergedAdditional,
+                // Preserve earliest timestamp if no effective change; else update
+                timestamp: prev && (
+                  prev.status === baseEntry.status &&
+                  stableStringify(prev.additionalContext) === stableStringify(mergedAdditional)
+                ) ? prev.timestamp : new Date().toISOString(),
+              };
+
+              const noChange = prev &&
+                prev.status === nextEntry.status &&
+                stableStringify(prev.additionalContext) === stableStringify(nextEntry.additionalContext) &&
+                (prev.toolName ?? null) === (nextEntry.toolName ?? null) &&
+                (prev.signature ?? null) === (nextEntry.signature ?? null);
+
+              if (!noChange) {
+                const mergedApprovals = { ...existingApprovals, [approvalKey]: nextEntry };
+                await provider.appendMessages(convId, [], { toolApprovals: mergedApprovals, traceId });
+              }
+            } else if (existing.success && !existing.data) {
+              // Create conversation shell with just metadata if not present
+              const entry = { ...baseEntry, timestamp: new Date().toISOString() };
+              await provider.storeMessages(convId, [], { toolApprovals: { [approvalKey]: entry }, traceId });
+            }
+            // If provider call failed, we intentionally do not throw; run will proceed
+          } catch {
+            // Ignore persistence errors here to avoid breaking the request path
+          }
+          // Broadcast decision to approvals SSE
+          try {
+            broadcastApprovalDecision({
+              conversationId: convId,
+              sessionId: appr.sessionId,
+              toolCallId: appr.toolCallId,
+              status: appr.approved ? 'approved' : 'rejected',
+              additionalContext: appr.additionalContext
+            });
+          } catch { /* ignore */ }
+        };
+
+        if (approvalsList.length > 0) {
+          for (const approval of approvalsList) {
+            if (approval.sessionId) {
+              initialApprovals.set(approval.toolCallId, {
+                status: approval.approved ? 'approved' : 'rejected',
+                approved: approval.approved,
+                additionalContext: approval.additionalContext
+              });
+            }
+            await persistApproval(conversationId, approval);
+          }
+        }
+
+        // Seed approvals from persisted conversation metadata (toolApprovals)
+        // This allows previously stored decisions to be applied even if the client
+        // does not resend them in the current request.
+        if (config.defaultMemoryProvider) {
+          try {
+            const conv = await config.defaultMemoryProvider.getConversation(conversationId);
+            if (conv.success && conv.data) {
+              const toolApprovals = (conv.data.metadata?.toolApprovals ?? null) as null | Record<string, any>;
+              if (toolApprovals) {
+                // Collect candidate tool_call ids and signatures from latest assistant message with tool_calls
+                const allMessages = conv.data.messages as Message[];
+                const assistantWithTools = [...allMessages].reverse().find(m => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0);
+                const candidateIds = new Set<string>(assistantWithTools?.tool_calls?.map(tc => tc.id) ?? []);
+                const candidateSignatures = new Map<string, string>();
+                if (assistantWithTools?.tool_calls) {
+                  for (const tc of assistantWithTools.tool_calls) {
+                    try {
+                      candidateSignatures.set(tc.id, computeToolCallSignature(tc as any));
+                    } catch { /* ignore */ }
+                  }
+                }
+
+                // Prefer explicit approval from request; otherwise seed from persisted entries
+                const existingKeys = new Set<string>(Array.from(initialApprovals.keys()));
+
+                for (const [, entry] of Object.entries(toolApprovals)) {
+                  const persistedToolCallId = (entry && (entry as any).toolCallId) as string | undefined;
+                  const persistedSignature = (entry && (entry as any).signature) as string | undefined;
+
+                  // Try direct id match first
+                  let targetId: string | undefined = undefined;
+                  if (persistedToolCallId && candidateIds.has(persistedToolCallId)) {
+                    targetId = persistedToolCallId;
+                  } else if (persistedSignature) {
+                    // Signature match fallback
+                    for (const [cid, sig] of candidateSignatures.entries()) {
+                      if (sig === persistedSignature) { targetId = cid; break; }
+                    }
+                  }
+                  if (!targetId) continue;
+                  if (existingKeys.has(targetId)) continue;
+
+                  const status = (entry as any).status ?? ((entry as any).approved === true ? 'approved' : ((entry as any).additionalContext?.status === 'pending' ? 'pending' : 'rejected'));
+                  initialApprovals.set(targetId, {
+                    status,
+                    approved: !!(entry as any).approved,
+                    additionalContext: (entry as any).additionalContext
+                  });
+                }
               }
             }
-            
-            // Apply the approval
-            initialApprovals.set(approval.toolCallId, {
-              approved: approval.approved,
-              additionalContext: approval.additionalContext
-            });
+          } catch (e) {
+            app.log.warn({ err: e }, 'Failed to seed approvals from metadata');
           }
         }
         
@@ -252,6 +448,27 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
 
               // If run ends, we close the stream
               if (event.type === 'run_end') {
+                // Broadcast approval_required to approvals SSE if interrupted
+                try {
+                  const outcome = (event as any).data?.outcome;
+                  if (outcome && outcome.status === 'interrupted') {
+                    const interruptions = outcome.interruptions as Array<{ type: string; toolCall: any; sessionId?: string }>;
+                    for (const intr of interruptions) {
+                      if (intr.type === 'tool_approval') {
+                        const toolCall = intr.toolCall;
+                        const args = tryParseJSON(toolCall.function.arguments);
+                        broadcastApprovalRequired({
+                          conversationId,
+                          sessionId: intr.sessionId || runId,
+                          toolCallId: toolCall.id,
+                          toolName: toolCall.function.name,
+                          args,
+                          signature: computeToolCallSignature(toolCall)
+                        });
+                      }
+                    }
+                  }
+                } catch { /* ignore */ }
                 break;
               }
             }
@@ -329,6 +546,26 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
             executionTimeMs: executionTime
           }
         };
+
+        // Broadcast approval_required to approvals SSE if interrupted (non-streaming)
+        if (result.outcome.status === 'interrupted') {
+          try {
+            for (const intr of result.outcome.interruptions) {
+              if (intr.type === 'tool_approval') {
+                const toolCall = intr.toolCall;
+                const args = tryParseJSON(toolCall.function.arguments);
+                broadcastApprovalRequired({
+                  conversationId,
+                  sessionId: intr.sessionId || runId,
+                  toolCallId: toolCall.id,
+                  toolName: toolCall.function.name,
+                  args,
+                  signature: computeToolCallSignature(toolCall)
+                });
+              }
+            }
+          } catch { /* ignore */ }
+        }
 
         return reply.code(200).send(response);
 
@@ -490,6 +727,82 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         data: result.data
       });
     });
+
+    // List pending approvals for a conversation (best-effort from stored history)
+    app.get('/approvals/pending', async (
+      request: FastifyRequest<{ Querystring: { conversationId?: string } }>,
+      reply: FastifyReply
+    ) => {
+      if (!config.defaultMemoryProvider) {
+        return reply.code(503).send({ success: false, error: 'Memory provider not configured' });
+      }
+
+      const conversationId = request.query.conversationId;
+      if (!conversationId) {
+        return reply.code(400).send({ success: false, error: 'conversationId is required' });
+      }
+
+      const conv = await config.defaultMemoryProvider.getConversation(conversationId);
+      if (!conv.success) {
+        return reply.code(500).send({ success: false, error: conv.error.message });
+      }
+      if (!conv.data) {
+        return reply.code(200).send({ success: true, data: { pending: [] } });
+      }
+
+      const messages = conv.data.messages as Message[];
+      const approvalsMeta = (conv.data.metadata?.toolApprovals ?? {}) as Record<string, any>;
+
+      // Find most recent assistant message with tool calls
+      const assistantIndex = [...messages].reverse().findIndex(m => m.role === 'assistant' && Array.isArray(m.tool_calls) && m.tool_calls.length > 0);
+      if (assistantIndex === -1) {
+        return reply.code(200).send({ success: true, data: { pending: [] } });
+      }
+      const realIndex = messages.length - 1 - assistantIndex;
+      const assistantMsg = messages[realIndex];
+
+      // Which tool_calls have already produced results?
+      const toolIds = new Set((assistantMsg.tool_calls ?? []).map(tc => tc.id));
+      const executed = new Set<string>();
+      for (let j = realIndex + 1; j < messages.length; j++) {
+        const m = messages[j];
+        if (m.role === 'tool' && m.tool_call_id && toolIds.has(m.tool_call_id)) {
+          executed.add(m.tool_call_id);
+        }
+      }
+
+      const pending: Array<{
+        conversationId: string;
+        toolCallId: string;
+        toolName: string;
+        args: any;
+        signature?: string;
+        status: 'pending';
+        sessionId?: string;
+      }> = [];
+
+      const entries = Object.values(approvalsMeta) as any[];
+      for (const tc of assistantMsg.tool_calls ?? []) {
+        if (executed.has(tc.id)) continue; // already resolved
+
+        const match = entries.find(e => e && e.toolCallId === tc.id);
+        const status = (match?.status as any) ?? (match?.approved === true ? 'approved' : (match?.additionalContext?.status === 'pending' ? 'pending' : undefined));
+        const decisionPending = !match || status === 'pending';
+        if (!decisionPending) continue;
+
+        pending.push({
+          conversationId,
+          toolCallId: tc.id,
+          toolName: tc.function.name,
+          args: tryParseJSON(tc.function.arguments),
+          signature: computeToolCallSignature(tc as any),
+          status: 'pending',
+          sessionId: (conv.data.metadata as any)?.runId,
+        });
+      }
+
+      return reply.code(200).send({ success: true, data: { pending } });
+    });
   };
 
   const start = async (): Promise<void> => {
@@ -500,6 +813,42 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       const host = config.host || 'localhost';
       const port = config.port || 3000;
       
+    // Approvals SSE stream
+    app.get('/approvals/stream', async (
+      request: FastifyRequest<{ Querystring: { conversationId?: string } }>,
+      reply: FastifyReply
+    ) => {
+      // SSE headers
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      });
+
+      const filterConversationId = (request.query && (request.query as any).conversationId) || undefined;
+      const client = { res: reply.raw, filterConversationId };
+      approvalSubscribers.add(client);
+
+      // Initial greeting
+      sseSend(reply.raw, 'stream_start', { conversationId: filterConversationId || null });
+
+      // Heartbeat
+      const interval = setInterval(() => {
+        try { sseSend(reply.raw, 'ping', { ts: Date.now() }); } catch { /* ignore */ }
+      }, 15000);
+
+      // Cleanup on close
+      request.raw.on('close', () => {
+        clearInterval(interval);
+        approvalSubscribers.delete(client);
+        try { reply.raw.end(); } catch { /* ignore */ }
+      });
+
+      // Fastify route handled via raw stream
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return undefined as any;
+    });
       console.log(`🔧 Starting Fastify server on ${host}:${port}...`);
       await app.listen({ 
         port, 
