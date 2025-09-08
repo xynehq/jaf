@@ -70,7 +70,7 @@ server.start().then(() => {
     ]
   }'\n`);
   
-  console.log('2. Image with multipart content (using image_url):');
+  console.log('2. Image with URL attachment:');
   console.log(`curl -X POST http://localhost:3002/chat \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -78,17 +78,13 @@ server.start().then(() => {
     "messages": [
       {
         "role": "user",
-        "content": [
+        "content": "What do you see in this image?",
+        "attachments": [
           {
-            "type": "text",
-            "text": "What do you see in this image?"
-          },
-          {
-            "type": "image_url",
-            "image_url": {
-              "url": "https://picsum.photos/400/300",
-              "detail": "high"
-            }
+            "kind": "image",
+            "mimeType": "image/jpeg",
+            "name": "random-image.jpg",
+            "url": "https://picsum.photos/400/300"
           }
         ]
       }
@@ -119,28 +115,7 @@ server.start().then(() => {
 
 
 
-  console.log('4. Remote image URL:');
-  console.log(`curl -X POST http://localhost:3002/chat \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "agentName": "attachment-analyst",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Describe this remote image",
-        "attachments": [
-          {
-            "kind": "image",
-            "mimeType": "image/jpeg",
-            "name": "random-image.jpg",
-            "url": "https://picsum.photos/200/300"
-          }
-        ]
-      }
-    ]
-  }'\n`);
-
-  console.log('5. PDF document:');
+  console.log('4. PDF document:');
   console.log(`curl -X POST http://localhost:3002/chat \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -154,14 +129,14 @@ server.start().then(() => {
             "kind": "document",
             "mimeType": "application/pdf",
             "name": "sample.pdf",
-            "data": "JVBERi0xLjQKJYGBgYEKCjEgMCBvYmoKPDwKL1R5cGUgL0NhdGFsb2cKL1BhZ2VzIDIgMCBSCj4+CmVuZG9iagoKMiAwIG9iago8PAovVHlwZSAvUGFnZXMKL0tpZHMgWzMgMCBSXQovQ291bnQgMQo+PgplbmRvYmoKCjMgMCBvYmoKPDwKL1R5cGUgL1BhZ2UKL1BhcmVudCAyIDAgUgovTWVkaWFCb3ggWzAgMCA2MTIgNzkyXQovQ29udGVudHMgNCAwIFIKPj4KZW5kb2JqCgo0IDAgb2JqCjw8Ci9MZW5ndGggNDQKPj4Kc3RyZWFtCkJUCi9GMSAxMiBUZgoxMDAgNzAwIFRkCihIZWxsbyBXb3JsZCkgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagoKNSAwIG9iago8PAovVHlwZSAvRm9udAovU3VidHlwZSAvVHlwZTEKL0Jhc2VGb250IC9IZWx2ZXRpY2EKPj4KZW5kb2JqCgp4cmVmCjAgNgo="
+            "data": "your_pdf_base64_data_here"
           }
         ]
       }
     ]
   }'\n`);
 
-  console.log('6. Text file:');
+  console.log('5. Text file:');
   console.log(`curl -X POST http://localhost:3002/chat \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -182,7 +157,7 @@ server.start().then(() => {
     ]
   }'\n`);
 
-  console.log('7. CSV data:');
+  console.log('6. CSV data:');
   console.log(`curl -X POST http://localhost:3002/chat \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -203,7 +178,7 @@ server.start().then(() => {
     ]
   }'\n`);
 
-  console.log('8. JSON file:');
+  console.log('7. JSON file:');
   console.log(`curl -X POST http://localhost:3002/chat \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -227,7 +202,7 @@ server.start().then(() => {
 
 
 
-  console.log('9. Testing security - dangerous filename (should fail):');
+  console.log('8. Testing security - dangerous filename (should fail):');
   console.log(`curl -X POST http://localhost:3002/chat \\
   -H "Content-Type: application/json" \\
   -d '{
