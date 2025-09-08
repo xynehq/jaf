@@ -6,6 +6,7 @@ export interface ServerConfig<Ctx> {
   port?: number;
   host?: string;
   cors?: boolean;
+  maxBodySize?: number;
   runConfig: RunConfig<Ctx>;
   agentRegistry: Map<string, Agent<Ctx, any>>;
   defaultMemoryProvider?: MemoryProvider;

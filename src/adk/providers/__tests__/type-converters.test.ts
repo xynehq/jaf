@@ -20,6 +20,7 @@ import {
   createAdkContentWithFunctionCall,
   createAdkContentWithFunctionResponse
 } from '../type-converters.js';
+import { getTextContent } from '../../../core/types.js';
 import {
   Content,
   ContentRole,
@@ -104,7 +105,7 @@ describe('Type Converters', () => {
 
       expect(coreMessage.role).toBe('tool');
       expect(coreMessage.tool_call_id).toBe('call_123');
-      expect(JSON.parse(coreMessage.content)).toEqual({ temperature: 22, condition: 'sunny' });
+      expect(JSON.parse(getTextContent(coreMessage.content))).toEqual({ temperature: 22, condition: 'sunny' });
     });
 
     it('should convert Core message to ADK content', () => {

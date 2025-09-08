@@ -5,7 +5,8 @@ import {
   RunState, 
   generateRunId, 
   generateTraceId,
-  agentAsTool
+  agentAsTool,
+  getTextContent
 } from '../index';
 
 type Ctx = { userId: string; permissions: string[] };
@@ -95,7 +96,7 @@ describe('Agents as Tools', () => {
     const toolMsgs = result.finalState.messages.filter(m => m.role === 'tool');
     expect(toolMsgs.length).toBeGreaterThan(0);
     // The tool result should include the SUMMARY prefix from the sub-agent
-    const hasSummary = toolMsgs.some(m => (m.content || '').includes('SUMMARY('));
+    const hasSummary = toolMsgs.some(m => (getTextContent(m.content) || '').includes('SUMMARY('));
     expect(hasSummary).toBe(true);
   });
 
@@ -158,7 +159,7 @@ describe('Agents as Tools', () => {
     const result = await run<Ctx, string>(initialState, config);
     expect(result.outcome.status).toBe('completed');
     const toolMsgs = result.finalState.messages.filter(m => m.role === 'tool');
-    expect(toolMsgs.some(m => (m.content || '').includes('EXTRACTED:child-output'))).toBe(true);
+    expect(toolMsgs.some(m => (getTextContent(m.content) || '').includes('EXTRACTED:child-output'))).toBe(true);
   });
 
   test('returns ToolResult.error when sub-run fails', async () => {
@@ -208,7 +209,7 @@ describe('Agents as Tools', () => {
     expect(result.outcome.status).toBe('completed');
     const toolMsgs = result.finalState.messages.filter(m => m.role === 'tool');
     // Expect a structured error string from ToolResponse.error
-    const hasExecError = toolMsgs.some(m => (m.content || '').includes('"code": "EXECUTION_FAILED"'));
+    const hasExecError = toolMsgs.some(m => (getTextContent(m.content) || '').includes('"code": "EXECUTION_FAILED"'));
     expect(hasExecError).toBe(true);
   });
 

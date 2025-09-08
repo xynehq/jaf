@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import type { Message, RunState, Agent as CoreAgent, Tool as CoreTool } from '../../core/types.js';
+import { getTextContent } from '../../core/types.js';
 import {
   Content,
   Part,
@@ -72,10 +73,11 @@ export const convertCoreMessageToAdkContent = (message: Message): Content => {
   const parts: Part[] = [];
   
   // Add text content
-  if (message.content && message.content.trim()) {
+  const textContent = getTextContent(message.content);
+  if (textContent && textContent.trim()) {
     parts.push({
       type: PartType.TEXT,
-      text: message.content
+      text: textContent
     });
   }
   
@@ -100,7 +102,7 @@ export const convertCoreMessageToAdkContent = (message: Message): Content => {
       functionResponse: {
         id: message.tool_call_id,
         name: 'unknown', // Core doesn't track function name in responses
-        response: safeJsonParse(message.content || ''),
+        response: safeJsonParse(getTextContent(message.content) || ''),
         success: true
       }
     });
