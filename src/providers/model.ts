@@ -247,8 +247,8 @@ async function buildChatMessageWithAttachments(
         parts.push({ type: 'image_url', image_url: { url } });
       }
     } else if (att.kind === 'document' || att.kind === 'file') {
-      // Extract document content if supported
-      if (isDocumentSupported(att.mimeType) && att.data) {
+      // Extract document content if supported and we have data or URL
+      if (isDocumentSupported(att.mimeType) && (att.data || att.url)) {
         try {
           const processed = await extractDocumentContent(att);
           const fileName = att.name || 'document';

@@ -18,15 +18,67 @@ export interface ProcessedDocument {
 }
 
 /**
+ * Fetch content from URL and return as buffer
+ */
+async function fetchUrlContent(url: string): Promise<{ buffer: Buffer; contentType?: string }> {
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'JAF-DocumentProcessor/1.0'
+      },
+      // 30 second timeout for large files
+      signal: AbortSignal.timeout(30000)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = response.headers.get('content-type') || undefined;
+
+    // Basic size check (25MB limit)
+    const maxSize = 25 * 1024 * 1024;
+    if (buffer.length > maxSize) {
+      throw new Error(`File size (${Math.round(buffer.length / 1024 / 1024)}MB) exceeds maximum allowed size (25MB)`);
+    }
+
+    return { buffer, contentType };
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Failed to fetch URL content: ${error.message}`);
+    }
+    throw new Error('Failed to fetch URL content: Unknown error');
+  }
+}
+
+/**
  * Extract text content from various document formats
  */
 export async function extractDocumentContent(attachment: Attachment): Promise<ProcessedDocument> {
-  if (!attachment.data) {
-    throw new Error('No document data provided');
-  }
+  let buffer: Buffer;
+  let mimeType = attachment.mimeType?.toLowerCase();
 
-  const buffer = Buffer.from(attachment.data, 'base64');
-  const mimeType = attachment.mimeType?.toLowerCase();
+  // Handle URL-based attachments
+  if (attachment.url && !attachment.data) {
+    const urlData = await fetchUrlContent(attachment.url);
+    buffer = urlData.buffer;
+    
+    // Use content type from response if mimeType wasn't provided
+    if (!mimeType && urlData.contentType) {
+      mimeType = urlData.contentType.toLowerCase();
+    }
+  } 
+  // Handle base64 data attachments
+  else if (attachment.data) {
+    buffer = Buffer.from(attachment.data, 'base64');
+  } 
+  // Error if neither URL nor data provided
+  else {
+    throw new Error('No document data or URL provided');
+  }
 
   switch (mimeType) {
     case 'application/pdf':
