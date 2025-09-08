@@ -580,7 +580,7 @@ async function runInternal<Ctx, Out>(
         const cleanedNewMessages = newMessages.filter(msg => {
           if (msg.role !== 'tool') return true;
           try {
-            const content = JSON.parse(msg.content);
+            const content = JSON.parse(getTextContent(msg.content));
             if (content.status === 'halted') {
               // Remove this halted message if we have a new result for the same tool_call_id
               return !toolResults.some(result => result.message.tool_call_id === msg.tool_call_id);
@@ -608,7 +608,7 @@ async function runInternal<Ctx, Out>(
     const cleanedNewMessages = newMessages.filter(msg => {
       if (msg.role !== 'tool') return true;
       try {
-        const content = JSON.parse(msg.content);
+        const content = JSON.parse(getTextContent(msg.content));
         if (content.status === 'halted') {
           // Remove this halted message if we have a new result for the same tool_call_id
           return !toolResults.some(result => result.message.tool_call_id === msg.tool_call_id);
@@ -1075,7 +1075,7 @@ async function loadConversationHistory<Ctx>(
   const memoryMessages = allMemoryMessages.filter(msg => {
     if (msg.role !== 'tool') return true;
     try {
-      const content = JSON.parse(msg.content);
+      const content = JSON.parse(getTextContent(msg.content));
       return content.status !== 'halted';
     } catch {
       return true; // Keep non-JSON tool messages
