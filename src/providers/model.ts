@@ -208,6 +208,14 @@ function convertContentPart(part: MessageContentPart): OpenAI.Chat.Completions.C
           detail: part.image_url.detail
         }
       };
+    case 'file':
+      return {
+        type: 'file',
+        file: {
+          file_id: part.file.file_id,
+          format: part.file.format
+        }
+      } as any; // LiteLLM extension
     default:
       throw new Error(`Unknown content part type: ${(part as any).type}`);
   }
@@ -247,32 +255,49 @@ async function buildChatMessageWithAttachments(
         parts.push({ type: 'image_url', image_url: { url } });
       }
     } else if (att.kind === 'document' || att.kind === 'file') {
-      // Extract document content if supported and we have data or URL
-      if (isDocumentSupported(att.mimeType) && (att.data || att.url)) {
-        try {
-          const processed = await extractDocumentContent(att);
-          const fileName = att.name || 'document';
-          const description = getDocumentDescription(att.mimeType);
-          
+      // Check if attachment has useLiteLLMFormat flag or is a large document
+      const useLiteLLMFormat = att.useLiteLLMFormat === true;
+      
+      if (useLiteLLMFormat && (att.url || att.data)) {
+        // Use LiteLLM native file format for better handling of large documents
+        const file_id = att.url || (att.data && att.mimeType ? `data:${att.mimeType};base64,${att.data}` : '');
+        if (file_id) {
           parts.push({
-            type: 'text',
-            text: `📄 ${fileName} (${description}):\n\n${processed.content}`
-          });
-        } catch (error) {
-          // Fallback to filename if extraction fails
-          const label = att.name || att.format || att.mimeType || 'attachment';
-          parts.push({
-            type: 'text',
-            text: `❌ Failed to process ${att.kind}: ${label} (${error instanceof Error ? error.message : 'Unknown error'})`
+            type: 'file',
+            file: {
+              file_id,
+              format: att.mimeType || att.format
+            }
           });
         }
       } else {
-        // Unsupported document type - show placeholder
-        const label = att.name || att.format || att.mimeType || 'attachment';
-        parts.push({
-          type: 'text',
-          text: `📎 Attached ${att.kind}: ${label}${att.url ? ` (${att.url})` : ''}`
-        });
+        // Extract document content if supported and we have data or URL
+        if (isDocumentSupported(att.mimeType) && (att.data || att.url)) {
+          try {
+            const processed = await extractDocumentContent(att);
+            const fileName = att.name || 'document';
+            const description = getDocumentDescription(att.mimeType);
+            
+            parts.push({
+              type: 'text',
+              text: `📄 ${fileName} (${description}):\n\n${processed.content}`
+            });
+          } catch (error) {
+            // Fallback to filename if extraction fails
+            const label = att.name || att.format || att.mimeType || 'attachment';
+            parts.push({
+              type: 'text',
+              text: `❌ Failed to process ${att.kind}: ${label} (${error instanceof Error ? error.message : 'Unknown error'})`
+            });
+          }
+        } else {
+          // Unsupported document type - show placeholder
+          const label = att.name || att.format || att.mimeType || 'attachment';
+          parts.push({
+            type: 'text',
+            text: `📎 Attached ${att.kind}: ${label}${att.url ? ` (${att.url})` : ''}`
+          });
+        }
       }
     }
   }

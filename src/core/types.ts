@@ -28,11 +28,13 @@ export type Attachment = {
   readonly url?: string;      // Remote URL or data URL
   readonly data?: string;     // Base64 without data: prefix
   readonly format?: string;   // Optional short format like 'pdf', 'txt'
+  readonly useLiteLLMFormat?: boolean; // Use LiteLLM native file format instead of text extraction
 };
 
 export type MessageContentPart = 
   | { readonly type: 'text'; readonly text: string }
-  | { readonly type: 'image_url'; readonly image_url: { readonly url: string; readonly detail?: 'low' | 'high' | 'auto' } };
+  | { readonly type: 'image_url'; readonly image_url: { readonly url: string; readonly detail?: 'low' | 'high' | 'auto' } }
+  | { readonly type: 'file'; readonly file: { readonly file_id: string; readonly format?: string } };
 
 export type Message = {
   readonly role: 'user' | 'assistant' | 'tool';

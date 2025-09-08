@@ -202,7 +202,80 @@ server.start().then(() => {
 
 
 
-  console.log('8. Testing security - dangerous filename (should fail):');
+  console.log('8. LiteLLM format - Large PDF via URL (efficient):');
+  console.log(`curl -X POST http://localhost:3002/chat \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "agentName": "attachment-analyst",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Analyze this large PDF using LiteLLM format",
+        "attachments": [
+          {
+            "kind": "document",
+            "mimeType": "application/pdf",
+            "name": "large-pdf.pdf",
+            "url": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+            "useLiteLLMFormat": true
+          }
+        ]
+      }
+    ]
+  }'\n`);
+
+  console.log('9. LiteLLM format - Base64 document (native processing):');
+  console.log(`curl -X POST http://localhost:3002/chat \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "agentName": "attachment-analyst",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Process this document using native model capabilities",
+        "attachments": [
+          {
+            "kind": "document",
+            "mimeType": "application/pdf",
+            "name": "document.pdf",
+            "data": "JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCgoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovS2lkcyBbMyAwIFJdCi9Db3VudCAxCj4+CmVuZG9iagoKMyAwIG9iago8PAovVHlwZSAvUGFnZQovUGFyZW50IDIgMCBSCi9NZWRpYUJveCBbMCAwIDYxMiA3OTJdCi9Db250ZW50cyA0IDAgUgo+PgplbmRvYmoKCjQgMCBvYmoKPDwKL0xlbmd0aCA0NAo+PgpzdHJlYW0KQlQKL0YxIDEyIFRmCjEwMCA3MDAgVGQKKEhlbGxvIFdvcmxkKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCgp4cmVmCjAgNQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTAgMDAwMDAgbiAKMDAwMDAwMDA1MyAwMDAwMCBuIAowMDAwMDAwMTI1IDAwMDAwIG4gCjAwMDAwMDAyMTAgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSA1Ci9Sb290IDEgMCBSCj4+CnN0YXJ0eHJlZgoyNjQKJSVFT0Y=",
+            "useLiteLLMFormat": true
+          }
+        ]
+      }
+    ]
+  }'\n`);
+
+  console.log('10. Hybrid approach - Regular processing for small files:');
+  console.log(`curl -X POST http://localhost:3002/chat \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "agentName": "attachment-analyst",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Compare: same document with different processing",
+        "attachments": [
+          {
+            "kind": "document",
+            "mimeType": "text/plain",
+            "name": "small-file.txt",
+            "data": "VGhpcyBpcyBhIHNtYWxsIGZpbGUgZm9yIHRleHQgZXh0cmFjdGlvbiB0ZXN0aW5nLg==",
+            "useLiteLLMFormat": false
+          },
+          {
+            "kind": "document", 
+            "mimeType": "text/plain",
+            "name": "same-file-litellm.txt",
+            "data": "VGhpcyBpcyBhIHNtYWxsIGZpbGUgZm9yIHRleHQgZXh0cmFjdGlvbiB0ZXN0aW5nLg==",
+            "useLiteLLMFormat": true
+          }
+        ]
+      }
+    ]
+  }'\n`);
+
+  console.log('11. Testing security - dangerous filename (should fail):');
   console.log(`curl -X POST http://localhost:3002/chat \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -227,9 +300,14 @@ server.start().then(() => {
   console.log('- Use Ctrl+C to stop the server');
   console.log('- Image attachments: Full visual analysis');
   console.log('- Document attachments: Text extraction and analysis for PDF, DOCX, XLSX, CSV, TXT, JSON, ZIP');
+  console.log('- LiteLLM format: Use "useLiteLLMFormat": true for efficient large file processing');
+  console.log('  * Large PDFs: No context window waste, native model processing');
+  console.log('  * Better layout understanding, tables, images preserved');
+  console.log('  * Automatic provider optimization (Bedrock, Gemini, OpenAI)');
+  console.log('- URL support: Both remote URLs and base64 data supported');
   console.log('- Base64 strings in examples contain real document content');
   console.log('- Security validations will reject malicious inputs');
-  console.log('- Max attachment size: 10MB per attachment');
+  console.log('- Max attachment size: 10MB per attachment (25MB with LiteLLM format)');
   console.log('- Max body size: 25MB total per request\n');
 
 }).catch(error => {
