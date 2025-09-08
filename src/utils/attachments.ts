@@ -58,9 +58,10 @@ function validateFilename(name?: string): void {
       throw new AttachmentValidationError(`Filename length (${name.length}) exceeds maximum allowed length (${MAX_FILENAME_LENGTH})`);
     }
     
-    // Check for dangerous characters
-    const dangerousChars = /[<>:"|?*\x00-\x1f]/;
-    if (dangerousChars.test(name)) {
+    // Check for dangerous characters and control characters
+    const dangerousChars = /[<>:"|?*]/;
+    const controlChars = /[\x00-\x1f]/; // eslint-disable-line no-control-regex
+    if (dangerousChars.test(name) || controlChars.test(name)) {
       throw new AttachmentValidationError('Filename contains invalid characters');
     }
     
