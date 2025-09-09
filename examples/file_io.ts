@@ -3,7 +3,7 @@
  * Demonstrates reading CSV files and writing JSON files using the core File I/O tool
  */
 
-import { fileIOTool, readCSVFile, writeJSONFile } from '../src/utils/fileIOTool.js';
+import { fileIOTool, readCSVFile, writeJSONFile } from '../src/tools/fileIOTool.js';
 import * as path from 'path';
 
 interface OrderSummary {
