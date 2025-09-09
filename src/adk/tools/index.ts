@@ -633,3 +633,6 @@ export const createTimestampTool = (): Tool => {
     parameters: []
   });
 };
+
+// Export unit conversion tool
+export { createUnitConversionTool, getSupportedUnits } from './unitConversionTool';
