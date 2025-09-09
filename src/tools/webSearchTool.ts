@@ -1,5 +1,6 @@
-import { Tool, ToolParameter, ToolContext, ToolResult, ToolParameterType } from '../types';
-import { createFunctionTool } from './index';
+import { z } from 'zod';
+import { Tool } from '../core/types';
+import { ToolResponse } from '../core/tool-results';
 
 export interface WebSearchResult {
   title: string;
@@ -122,78 +123,75 @@ export class WebSearchService {
   }
 }
 
-export const createWebSearchTool = (service?: WebSearchService): Tool => {
-  const searchService = service || new WebSearchService();
+const webSearchSchema = z.object({
+  query: z.string().describe('Search query string'),
+  maxResults: z.number().optional().default(5).describe('Maximum number of results to return'),
+  region: z.string().optional().describe('Region/market code for localized results (e.g., "en-US", "en-IN")'),
+  language: z.string().optional().describe('Language code for results (e.g., "en", "hi")'),
+  safeSearch: z.boolean().optional().default(false).describe('Enable safe search filtering'),
+});
 
-  return createFunctionTool({
+type WebSearchParams = z.infer<typeof webSearchSchema>;
+
+export const webSearchTool: Tool<WebSearchParams, any> = {
+  schema: {
     name: 'webSearch',
     description: 'Search the web for real-time information using configured provider (Tavily/Bing)',
-    execute: async (params, context) => {
-      const { query, maxResults, region, language, safeSearch } = params as {
-        query: string;
-        maxResults?: number;
-        region?: string;
-        language?: string;
-        safeSearch?: boolean;
+    parameters: webSearchSchema,
+  },
+  needsApproval: false,
+  execute: async (params, context) => {
+    try {
+      const service = new WebSearchService();
+      const results = await service.search(params.query, {
+        maxResults: params.maxResults,
+        region: params.region,
+        language: params.language,
+        safeSearch: params.safeSearch,
+      });
+
+      const response = {
+        query: params.query,
+        resultsCount: results.length,
+        results,
       };
 
+      return ToolResponse.success(response);
+    } catch (error) {
+      return ToolResponse.error(`Web search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  },
+};
+
+export function createWebSearchTool<Ctx>(service?: WebSearchService): Tool<WebSearchParams, Ctx> {
+  const searchService = service || new WebSearchService();
+
+  return {
+    schema: {
+      name: 'webSearch',
+      description: 'Search the web for real-time information using configured provider (Tavily/Bing)',
+      parameters: webSearchSchema,
+    },
+    needsApproval: false,
+    execute: async (params, context) => {
       try {
-        const results = await searchService.search(query, {
-          maxResults,
-          region,
-          language,
-          safeSearch,
+        const results = await searchService.search(params.query, {
+          maxResults: params.maxResults,
+          region: params.region,
+          language: params.language,
+          safeSearch: params.safeSearch,
         });
 
-        return {
-          query,
+        const response = {
+          query: params.query,
           resultsCount: results.length,
           results,
         };
+
+        return ToolResponse.success(response);
       } catch (error) {
-        throw new Error(`Web search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return ToolResponse.error(`Web search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     },
-    parameters: [
-      {
-        name: 'query',
-        type: ToolParameterType.STRING,
-        description: 'Search query string',
-        required: true,
-      },
-      {
-        name: 'maxResults',
-        type: ToolParameterType.NUMBER,
-        description: 'Maximum number of results to return (default: 5)',
-        required: false,
-        default: 5,
-      },
-      {
-        name: 'region',
-        type: ToolParameterType.STRING,
-        description: 'Region/market code for localized results (e.g., "en-US", "en-IN")',
-        required: false,
-      },
-      {
-        name: 'language',
-        type: ToolParameterType.STRING,
-        description: 'Language code for results (e.g., "en", "hi")',
-        required: false,
-      },
-      {
-        name: 'safeSearch',
-        type: ToolParameterType.BOOLEAN,
-        description: 'Enable safe search filtering',
-        required: false,
-        default: false,
-      },
-    ],
-    metadata: {
-      source: 'web-search',
-      version: '1.0.0',
-      tags: ['search', 'web', 'real-time'],
-    },
-  });
-};
-
-export default createWebSearchTool;
+  };
+}

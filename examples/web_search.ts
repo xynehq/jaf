@@ -1,17 +1,16 @@
-import { createWebSearchTool, WebSearchService } from '../src/adk/tools/webSearchTool';
+import { webSearchTool, WebSearchService, createWebSearchTool } from '../src/tools/webSearchTool';
+import { ToolResponse } from '../src/core/tool-results';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
 async function demonstrateWebSearch() {
   console.log('🔍 Web Search Tool Demo\n');
-  console.log('=' .repeat(50));
+  console.log('='.repeat(50));
 
   try {
-    const webSearchTool = createWebSearchTool();
-
     console.log('\n📋 Example 1: Searching for RBI UPI Guidelines');
-    console.log('-' .repeat(50));
+    console.log('-'.repeat(50));
 
     const upiQuery = 'latest RBI UPI guidelines';
     console.log(`Query: "${upiQuery}"\n`);
@@ -21,7 +20,7 @@ async function demonstrateWebSearch() {
       { userId: 'demo-user', sessionId: 'demo-session' }
     );
 
-    if (directSearchResult.success && directSearchResult.data) {
+    if (ToolResponse.isSuccess(directSearchResult)) {
       const data = directSearchResult.data as any;
       console.log(`Found ${data.resultsCount} results:\n`);
       
@@ -34,10 +33,12 @@ async function demonstrateWebSearch() {
         }
         console.log();
       });
+    } else {
+      console.log('Search failed:', directSearchResult.error);
     }
 
     console.log('\n📋 Example 2: Regional Search');
-    console.log('-' .repeat(50));
+    console.log('-'.repeat(50));
 
     const regionalQuery = 'cryptocurrency regulations India 2024';
     console.log(`Query: "${regionalQuery}" (Region: en-IN)\n`);
@@ -52,7 +53,7 @@ async function demonstrateWebSearch() {
       { userId: 'demo-user', sessionId: 'demo-session' }
     );
 
-    if (regionalResult.success && regionalResult.data) {
+    if (ToolResponse.isSuccess(regionalResult)) {
       const data = regionalResult.data as any;
       console.log(`Found ${data.resultsCount} India-specific results:\n`);
       
@@ -64,7 +65,7 @@ async function demonstrateWebSearch() {
     }
 
     console.log('\n📋 Example 3: Multiple Providers');
-    console.log('-' .repeat(50));
+    console.log('-'.repeat(50));
 
     if (process.env.BING_API_KEY) {
       const bingService = new WebSearchService('bing', process.env.BING_API_KEY);
@@ -75,7 +76,7 @@ async function demonstrateWebSearch() {
         { userId: 'demo-user', sessionId: 'demo-session' }
       );
 
-      if (bingResult.success && bingResult.data) {
+      if (ToolResponse.isSuccess(bingResult)) {
         const data = bingResult.data as any;
         console.log('Results from Bing:');
         data.results.forEach((result: any, index: number) => {
