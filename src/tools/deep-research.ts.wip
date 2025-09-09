@@ -1,0 +1,624 @@
+/**
+ * Deep Research Tool for JAF
+ * 
+ * A comprehensive research tool inspired by LangChain's Open Deep Research
+ * that performs structured multi-step research with citations using JAF's
+ * native orchestration capabilities.
+ */
+
+import { z } from 'zod';
+import { Tool, Message, ValidationResult, RunState, RunConfig, TraceId, RunId, createTraceId, createRunId } from '../core/types';
+import { ToolResult, ToolResponse, ToolErrorCodes } from '../core/tool-results';
+import { run } from '../core/engine';
+import { makeLiteLLMProvider } from '../providers/model';
+import { v4 as uuidv4 } from 'uuid';
+
+// ========== Configuration Types ==========
+
+export interface DeepResearchContext {
+  apiKey?: string;
+  modelName?: string;
+  baseUrl?: string;
+  maxSearchResults?: number;
+  maxDepth?: number;
+  maxConcurrentResearchers?: number;
+  maxResearchIterations?: number;
+}
+
+// ========== Schema Definitions ==========
+
+const deepResearchSchema = z.object({
+  query: z.string().describe('The main research query to investigate'),
+  maxDepth: z.number().default(2).describe('Maximum depth of research iterations'),
+  maxSearchResults: z.number().default(3).describe('Maximum search results per sub-query'),
+  maxIterations: z.number().default(6).describe('Maximum supervisor iterations'),
+  allowClarification: z.boolean().default(true).describe('Allow clarifying questions before research'),
+});
+
+export type DeepResearchParams = z.infer<typeof deepResearchSchema>;
+
+// ========== Data Structures ==========
+
+interface ResearchResult {
+  query: string;
+  source: string;
+  content: string;
+  relevanceScore: number;
+  timestamp: string;
+  url?: string;
+}
+
+interface ResearchReport {
+  mainQuery: string;
+  subQueries: string[];
+  findings: ResearchResult[];
+  synthesis: string;
+  citations: string[];
+  timestamp: string;
+}
+
+interface SubQuery {
+  question: string;
+  priority: number;
+  category: 'technical' | 'policy' | 'impact' | 'case_study' | 'general';
+}
+
+interface ResearchState {
+  mainQuery: string;
+  researchBrief: string;
+  subQueries: SubQuery[];
+  findings: ResearchResult[];
+  iterations: number;
+  phase: 'clarification' | 'planning' | 'researching' | 'synthesizing' | 'complete';
+  notes: string[];
+}
+
+// ========== Research Tools ==========
+
+const conductResearchTool: Tool<{ research_topic: string }, any> = {
+  schema: {
+    name: 'conductResearch',
+    description: 'Conduct focused research on a specific topic',
+    parameters: z.object({
+      research_topic: z.string().describe('The specific topic to research in detail'),
+    }),
+  },
+  execute: async ({ research_topic }, context) => {
+    // This will be replaced by actual researcher agent execution
+    const mockFindings = `Research findings for: ${research_topic}
+    - Key insight 1 about ${research_topic}
+    - Key insight 2 about ${research_topic}
+    - Key insight 3 about ${research_topic}`;
+    
+    return ToolResponse.success({
+      topic: research_topic,
+      findings: mockFindings,
+      sources: ['source1.com', 'source2.com'],
+    });
+  },
+};
+
+const researchCompleteTool: Tool<{}, any> = {
+  schema: {
+    name: 'researchComplete',
+    description: 'Signal that research is complete',
+    parameters: z.object({}),
+  },
+  execute: async () => {
+    return ToolResponse.success({ complete: true });
+  },
+};
+
+const thinkTool: Tool<{ reflection: string }, any> = {
+  schema: {
+    name: 'think',
+    description: 'Strategic reflection and planning tool',
+    parameters: z.object({
+      reflection: z.string().describe('Your reflection on progress and next steps'),
+    }),
+  },
+  execute: async ({ reflection }) => {
+    return `Reflection recorded: ${reflection}`;
+  },
+};
+
+const webSearchTool: Tool<{ query: string; max_results?: number }, any> = {
+  schema: {
+    name: 'webSearch',
+    description: 'Search the web for information',
+    parameters: z.object({
+      query: z.string().describe('Search query'),
+      max_results: z.number().optional().default(5).describe('Maximum results to return'),
+    }),
+  },
+  execute: async ({ query, max_results = 5 }) => {
+    // Mock web search results
+    const results = [];
+    for (let i = 1; i <= max_results; i++) {
+      results.push({
+        title: `Result ${i} for: ${query}`,
+        url: `https://example${i}.com/${query.replace(/\s+/g, '-')}`,
+        snippet: `This is a relevant snippet about ${query} from source ${i}.`,
+      });
+    }
+    return ToolResponse.success(results);
+  },
+};
+
+// ========== Prompts ==========
+
+const SUPERVISOR_SYSTEM_PROMPT = `You are a research supervisor. Your job is to conduct research by calling the "conductResearch" tool to delegate work to specialized researchers.
+
+Today's date is ${new Date().toLocaleDateString()}.
+
+Your focus is to:
+1. Break down the research question into manageable sub-queries
+2. Delegate research tasks using conductResearch tool
+3. Use the think tool to reflect on progress
+4. Call researchComplete when satisfied with findings
+
+Think like a research manager with limited resources:
+- Bias towards single researcher for simple queries
+- Use parallel researchers only when truly beneficial
+- Stop when you have enough information to answer comprehensively
+
+Before each conductResearch call, use think tool to plan your approach.
+After each result, use think tool to assess progress.`;
+
+const RESEARCHER_SYSTEM_PROMPT = `You are a research assistant conducting focused research on a specific topic.
+
+Today's date is ${new Date().toLocaleDateString()}.
+
+Your job is to:
+1. Use webSearch tool to gather information
+2. Use think tool to reflect on findings
+3. Stop when you have comprehensive information
+
+Guidelines:
+- Start with broad searches, then narrow down
+- Limit yourself to 3-5 search queries maximum
+- Focus on finding credible, relevant sources`;
+
+const SYNTHESIS_PROMPT = `You are a research analyst. Create a comprehensive report from the research findings.
+
+Structure your report with:
+1. Executive Summary
+2. Key Findings (organized by theme)  
+3. Analysis and Implications
+4. Recommendations
+5. Sources and Citations
+
+Format in clear markdown with proper headings and citations.`;
+
+// ========== Research Agents ==========
+
+/**
+ * Create a supervisor agent that manages research delegation
+ */
+function createSupervisorConfig(context: DeepResearchContext): RunConfig<any> {
+  const modelProvider = makeLiteLLMProvider(
+    context.baseUrl || 'https://api.openai.com/v1',
+    context.apiKey || ''
+  );
+
+  return {
+    agent: {
+      model: context.modelName || 'gpt-4-turbo-preview',
+      modelProvider,
+      maxIterations: context.maxResearchIterations || 6,
+    },
+    tools: [conductResearchTool, researchCompleteTool, thinkTool],
+  };
+}
+
+/**
+ * Create a researcher agent for conducting focused research
+ */
+function createResearcherConfig(context: DeepResearchContext): RunConfig<any> {
+  const modelProvider = makeLiteLLMProvider(
+    context.baseUrl || 'https://api.openai.com/v1',
+    context.apiKey || ''
+  );
+
+  return {
+    agent: {
+      model: context.modelName || 'gpt-4-turbo-preview',
+      modelProvider,
+      maxIterations: 10,
+    },
+    tools: [webSearchTool, thinkTool],
+  };
+}
+
+// ========== Research Workflow ==========
+
+class DeepResearchWorkflow {
+  private context: DeepResearchContext;
+  private state: ResearchState;
+  
+  constructor(context: DeepResearchContext) {
+    this.context = context;
+    this.state = {
+      mainQuery: '',
+      researchBrief: '',
+      subQueries: [],
+      findings: [],
+      iterations: 0,
+      phase: 'clarification',
+      notes: [],
+    };
+  }
+
+  /**
+   * Check if clarification is needed for the query
+   */
+  async checkClarification(query: string): Promise<{
+    needsClarification: boolean;
+    question?: string;
+    researchBrief?: string;
+  }> {
+    const modelProvider = makeLiteLLMProvider(
+      this.context.baseUrl || 'https://api.openai.com/v1',
+      this.context.apiKey || ''
+    );
+
+    const messages: Message[] = [
+      {
+        role: 'user',
+        content: `Analyze this research query and determine if clarification is needed: "${query}"
+        
+If the query is clear and specific, return:
+{"needsClarification": false, "researchBrief": "refined query"}
+
+If clarification is needed, return:
+{"needsClarification": true, "question": "clarifying question"}`,
+      },
+    ];
+
+    const response = await modelProvider.callModel(
+      messages,
+      { model: this.context.modelName || 'gpt-4-turbo-preview' }
+    );
+
+    try {
+      const content = typeof response.content === 'string' 
+        ? response.content 
+        : response.content[0]?.text || '{}';
+      return JSON.parse(content);
+    } catch {
+      return {
+        needsClarification: false,
+        researchBrief: query,
+      };
+    }
+  }
+
+  /**
+   * Generate sub-queries for research
+   */
+  async generateSubQueries(query: string): Promise<SubQuery[]> {
+    const modelProvider = makeLiteLLMProvider(
+      this.context.baseUrl || 'https://api.openai.com/v1',
+      this.context.apiKey || ''
+    );
+
+    const messages: Message[] = [
+      {
+        role: 'user',
+        content: `Generate 3-5 specific sub-queries for researching: "${query}"
+        
+Consider different aspects:
+- Technical details
+- Current developments
+- Policy/regulatory aspects  
+- Impact and implications
+- Case studies
+
+Return JSON format:
+{"subQueries": [{"question": "...", "priority": 1-5, "category": "technical|policy|impact|case_study|general"}]}`,
+      },
+    ];
+
+    const response = await modelProvider.callModel(
+      messages,
+      { model: this.context.modelName || 'gpt-4-turbo-preview' }
+    );
+
+    try {
+      const content = typeof response.content === 'string' 
+        ? response.content 
+        : response.content[0]?.text || '{}';
+      const parsed = JSON.parse(content);
+      return parsed.subQueries || [];
+    } catch {
+      // Fallback sub-queries
+      return [
+        { question: `Current state of ${query}`, priority: 1, category: 'general' },
+        { question: `Key developments in ${query}`, priority: 2, category: 'technical' },
+        { question: `Implications of ${query}`, priority: 3, category: 'impact' },
+      ];
+    }
+  }
+
+  /**
+   * Run the supervisor to coordinate research
+   */
+  async runSupervisor(researchBrief: string): Promise<ResearchResult[]> {
+    const config = createSupervisorConfig(this.context);
+    const findings: ResearchResult[] = [];
+    
+    const initialState: RunState<any> = {
+      runId: createRunId(uuidv4()),
+      traceId: createTraceId(uuidv4()),
+      messages: [
+        {
+          role: 'user',
+          content: `${SUPERVISOR_SYSTEM_PROMPT}\n\n${researchBrief}`,
+        },
+      ],
+      context: {},
+      turnCount: 0,
+      approvals: new Map(),
+    };
+
+    // Run supervisor with iteration limit
+    const maxIterations = this.context.maxResearchIterations || 6;
+    let iterations = 0;
+    let researchComplete = false;
+    let currentState = initialState;
+
+    while (iterations < maxIterations && !researchComplete) {
+      const result = await run(currentState, config);
+
+      // Check if research is complete
+      if (result.outcome.status === 'completed' && result.state.messages) {
+        const lastMessage = result.state.messages[result.state.messages.length - 1];
+        if (lastMessage.tool_calls) {
+          for (const toolCall of lastMessage.tool_calls) {
+            if (toolCall.function.name === 'researchComplete') {
+              researchComplete = true;
+              break;
+            }
+            
+            // Process research findings
+            if (toolCall.function.name === 'conductResearch') {
+              const args = JSON.parse(toolCall.function.arguments);
+              const researchResult = await this.conductFocusedResearch(args.research_topic);
+              findings.push(...researchResult);
+            }
+          }
+        }
+        
+        currentState = result.state;
+      }
+      
+      iterations++;
+    }
+
+    return findings;
+  }
+
+  /**
+   * Conduct focused research on a specific topic
+   */
+  async conductFocusedResearch(topic: string): Promise<ResearchResult[]> {
+    const config = createResearcherConfig(this.context);
+    const findings: ResearchResult[] = [];
+    
+    const initialState: RunState<any> = {
+      runId: createRunId(uuidv4()),
+      traceId: createTraceId(uuidv4()),
+      messages: [
+        {
+          role: 'user',
+          content: `${RESEARCHER_SYSTEM_PROMPT}\n\nResearch this specific topic thoroughly: ${topic}`,
+        },
+      ],
+      context: {},
+      turnCount: 0,
+      approvals: new Map(),
+    };
+
+    const result = await run(initialState, config);
+
+    // Extract findings from researcher results
+    if (result.state.messages) {
+      for (const message of result.state.messages) {
+        if (message.role === 'tool' && message.content) {
+          findings.push({
+            query: topic,
+            source: 'web_search',
+            content: typeof message.content === 'string' ? message.content : JSON.stringify(message.content),
+            relevanceScore: 75, // Default score
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+    }
+
+    return findings;
+  }
+
+  /**
+   * Synthesize findings into a comprehensive report
+   */
+  async synthesizeReport(
+    mainQuery: string,
+    subQueries: string[],
+    findings: ResearchResult[]
+  ): Promise<string> {
+    const modelProvider = makeLiteLLMProvider(
+      this.context.baseUrl || 'https://api.openai.com/v1',
+      this.context.apiKey || ''
+    );
+
+    const findingsText = findings
+      .map(f => `Source: ${f.source}\nContent: ${f.content}\n`)
+      .join('\n---\n');
+
+    const messages: Message[] = [
+      {
+        role: 'user',
+        content: `${SYNTHESIS_PROMPT}\n\nMain Query: ${mainQuery}
+
+Sub-queries investigated:
+${subQueries.join('\n- ')}
+
+Research Findings:
+${findingsText}
+
+Create a comprehensive report with proper markdown formatting and citations.`,
+      },
+    ];
+
+    const response = await modelProvider.callModel(
+      messages,
+      { 
+        model: this.context.modelName || 'gpt-4-turbo-preview',
+        maxTokens: 4000,
+      }
+    );
+
+    return typeof response.content === 'string' 
+      ? response.content 
+      : response.content[0]?.text || 'Unable to generate report';
+  }
+
+  /**
+   * Execute the complete research workflow
+   */
+  async execute(params: DeepResearchParams): Promise<ResearchReport> {
+    this.state.mainQuery = params.query;
+    
+    // Step 1: Check clarification if enabled
+    if (params.allowClarification) {
+      this.state.phase = 'clarification';
+      const clarification = await this.checkClarification(params.query);
+      
+      if (clarification.needsClarification) {
+        throw new Error(`Clarification needed: ${clarification.question}`);
+      }
+      
+      this.state.researchBrief = clarification.researchBrief || params.query;
+    } else {
+      this.state.researchBrief = params.query;
+    }
+
+    // Step 2: Generate sub-queries
+    this.state.phase = 'planning';
+    this.state.subQueries = await this.generateSubQueries(this.state.researchBrief);
+
+    // Step 3: Run supervisor to coordinate research
+    this.state.phase = 'researching';
+    this.state.findings = await this.runSupervisor(this.state.researchBrief);
+
+    // Step 4: Synthesize findings
+    this.state.phase = 'synthesizing';
+    const synthesis = await this.synthesizeReport(
+      this.state.mainQuery,
+      this.state.subQueries.map(sq => sq.question),
+      this.state.findings
+    );
+
+    // Step 5: Complete
+    this.state.phase = 'complete';
+    
+    const report: ResearchReport = {
+      mainQuery: this.state.mainQuery,
+      subQueries: this.state.subQueries.map(sq => sq.question),
+      findings: this.state.findings,
+      synthesis,
+      citations: [...new Set(this.state.findings.map(f => f.url || f.source))],
+      timestamp: new Date().toISOString(),
+    };
+
+    return report;
+  }
+}
+
+// ========== Main Tool Implementation ==========
+
+export const createDeepResearchTool = <Ctx extends DeepResearchContext>(
+  defaultContext?: Partial<DeepResearchContext>
+): Tool<DeepResearchParams, Ctx> => {
+  return {
+    schema: {
+      name: 'deepResearch',
+      description: 'Performs deep multi-step research using JAF orchestration with supervisor-researcher pattern',
+      parameters: deepResearchSchema as z.ZodType<DeepResearchParams>,
+    },
+    
+    execute: async (params, context) => {
+      // Validate API key
+      const apiKey = context.apiKey || defaultContext?.apiKey || process.env.OPENAI_API_KEY;
+      
+      if (!apiKey) {
+        return ToolResponse.error(
+          'MISSING_API_KEY',
+          'OpenAI API key is required for deep research'
+        );
+      }
+
+      // Create workflow with context
+      const workflowContext: DeepResearchContext = {
+        apiKey,
+        modelName: context.modelName || defaultContext?.modelName || 'gpt-4-turbo-preview',
+        baseUrl: context.baseUrl || defaultContext?.baseUrl || 'https://api.openai.com/v1',
+        maxSearchResults: context.maxSearchResults || defaultContext?.maxSearchResults || 3,
+        maxDepth: params.maxDepth,
+        maxConcurrentResearchers: context.maxConcurrentResearchers || 3,
+        maxResearchIterations: params.maxIterations,
+      };
+
+      const workflow = new DeepResearchWorkflow(workflowContext);
+
+      try {
+        const report = await workflow.execute(params);
+        return createSuccessResult(report);
+      } catch (error) {
+        return ToolResponse.error(
+          'RESEARCH_ERROR',
+          error instanceof Error ? error.message : 'Unknown error during research',
+          { error }
+        );
+      }
+    },
+  };
+};
+
+// ========== Simplified Research Tool ==========
+
+export const createSimpleResearchTool = <Ctx extends DeepResearchContext>(
+  defaultContext?: Partial<DeepResearchContext>
+): Tool<{ query: string }, Ctx> => {
+  const simpleSchema = z.object({
+    query: z.string().describe('The research query to investigate'),
+  });
+
+  return {
+    schema: {
+      name: 'simpleResearch',
+      description: 'Performs quick research on a topic with automatic configuration',
+      parameters: simpleSchema as z.ZodType<{ query: string }>,
+    },
+    
+    execute: async (params, context) => {
+      const deepResearchTool = createDeepResearchTool(defaultContext);
+      
+      return deepResearchTool.execute(
+        {
+          query: params.query,
+          maxDepth: 1,
+          maxSearchResults: 3,
+          maxIterations: 3,
+          allowClarification: false,
+        },
+        context
+      );
+    },
+  };
+};
+
+// Export default instances
+export const deepResearchTool = createDeepResearchTool();
+export const simpleResearchTool = createSimpleResearchTool();
