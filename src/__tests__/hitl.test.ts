@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { run, RunConfig, RunState, generateTraceId, generateRunId, Agent, Tool } from '../index';
+import { run, RunConfig, RunState, generateTraceId, generateRunId, Agent, Tool, getTextContent } from '../index';
 
 describe('HITL approvals', () => {
   const sensitiveTool: Tool<{ x: number }, any> = {
@@ -120,7 +120,7 @@ describe('HITL approvals', () => {
     const toolMsg = completed.finalState.messages.find(m => m.role === 'tool');
     expect(toolMsg).toBeTruthy();
     if (toolMsg) {
-      const payload = JSON.parse(toolMsg.content);
+      const payload = JSON.parse(getTextContent(toolMsg.content));
       expect(payload.error).toBe('approval_denied');
       expect(payload.rejection_reason).toBe('nope');
     }

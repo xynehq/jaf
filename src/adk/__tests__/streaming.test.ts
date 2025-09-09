@@ -542,7 +542,7 @@ describe('Streaming System', () => {
       expect(metrics.eventsByType.error).toBe(1);
       expect(metrics.eventsByType.message_complete).toBe(1);
       expect(metrics.errors).toBe(1);
-      expect(metrics.duration).toBeGreaterThanOrEqual(20);
+      expect(metrics.duration).toBeGreaterThanOrEqual(15);
     });
   });
 

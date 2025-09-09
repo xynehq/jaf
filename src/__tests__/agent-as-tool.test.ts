@@ -85,7 +85,8 @@ describe('Agents as Tools', () => {
       messages: [{ role: 'user', content: 'Please summarize: Hello World' }],
       currentAgentName: mainAgent.name,
       context,
-      turnCount: 0
+      turnCount: 0,
+      approvals: new Map()
     };
 
     const result = await run<Ctx, string>(initialState, config);
@@ -153,7 +154,8 @@ describe('Agents as Tools', () => {
       messages: [{ role: 'user', content: 'Use the tool' }],
       currentAgentName: customAgent.name,
       context,
-      turnCount: 0
+      turnCount: 0,
+      approvals: new Map()
     };
 
     const result = await run<Ctx, string>(initialState, config);
@@ -202,14 +204,15 @@ describe('Agents as Tools', () => {
       messages: [{ role: 'user', content: 'Trigger failure' }],
       currentAgentName: mainAgent.name,
       context,
-      turnCount: 0
+      turnCount: 0,
+      approvals: new Map()
     };
 
     const result = await run<Ctx, string>(initialState, config);
     expect(result.outcome.status).toBe('completed');
     const toolMsgs = result.finalState.messages.filter(m => m.role === 'tool');
-    // Expect a structured error string from ToolResponse.error
-    const hasExecError = toolMsgs.some(m => (getTextContent(m.content) || '').includes('"code": "EXECUTION_FAILED"'));
+    // Expect a structured error string from ToolResponse.error (escaped JSON in result field)
+    const hasExecError = toolMsgs.some(m => (getTextContent(m.content) || '').includes('\\"code\\": \\"EXECUTION_FAILED\\"'));
     expect(hasExecError).toBe(true);
   });
 
@@ -246,7 +249,8 @@ describe('Agents as Tools', () => {
       messages: [{ role: 'user', content: 'check ctx' }],
       currentAgentName: mainAgent.name,
       context,
-      turnCount: 0
+      turnCount: 0,
+      approvals: new Map()
     };
 
     const result = await run<Ctx, string>(initialState, config);
