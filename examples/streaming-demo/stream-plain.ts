@@ -39,6 +39,7 @@ const agent: Agent<DemoCtx, string> = {
     'You are StreamerBot. You can greet users and tell the current time.',
     '- If user tells their name, use the greet tool.',
     '- If user asks for time, use the get_current_time tool.',
+    '- If asked, give user the list of all the PMs of India with their description.',
     '- Otherwise, reply helpfully.'
   ].join('\n'),
   tools: [greetTool, timeTool],

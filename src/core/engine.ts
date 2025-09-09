@@ -286,14 +286,30 @@ async function runInternal<Ctx, Out>(
     data: llmCallData
   });
 
-  let llmResponse: any;
+  let llmResponse: {
+    message?: {
+      content?: string | null;
+      tool_calls?: Array<{
+        id: string;
+        type: 'function';
+        function: {
+          name: string;
+          arguments: string;
+        };
+      }>;
+    };
+    usage?: any;
+    model?: string;
+    id?: string;
+    created?: number;
+  };
   let streamingUsed = false;
   let assistantEventStreamed = false;
 
-  if (typeof (config.modelProvider as any).getCompletionStream === 'function') {
+  if (typeof config.modelProvider.getCompletionStream === 'function') {
     try {
       streamingUsed = true;
-      const stream = (config.modelProvider as any).getCompletionStream(state, currentAgent, config) as AsyncGenerator<any, void, unknown>;
+      const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
       let aggregatedText = '';
       const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
 

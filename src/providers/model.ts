@@ -106,13 +106,14 @@ export const makeLiteLLMProvider = <Ctx>(
       console.log(`📡 Streaming model: ${model} with params: ${JSON.stringify(baseParams, null, 2)}`);
 
       // Enable streaming on request
-      const stream = await client.chat.completions.create({
-        ...(baseParams as any),
+      const streamParams: OpenAI.Chat.Completions.ChatCompletionCreateParams & { stream: true } = {
+        ...baseParams,
         stream: true,
-      } as any);
+      };
+      const stream = await client.chat.completions.create(streamParams);
 
       // Iterate OpenAI streaming chunks (choices[].delta.*)
-      for await (const chunk of stream as any) {
+      for await (const chunk of stream) {
         const choice = chunk?.choices?.[0];
         const delta = choice?.delta;
 
