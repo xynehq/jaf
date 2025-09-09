@@ -162,7 +162,28 @@ export const createAiSdkProvider = <Ctx>(
         }
       }
 
-      if (agent.outputCodec) {
+      // Decide whether to enable tool calls or produce final structured output
+      const lastJafMessage = state.messages[state.messages.length - 1];
+      const hasCompletedTools = lastJafMessage?.role === 'tool';
+
+      const toolsForAiSDK: ToolSet | undefined =
+        !hasCompletedTools && agent.tools && agent.tools.length > 0
+          ? agent.tools.reduce(
+              (acc, jafTool) => {
+                const toSchema = zodSchema as unknown as (s: unknown) => Schema;
+                acc[jafTool.schema.name] = tool({
+                  description: jafTool.schema.description,
+                  inputSchema: toSchema(jafTool.schema.parameters),
+                });
+                return acc;
+              },
+              {} as ToolSet,
+            )
+          : undefined;
+
+      const shouldGenerateObject = Boolean(agent.outputCodec) && !toolsForAiSDK;
+
+      if (shouldGenerateObject) {
         const toSchema = zodSchema as unknown as (s: unknown) => Schema;
         const go = generateObject as unknown as (opts: unknown) => Promise<unknown>;
         const resultUnknown = await go({
@@ -175,69 +196,40 @@ export const createAiSdkProvider = <Ctx>(
         });
         const object = (resultUnknown as { object: unknown }).object;
 
+        return { message: { content: JSON.stringify(object) } };
+      }
+
+      console.log(`[DEBUG] Tools passed to AI SDK: ${toolsForAiSDK ? Object.keys(toolsForAiSDK).length : 0} (hasCompletedTools: ${hasCompletedTools})`);
+      try {
+        console.log('[DEBUG] Messages being passed to AI SDK:', JSON.stringify(messages, null, 2));
+
+        const completeResponse = await generateText({
+          model: lm,
+          system,
+          messages,
+          tools: toolsForAiSDK,
+          temperature: agent.modelConfig?.temperature,
+          maxOutputTokens: agent.modelConfig?.maxTokens,
+        });
+
+        console.log('[DEBUG] AI SDK generateText response summary:', {
+          text: completeResponse.text?.slice(0, 100),
+          toolCallsCount: completeResponse.toolCalls?.length ?? 0,
+        });
+
         return {
           message: {
-            content: JSON.stringify(object),
+            content: completeResponse.text,
+            tool_calls: completeResponse.toolCalls?.map((tc) => ({
+              id: tc.toolCallId,
+              type: 'function' as const,
+              function: { name: tc.toolName, arguments: JSON.stringify(tc.input) },
+            })),
           },
         };
-      } else {
-        // Check if the last original JAF message contained tool results
-        const lastJafMessage = state.messages[state.messages.length - 1];
-        const hasCompletedTools = lastJafMessage?.role === 'tool';
-
-        // Only provide tools if we don't have completed tool results
-        const toolsForAiSDK: ToolSet | undefined =
-          !hasCompletedTools && agent.tools && agent.tools.length > 0
-            ? agent.tools.reduce(
-                (acc, jafTool) => {
-                  // Use AI SDK's tool() and zodSchema() to keep types while avoiding deep instantiation
-                  const toSchema = zodSchema as unknown as (s: unknown) => Schema;
-                  acc[jafTool.schema.name] = tool({
-                    description: jafTool.schema.description,
-                    inputSchema: toSchema(jafTool.schema.parameters),
-                  });
-                  return acc;
-                },
-                {} as ToolSet,
-              )
-            : undefined;
-        
-        console.log(`[DEBUG] Tools passed to AI SDK: ${toolsForAiSDK ? Object.keys(toolsForAiSDK).length : 0} (hasCompletedTools: ${hasCompletedTools})`);
-        
-        try {
-          console.log('[DEBUG] Messages being passed to AI SDK:', JSON.stringify(messages, null, 2));
-          
-          const completeResponse = await generateText({
-            model: lm,
-            system,
-            messages,
-            tools: toolsForAiSDK,
-            temperature: agent.modelConfig?.temperature,
-            maxOutputTokens: agent.modelConfig?.maxTokens,
-          });
-          
-          console.log('[DEBUG] AI SDK generateText response summary:', {
-            text: completeResponse.text?.slice(0, 100),
-            toolCallsCount: completeResponse.toolCalls?.length ?? 0,
-          });
-          
-          return {
-            message: {
-              content: completeResponse.text,
-              tool_calls: completeResponse.toolCalls?.map((tc) => ({
-                id: tc.toolCallId,
-                type: 'function' as const,
-                function: {
-                  name: tc.toolName,
-                  arguments: JSON.stringify(tc.input),
-                },
-              })),
-            },
-          };
-        } catch (error) {
-          console.error('[DEBUG] AI SDK generateText error:', error);
-          throw error;
-        }
+      } catch (error) {
+        console.error('[DEBUG] AI SDK generateText error:', error);
+        throw error;
       }
     },
   };
