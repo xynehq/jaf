@@ -1,9 +1,9 @@
 /**
  * File I/O Tool Example
- * Demonstrates reading CSV files and writing JSON files
+ * Demonstrates reading CSV files and writing JSON files using the core File I/O tool
  */
 
-import { fileIOTool, readCSVFile, writeJSONFile } from '../src/adk/tools/fileIOTool.js';
+import { fileIOTool, readCSVFile, writeJSONFile } from '../src/utils/fileIOTool.js';
 import * as path from 'path';
 
 interface OrderSummary {
@@ -27,13 +27,17 @@ async function demonstrateFileIO() {
       action: 'read',
       filepath: csvPath,
       format: 'csv'
-    });
+    }, {} as any); // Context would be provided by the agent framework
     
-    if (!readResult.success) {
-      throw new Error(readResult.error);
+    // Check if result is a ToolResult
+    let orders: any[];
+    if (typeof readResult === 'string') {
+      throw new Error('Unexpected string result');
+    } else if (readResult.status === 'success') {
+      orders = readResult.data.data as any[];
+    } else {
+      throw new Error(readResult.message || 'Failed to read CSV');
     }
-    
-    const orders = readResult.data as any[];
     console.log(`✓ Successfully read ${orders.length} orders from CSV\n`);
     
     // Display first few orders
@@ -94,10 +98,10 @@ async function demonstrateFileIO() {
       filepath: jsonPath,
       content: summary,
       format: 'json'
-    });
+    }, {} as any);
     
-    if (!writeResult.success) {
-      throw new Error(writeResult.error);
+    if (typeof writeResult !== 'string' && writeResult.status !== 'success') {
+      throw new Error(writeResult.message || 'Failed to write JSON');
     }
     
     console.log(`✓ Successfully wrote summary to ${jsonPath}\n`);
@@ -126,15 +130,13 @@ async function demonstrateFileIO() {
       action: 'read',
       filepath: jsonPath,
       format: 'json'
-    });
+    }, {} as any);
     
-    if (!verifyResult.success) {
-      throw new Error(verifyResult.error);
+    if (typeof verifyResult !== 'string' && verifyResult.status === 'success') {
+      const verifiedData = verifyResult.data.data as OrderSummary;
+      console.log(`✓ Verified JSON file contains ${verifiedData.totalOrders} orders`);
+      console.log(`✓ Revenue matches: $${verifiedData.totalRevenue}\n`);
     }
-    
-    const verifiedData = verifyResult.data as OrderSummary;
-    console.log(`✓ Verified JSON file contains ${verifiedData.totalOrders} orders`);
-    console.log(`✓ Revenue matches: $${verifiedData.totalRevenue}\n`);
     
     // 6. Demonstrate CSV writing
     console.log('6. Writing filtered data to new CSV...');
@@ -145,15 +147,23 @@ async function demonstrateFileIO() {
       filepath: path.join(process.cwd(), 'data', 'completed_orders.csv'),
       content: completedOrders,
       format: 'csv'
-    });
+    }, {} as any);
     
-    if (!csvWriteResult.success) {
-      throw new Error(csvWriteResult.error);
+    if (typeof csvWriteResult !== 'string' && csvWriteResult.status !== 'success') {
+      throw new Error(csvWriteResult.message || 'Failed to write CSV');
     }
     
     console.log(`✓ Wrote ${completedOrders.length} completed orders to new CSV file\n`);
     
     console.log('=== File I/O Tool Demonstration Complete ===');
+    console.log('\nThe fileIOTool provides:');
+    console.log('  • Core Tool<A, Ctx> interface compatible with JAF framework');
+    console.log('  • Read/write support for text, JSON, and CSV files');
+    console.log('  • Automatic format detection based on file extension');
+    console.log('  • CSV parsing with configurable delimiter and headers');
+    console.log('  • Type-safe parameters using Zod schemas');
+    console.log('  • Proper error handling with ToolResult types');
+    console.log('  • Convenience functions for common operations');
     
   } catch (error) {
     console.error('Error during file I/O demonstration:', error);
