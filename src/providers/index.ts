@@ -5,7 +5,6 @@ export * from './model';
 export * from './mcp';
 export {
   createAiSdkProvider,
-  makeAiSdkProvider,
   type AiSdkFunctionTool,
   type AiSdkChatMessageParam,
   type AiSdkChatRequest,
