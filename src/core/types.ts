@@ -116,7 +116,7 @@ export type RunState<Ctx> = {
   readonly currentAgentName: string;
   readonly context: Readonly<Ctx>;
   readonly turnCount: number;
-  readonly approvals: ReadonlyMap<string, ApprovalValue>;
+  readonly approvals?: ReadonlyMap<string, ApprovalValue>;
 };
 
 export type JAFError =
@@ -173,6 +173,7 @@ export type TraceEvent =
   | { type: 'run_end'; data: { outcome: RunResult<any>['outcome']; traceId: TraceId; runId: RunId; } };
 
 export interface ModelProvider<Ctx> {
+  isAiSdkProvider?: boolean;
   getCompletion: (
     state: Readonly<RunState<Ctx>>,
     agent: Readonly<Agent<Ctx, any>>,

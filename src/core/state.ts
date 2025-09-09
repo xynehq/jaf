@@ -27,7 +27,7 @@ export async function approve<Ctx>(
     }
 
     // Update in-memory state
-    const newApprovals = new Map(state.approvals);
+    const newApprovals = new Map(state.approvals ?? []);
     newApprovals.set(interruption.toolCall.id, approvalValue);
     return {
       ...state,
@@ -64,7 +64,7 @@ export async function reject<Ctx>(
     }
 
     // Update in-memory state
-    const newApprovals = new Map(state.approvals);
+    const newApprovals = new Map(state.approvals ?? []);
     newApprovals.set(interruption.toolCall.id, approvalValue);
     return {
       ...state,

@@ -48,7 +48,6 @@ export async function run<Ctx, Out>(
     }
 
     const result = await runInternal<Ctx, Out>(stateWithMemory, config);
-    // console.log("RESULT", result)
     
     // Store conversation history only if this is a final completion of the entire conversation
     // For HITL scenarios, storage happens on interruption (line 261) to allow resumption
@@ -248,7 +247,7 @@ async function tryResumePendingToolCalls<Ctx, Out>(
           ...state,
           messages: [...state.messages, ...toolResults.map(r => r.message)],
           turnCount: state.turnCount,
-          approvals: state.approvals,
+          approvals: state.approvals ?? new Map(),
         };
         // Continue the normal loop with updated state
         return await runInternal<Ctx, Out>(nextState, config);
@@ -359,7 +358,8 @@ async function runInternal<Ctx, Out>(
 
   const model = config.modelOverride ?? currentAgent.modelConfig?.name;
 
-  if (!model) {
+  // Only check for model if not using the new AI SDK provider
+  if (!model && !(config.modelProvider as any).isAiSdkProvider) {
     return {
       finalState: state,
       outcome: {
@@ -379,7 +379,7 @@ async function runInternal<Ctx, Out>(
   // Prepare complete LLM call data for tracing
   const llmCallData = {
     agentName: currentAgent.name,
-    model,
+    model: model || 'unknown',
     traceId: state.traceId,
     runId: state.runId,
     messages: state.messages,
@@ -416,7 +416,7 @@ async function runInternal<Ctx, Out>(
       traceId: state.traceId, 
       runId: state.runId,
       agentName: currentAgent.name,
-      model,
+      model: model || 'unknown',
       usage: usage ? {
         prompt_tokens: usage.prompt_tokens,
         completion_tokens: usage.completion_tokens,
@@ -435,7 +435,7 @@ async function runInternal<Ctx, Out>(
           prompt: usage.prompt_tokens,
           completion: usage.completion_tokens,
           total: usage.total_tokens,
-          model
+          model: model || 'unknown'
         }
       });
     }
@@ -502,7 +502,7 @@ async function runInternal<Ctx, Out>(
       const approvalRequiredResults = toolResults.filter(r => r.interruption);
       
       // Add pending approvals to state.approvals
-      const updatedApprovals = new Map(state.approvals);
+      const updatedApprovals = new Map(state.approvals ?? []);
       for (const interruption of interruptions) {
         if (interruption.type === 'tool_approval') {
           updatedApprovals.set(interruption.toolCall.id, {
@@ -596,7 +596,7 @@ async function runInternal<Ctx, Out>(
           messages: [...cleanedNewMessages, ...toolResults.map(r => r.message)],
           currentAgentName: targetAgent,
           turnCount: updatedTurnCount,
-          approvals: state.approvals,
+          approvals: state.approvals ?? new Map(),
         };
         // End of turn before handing off to next agent
         config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -623,7 +623,7 @@ async function runInternal<Ctx, Out>(
       ...state,
       messages: [...cleanedNewMessages, ...toolResults.map(r => r.message)],
       turnCount: updatedTurnCount,
-      approvals: state.approvals,
+      approvals: state.approvals ?? new Map(),
     };
     // End of this turn before next model call
     config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -852,7 +852,7 @@ async function executeToolCalls<Ctx>(
           needsApproval = !!tool.needsApproval;
         }
 
-        const approvalStatus = state.approvals.get(toolCall.id);
+        const approvalStatus = state.approvals?.get(toolCall.id);
         // Derive a normalized status for backward compatibility
         const derivedStatus: 'approved' | 'rejected' | 'pending' | undefined =
           approvalStatus?.status ?? (
@@ -1098,7 +1098,7 @@ async function loadConversationHistory<Ctx>(
   const storedApprovals = result.data.metadata?.approvals;
   const approvalsMap = storedApprovals 
     ? new Map(Object.entries(storedApprovals) as [string, any][])
-    : initialState.approvals;
+    : (initialState.approvals ?? new Map());
 
   console.log(`[JAF:MEMORY] Loaded ${allMemoryMessages.length} messages from memory, filtered to ${memoryMessages.length} for LLM context (removed halted messages)`);
   if (storedApprovals) {
@@ -1147,7 +1147,7 @@ async function storeConversationHistory<Ctx>(
     runId: finalState.runId,
     agentName: finalState.currentAgentName,
     turnCount: finalState.turnCount,
-    approvals: Object.fromEntries(finalState.approvals) // Store approvals in metadata
+    approvals: Object.fromEntries(finalState.approvals ?? new Map()) // Store approvals in metadata
   };
 
   const result = await config.memory.provider.storeMessages(config.conversationId, messagesToStore, metadata);
