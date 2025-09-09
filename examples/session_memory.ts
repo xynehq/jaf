@@ -5,14 +5,16 @@
  * user preferences and context across multiple interactions.
  */
 
+import { z } from 'zod';
+import { Tool } from '../src/core/types';
 import { 
   storeMemoryTool, 
   recallMemoryTool, 
   listMemoryKeysTool,
   deleteMemoryTool,
-  clearMemoryTool 
-} from '../src/adk/tools/sessionMemoryTool';
-import { Model } from '../src/adk/models';
+  clearMemoryTool,
+  SessionMemoryContext
+} from '../src/tools/sessionMemoryTool';
 
 // Currency conversion rates (simplified for demo)
 const CONVERSION_RATES: Record<string, number> = {
@@ -26,51 +28,31 @@ const CONVERSION_RATES: Record<string, number> = {
 };
 
 // Custom tool for currency conversion that uses memory
-const currencyConverterTool = {
-  name: 'convertCurrency',
-  description: 'Convert amount between currencies using stored preference',
-  parameters: [
-    {
-      name: 'amount',
-      type: 'number' as const,
-      description: 'Amount to convert',
-      required: true
-    },
-    {
-      name: 'fromCurrency',
-      type: 'string' as const,
-      description: 'Source currency code (e.g., USD)',
-      required: false,
-      default: 'USD'
-    },
-    {
-      name: 'toCurrency',
-      type: 'string' as const,
-      description: 'Target currency code (will use stored preference if not provided)',
-      required: false
-    }
-  ],
-  execute: async (params: any, context: any) => {
-    const { amount, fromCurrency = 'USD' } = params;
-    let { toCurrency } = params;
-    
+const currencyConverterTool: Tool<
+  { amount: number; fromCurrency?: string; toCurrency?: string },
+  SessionMemoryContext
+> = {
+  schema: {
+    name: 'convertCurrency',
+    description: 'Convert amount between currencies using stored preference',
+    parameters: z.object({
+      amount: z.number().describe('Amount to convert'),
+      fromCurrency: z.string().optional().default('USD').describe('Source currency code (e.g., USD)'),
+      toCurrency: z.string().optional().describe('Target currency code (will use stored preference if not provided)')
+    }) as z.ZodType<{ amount: number; fromCurrency?: string; toCurrency?: string }>
+  },
+  needsApproval: false,
+  execute: async ({ amount, fromCurrency = 'USD', toCurrency }, context) => {
     // If no target currency specified, try to recall from memory
     if (!toCurrency) {
-      // Use the recall tool to get preferred currency
-      const recallTool = recallMemoryTool();
-      const memoryResult = await recallTool.execute(
+      const memoryResult = await recallMemoryTool.execute(
         { key: 'preferred_currency', defaultValue: 'USD' },
         context
       );
       
-      if (memoryResult.success && memoryResult.data) {
-        const data = memoryResult.data as any;
-        toCurrency = data.value || 'USD';
-        console.log(`📝 Using stored currency preference: ${toCurrency}`);
-      } else {
-        toCurrency = 'USD';
-        console.log('📝 No currency preference found, using USD');
-      }
+      const data = JSON.parse(memoryResult as string);
+      toCurrency = data.value || 'USD';
+      console.log(`📝 Using stored currency preference: ${toCurrency}`);
     }
     
     // Perform conversion
@@ -78,117 +60,100 @@ const currencyConverterTool = {
     const toRate = CONVERSION_RATES[toCurrency] || 1;
     const convertedAmount = (amount / fromRate) * toRate;
     
-    return {
+    return JSON.stringify({
       success: true,
-      data: {
-        amount,
-        fromCurrency,
-        toCurrency,
-        convertedAmount: parseFloat(convertedAmount.toFixed(2)),
-        rate: parseFloat((toRate / fromRate).toFixed(4)),
-        message: `${amount} ${fromCurrency} = ${convertedAmount.toFixed(2)} ${toCurrency}`
-      }
-    };
+      amount,
+      fromCurrency,
+      toCurrency,
+      convertedAmount: parseFloat(convertedAmount.toFixed(2)),
+      rate: parseFloat((toRate / fromRate).toFixed(4)),
+      message: `${amount} ${fromCurrency} = ${convertedAmount.toFixed(2)} ${toCurrency}`
+    });
   }
 };
 
 // Shopping cart tool that uses memory
-const shoppingCartTool = {
-  name: 'manageCart',
-  description: 'Manage shopping cart items in memory',
-  parameters: [
-    {
-      name: 'action',
-      type: 'string' as const,
-      description: 'Action to perform: add, remove, list, total',
-      required: true
-    },
-    {
-      name: 'item',
-      type: 'object' as const,
-      description: 'Item details for add/remove actions',
-      required: false
-    }
-  ],
-  execute: async (params: any, context: any) => {
-    const { action, item } = params;
-    
+const shoppingCartTool: Tool<
+  { action: string; item?: any },
+  SessionMemoryContext
+> = {
+  schema: {
+    name: 'manageCart',
+    description: 'Manage shopping cart items in memory',
+    parameters: z.object({
+      action: z.string().describe('Action to perform: add, remove, list, total'),
+      item: z.any().optional().describe('Item details for add/remove actions')
+    }) as z.ZodType<{ action: string; item?: any }>
+  },
+  needsApproval: false,
+  execute: async ({ action, item }, context) => {
     // Recall cart from memory
-    const recallTool = recallMemoryTool();
-    const cartResult = await recallTool.execute(
+    const cartResult = await recallMemoryTool.execute(
       { key: 'shopping_cart', defaultValue: [] },
       context
     );
     
-    let cart = (cartResult.data as any)?.value || [];
+    let cart = JSON.parse(cartResult as string).value || [];
     
     switch (action) {
       case 'add':
         if (!item) {
-          return { success: false, error: 'Item required for add action' };
+          return JSON.stringify({ success: false, error: 'Item required for add action' });
         }
         cart.push({ ...item, id: Date.now() });
         
         // Store updated cart
-        const storeTool = storeMemoryTool();
-        await storeTool.execute(
+        await storeMemoryTool.execute(
           { key: 'shopping_cart', value: cart, overwrite: true },
           context
         );
         
-        return {
+        return JSON.stringify({
           success: true,
-          data: {
-            action: 'added',
-            item,
-            cartSize: cart.length,
-            message: `Added ${item.name} to cart`
-          }
-        };
+          action: 'added',
+          item,
+          cartSize: cart.length,
+          message: `Added ${item.name} to cart`
+        });
         
       case 'remove':
         if (!item || !item.id) {
-          return { success: false, error: 'Item ID required for remove action' };
+          return JSON.stringify({ success: false, error: 'Item ID required for remove action' });
         }
         cart = cart.filter((i: any) => i.id !== item.id);
         
         // Store updated cart
-        const storeToolRemove = storeMemoryTool();
-        await storeToolRemove.execute(
+        await storeMemoryTool.execute(
           { key: 'shopping_cart', value: cart, overwrite: true },
           context
         );
         
-        return {
+        return JSON.stringify({
           success: true,
-          data: {
-            action: 'removed',
-            itemId: item.id,
-            cartSize: cart.length,
-            message: `Removed item from cart`
-          }
-        };
+          action: 'removed',
+          itemId: item.id,
+          cartSize: cart.length,
+          message: `Removed item from cart`
+        });
         
       case 'list':
-        return {
+        return JSON.stringify({
           success: true,
-          data: {
-            action: 'list',
-            items: cart,
-            cartSize: cart.length,
-            message: cart.length > 0 
-              ? `Cart contains ${cart.length} items`
-              : 'Cart is empty'
-          }
-        };
+          action: 'list',
+          items: cart,
+          cartSize: cart.length,
+          message: cart.length > 0 
+            ? `Cart contains ${cart.length} items`
+            : 'Cart is empty'
+        });
         
       case 'total':
         // Calculate total in preferred currency
-        const currencyResult = await recallTool.execute(
+        const currencyResult = await recallMemoryTool.execute(
           { key: 'preferred_currency', defaultValue: 'USD' },
           context
         );
-        const currency = (currencyResult.data as any)?.value || 'USD';
+        const currency = JSON.parse(currencyResult as string).value || 'USD';
         
         const total = cart.reduce((sum: number, item: any) => {
           // Convert item price to preferred currency if needed
@@ -200,19 +165,17 @@ const shoppingCartTool = {
           return sum + (item.price || 0);
         }, 0);
         
-        return {
+        return JSON.stringify({
           success: true,
-          data: {
-            action: 'total',
-            total: parseFloat(total.toFixed(2)),
-            currency,
-            itemCount: cart.length,
-            message: `Total: ${total.toFixed(2)} ${currency}`
-          }
-        };
+          action: 'total',
+          total: parseFloat(total.toFixed(2)),
+          currency,
+          itemCount: cart.length,
+          message: `Total: ${total.toFixed(2)} ${currency}`
+        });
         
       default:
-        return { success: false, error: `Unknown action: ${action}` };
+        return JSON.stringify({ success: false, error: `Unknown action: ${action}` });
     }
   }
 };
@@ -221,93 +184,59 @@ async function runExample() {
   console.log('🧠 Session Memory Tool Example\n');
   console.log('=' .repeat(50));
   
-  // Create a mock agent config (no need for full agent creation for this demo)
-  const agentConfig = {
-    name: 'MemoryAgent',
-    model: Model.CLAUDE_3_5_HAIKU_20241022,
-    instruction: `You are a helpful assistant with memory capabilities.
-    You can remember user preferences and use them in future interactions.
-    You help with currency conversion and shopping using stored preferences.`,
-    description: 'Agent that demonstrates session memory capabilities',
-    tools: [
-      storeMemoryTool(),
-      recallMemoryTool(),
-      listMemoryKeysTool(),
-      deleteMemoryTool(),
-      clearMemoryTool(),
-      currencyConverterTool,
-      shoppingCartTool
-    ]
-  };
-  
-  // Simulate a session
-  const mockContext = {
-    agent: agentConfig as any,
-    session: {
-      id: 'demo-session-001',
-      appName: 'memory-demo',
-      userId: 'user123',
-      messages: [],
-      artifacts: {},
-      metadata: {
-        created: new Date()
-      }
-    },
-    message: {
-      role: 'user' as const,
-      parts: []
-    },
-    actions: {}
+  // Simulate a session context
+  const context: SessionMemoryContext = {
+    sessionId: 'demo-session-001',
+    userId: 'user123'
   };
   
   console.log('\n📝 Step 1: Store user preferences');
   console.log('-'.repeat(50));
   
   // Store currency preference
-  const storeToolInstance = storeMemoryTool();
-  const storeResult1 = await storeToolInstance.execute(
+  let result = await storeMemoryTool.execute(
     { key: 'preferred_currency', value: 'INR' },
-    mockContext
+    context
   );
-  console.log('Stored currency preference:', (storeResult1.data as any).message);
+  console.log('Stored currency preference:', JSON.parse(result as string).message);
   
   // Store user name
-  const storeResult2 = await storeToolInstance.execute(
+  result = await storeMemoryTool.execute(
     { key: 'user_name', value: 'Alice' },
-    mockContext
+    context
   );
-  console.log('Stored user name:', (storeResult2.data as any).message);
+  console.log('Stored user name:', JSON.parse(result as string).message);
   
   // Store location
-  const storeResult3 = await storeToolInstance.execute(
+  result = await storeMemoryTool.execute(
     { key: 'user_location', value: { city: 'Mumbai', country: 'India' } },
-    mockContext
+    context
   );
-  console.log('Stored user location:', (storeResult3.data as any).message);
+  console.log('Stored user location:', JSON.parse(result as string).message);
   
   console.log('\n📝 Step 2: List stored keys');
   console.log('-'.repeat(50));
   
-  const listToolInstance = listMemoryKeysTool();
-  const listResult = await listToolInstance.execute({}, mockContext);
-  console.log('Keys in memory:', (listResult.data as any).keys);
+  result = await listMemoryKeysTool.execute({}, context);
+  const listData = JSON.parse(result as string);
+  console.log('Keys in memory:', listData.keys);
   
   console.log('\n📝 Step 3: Use preferences in currency conversion');
   console.log('-'.repeat(50));
   
   // Convert without specifying target currency (will use stored preference)
-  const conversionResult1 = await currencyConverterTool.execute(
+  result = await currencyConverterTool.execute(
     { amount: 100, fromCurrency: 'USD' },
-    mockContext
+    context
   );
-  console.log('Conversion result:', (conversionResult1.data as any).message);
+  console.log('Conversion result:', JSON.parse(result as string).message);
   
   // Convert with explicit target currency
-  const conversionResult2 = await currencyConverterTool.execute(
+  result = await currencyConverterTool.execute(
     { amount: 50, fromCurrency: 'EUR', toCurrency: 'JPY' },
-    mockContext
+    context
   );
-  console.log('Conversion result:', (conversionResult2.data as any).message);
+  console.log('Conversion result:', JSON.parse(result as string).message);
   
   console.log('\n📝 Step 4: Shopping cart with memory');
   console.log('-'.repeat(50));
@@ -318,7 +247,7 @@ async function runExample() {
       action: 'add', 
       item: { name: 'Laptop', price: 999, currency: 'USD' }
     },
-    mockContext
+    context
   );
   console.log('Added laptop to cart');
   
@@ -327,86 +256,82 @@ async function runExample() {
       action: 'add', 
       item: { name: 'Mouse', price: 25, currency: 'USD' }
     },
-    mockContext
+    context
   );
   console.log('Added mouse to cart');
   
   // List cart items
-  const cartListResult = await shoppingCartTool.execute(
+  result = await shoppingCartTool.execute(
     { action: 'list' },
-    mockContext
+    context
   );
-  console.log('Cart items:', (cartListResult.data as any).items);
+  const cartData = JSON.parse(result as string);
+  console.log('Cart items:', cartData.items);
   
   // Get total in preferred currency
-  const cartTotalResult = await shoppingCartTool.execute(
+  result = await shoppingCartTool.execute(
     { action: 'total' },
-    mockContext
+    context
   );
-  console.log('Cart total:', (cartTotalResult.data as any).message);
+  console.log('Cart total:', JSON.parse(result as string).message);
   
   console.log('\n📝 Step 5: Recall specific values');
   console.log('-'.repeat(50));
   
-  const recallToolInstance = recallMemoryTool();
-  
   // Recall user name
-  const nameResult = await recallToolInstance.execute(
+  result = await recallMemoryTool.execute(
     { key: 'user_name' },
-    mockContext
+    context
   );
-  console.log('Recalled name:', (nameResult.data as any).value);
+  console.log('Recalled name:', JSON.parse(result as string).value);
   
   // Recall location
-  const locationResult = await recallToolInstance.execute(
+  result = await recallMemoryTool.execute(
     { key: 'user_location' },
-    mockContext
+    context
   );
-  console.log('Recalled location:', (locationResult.data as any).value);
+  console.log('Recalled location:', JSON.parse(result as string).value);
   
   // Try to recall non-existent key with default
-  const missingResult = await recallToolInstance.execute(
+  result = await recallMemoryTool.execute(
     { key: 'theme', defaultValue: 'light' },
-    mockContext
+    context
   );
-  console.log('Recalled theme (with default):', (missingResult.data as any).value);
+  console.log('Recalled theme (with default):', JSON.parse(result as string).value);
   
   console.log('\n📝 Step 6: Delete a key');
   console.log('-'.repeat(50));
   
-  const deleteToolInstance = deleteMemoryTool();
-  const deleteResult = await deleteToolInstance.execute(
+  result = await deleteMemoryTool.execute(
     { key: 'user_location' },
-    mockContext
+    context
   );
-  console.log('Delete result:', (deleteResult.data as any).message);
+  console.log('Delete result:', JSON.parse(result as string).message);
   
   // List keys after deletion
-  const listResult2 = await listToolInstance.execute({}, mockContext);
-  console.log('Keys after deletion:', (listResult2.data as any).keys);
+  result = await listMemoryKeysTool.execute({}, context);
+  console.log('Keys after deletion:', JSON.parse(result as string).keys);
   
   console.log('\n📝 Step 7: Clear all memory (with confirmation)');
   console.log('-'.repeat(50));
   
-  const clearToolInstance = clearMemoryTool();
-  
   // First attempt without confirmation
-  const clearResult1 = await clearToolInstance.execute(
+  result = await clearMemoryTool.execute(
     { confirm: false },
-    mockContext
+    context
   );
-  console.log('Clear without confirmation:', (clearResult1.data as any).message);
+  console.log('Clear without confirmation:', JSON.parse(result as string).message);
   
   // Clear with confirmation
-  const clearResult2 = await clearToolInstance.execute(
+  result = await clearMemoryTool.execute(
     { confirm: true },
-    mockContext
+    context
   );
-  console.log('Clear with confirmation:', (clearResult2.data as any).message);
+  console.log('Clear with confirmation:', JSON.parse(result as string).message);
   
   // List keys after clearing
-  const listResult3 = await listToolInstance.execute({}, mockContext);
-  console.log('Keys after clearing:', (listResult3.data as any).keys);
+  result = await listMemoryKeysTool.execute({}, context);
+  console.log('Keys after clearing:', JSON.parse(result as string).keys);
   
   console.log('\n' + '='.repeat(50));
   console.log('✅ Session Memory Tool Example Complete!');
