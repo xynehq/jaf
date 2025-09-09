@@ -1,26 +1,9 @@
 #!/usr/bin/env npx tsx
 
-import { createUnitConversionTool, getSupportedUnits } from '../src/adk/tools/unitConversionTool';
-import { ToolContext } from '../src/adk/types';
+import { unitConversionTool, getSupportedUnits, performConversion } from '../src/tools/unitConversionTool';
 
 async function demonstrateUnitConversion() {
   console.log('=== Unit Conversion Tool Demo ===\n');
-  
-  // Create the tool
-  const unitConversionTool = createUnitConversionTool();
-  
-  // Create a mock context
-  const context: ToolContext = {
-    agent: {
-      id: 'demo-agent',
-      name: 'Unit Conversion Demo Agent',
-      role: 'demonstrator'
-    },
-    session: {
-      id: 'demo-session',
-      startTime: new Date()
-    }
-  };
   
   // Display supported units
   const supportedUnits = getSupportedUnits();
@@ -66,23 +49,15 @@ async function demonstrateUnitConversion() {
       console.log(`📏 ${demo.description}`);
       console.log(`   Input: ${demo.value} ${demo.fromUnit}`);
       
-      const result = await unitConversionTool.execute(
-        {
-          value: demo.value,
-          fromUnit: demo.fromUnit,
-          toUnit: demo.toUnit
-        },
-        context
-      );
+      const result = await unitConversionTool.execute({
+        value: demo.value,
+        fromUnit: demo.fromUnit,
+        toUnit: demo.toUnit
+      });
       
-      if (result.success && result.data) {
-        const data = result.data as any;
-        console.log(`   Output: ${data.convertedValue.toFixed(2)} ${data.toUnit}`);
-        if (data.formula) {
-          console.log(`   Method: ${data.formula}`);
-        }
-      } else {
-        console.log(`   Error: ${result.error}`);
+      console.log(`   Output: ${result.convertedValue.toFixed(2)} ${result.toUnit}`);
+      if (result.formula) {
+        console.log(`   Method: ${result.formula}`);
       }
       console.log();
     } catch (error) {
@@ -103,21 +78,17 @@ async function demonstrateUnitConversion() {
       console.log(`🚫 ${errorCase.description}`);
       console.log(`   Attempting: ${errorCase.value} ${errorCase.fromUnit} → ${errorCase.toUnit}`);
       
-      const result = await unitConversionTool.execute(
-        {
-          value: errorCase.value,
-          fromUnit: errorCase.fromUnit,
-          toUnit: errorCase.toUnit
-        },
-        context
-      );
+      await unitConversionTool.execute({
+        value: errorCase.value,
+        fromUnit: errorCase.fromUnit,
+        toUnit: errorCase.toUnit
+      });
       
-      if (!result.success) {
-        console.log(`   Expected error: ${result.error}`);
-      }
+      console.log('   Unexpected: No error thrown');
       console.log();
     } catch (error) {
-      console.error(`   Caught error: ${error instanceof Error ? error.message : 'Unknown error'}\n`);
+      console.log(`   Expected error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.log();
     }
   }
   
@@ -131,15 +102,22 @@ async function demonstrateUnitConversion() {
   console.log('🚀 Advanced Usage Example:\n');
   console.log('```typescript');
   console.log('// Import the tool');
-  console.log("import { createUnitConversionTool } from './unitConversionTool';");
+  console.log("import { unitConversionTool } from '../src/tools/unitConversionTool';");
   console.log('');
-  console.log('// Create and use the tool');
-  console.log('const converter = createUnitConversionTool();');
-  console.log('const result = await converter.execute({');
+  console.log('// Use the tool directly');
+  console.log('const result = await unitConversionTool.execute({');
   console.log('  value: 100,');
   console.log("  fromUnit: 'USD',");
   console.log("  toUnit: 'EUR'");
-  console.log('}, context);');
+  console.log('});');
+  console.log('');
+  console.log('// Or use the performConversion function');
+  console.log("import { performConversion } from '../src/tools/unitConversionTool';");
+  console.log('const result = await performConversion({');
+  console.log('  value: 100,');
+  console.log("  fromUnit: 'kg',");
+  console.log("  toUnit: 'lbs'");
+  console.log('});');
   console.log('```\n');
 }
 

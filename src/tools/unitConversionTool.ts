@@ -1,23 +1,3 @@
-import { 
-  Tool, 
-  ToolParameter, 
-  ToolContext, 
-  ToolResult,
-  ToolParameterType
-} from '../types';
-import { createFunctionTool } from './index';
-
-export interface ConversionUnit {
-  category: 'weight' | 'temperature' | 'length' | 'volume' | 'area' | 'currency';
-  unit: string;
-  toBase: (value: number) => number;
-  fromBase: (value: number) => number;
-}
-
-export interface CurrencyRates {
-  [currency: string]: number;
-}
-
 export interface ConversionRequest {
   value: number;
   fromUnit: string;
@@ -30,6 +10,17 @@ export interface ConversionResult {
   fromUnit: string;
   toUnit: string;
   formula?: string;
+}
+
+interface ConversionUnit {
+  category: 'weight' | 'temperature' | 'length' | 'volume' | 'area' | 'currency';
+  unit: string;
+  toBase: (value: number) => number;
+  fromBase: (value: number) => number;
+}
+
+interface CurrencyRates {
+  [currency: string]: number;
 }
 
 const CONVERSION_UNITS: ConversionUnit[] = [
@@ -207,62 +198,45 @@ export async function performConversion(request: ConversionRequest): Promise<Con
   };
 }
 
-export function createUnitConversionTool(): Tool {
-  return createFunctionTool({
-    name: 'unitConversion',
-    description: 'Convert between various units of measurement including weight, temperature, length, volume, area, and currencies',
-    execute: async (params: Record<string, unknown>, context: ToolContext): Promise<ConversionResult> => {
-      const { value, fromUnit, toUnit } = params as ConversionRequest;
-      
-      if (typeof value !== 'number' || isNaN(value)) {
-        throw new Error('Value must be a valid number');
-      }
-      
-      if (!fromUnit || !toUnit) {
-        throw new Error('Both fromUnit and toUnit are required');
-      }
-      
-      return await performConversion({ value, fromUnit, toUnit });
-    },
-    parameters: [
-      {
-        name: 'value',
-        type: ToolParameterType.NUMBER,
-        description: 'The numeric value to convert',
-        required: true
-      },
-      {
-        name: 'fromUnit',
-        type: ToolParameterType.STRING,
-        description: 'The unit to convert from (e.g., kg, lb, C, F, USD, EUR)',
-        required: true
-      },
-      {
-        name: 'toUnit',
-        type: ToolParameterType.STRING,
-        description: 'The unit to convert to',
-        required: true
-      }
-    ],
-    metadata: {
-      source: 'function' as any,
-      version: '1.0.0',
-      tags: ['conversion', 'units', 'currency', 'measurement'],
-      capabilities: {
-        weight: ['kg', 'g', 'mg', 'lb', 'oz', 'ton'],
-        temperature: ['C', 'F', 'K'],
-        length: ['m', 'km', 'cm', 'mm', 'mi', 'yd', 'ft', 'in'],
-        volume: ['L', 'mL', 'gal', 'qt', 'pt', 'cup', 'fl oz'],
-        area: ['m²', 'km²', 'cm²', 'ft²', 'in²', 'acre', 'hectare'],
-        currency: CURRENCY_CODES
-      }
-    }
-  });
-}
-
 export function getSupportedUnits(): { static: string[], currencies: string[] } {
   return {
     static: CONVERSION_UNITS.map(u => u.unit),
     currencies: CURRENCY_CODES
   };
 }
+
+export const unitConversionTool = {
+  name: 'unitConversion',
+  description: 'Convert between various units of measurement including weight, temperature, length, volume, area, and currencies',
+  
+  parameters: {
+    type: 'object',
+    properties: {
+      value: {
+        type: 'number',
+        description: 'The numeric value to convert'
+      },
+      fromUnit: {
+        type: 'string',
+        description: 'The unit to convert from (e.g., kg, lb, C, F, USD, EUR)'
+      },
+      toUnit: {
+        type: 'string',
+        description: 'The unit to convert to'
+      }
+    },
+    required: ['value', 'fromUnit', 'toUnit']
+  },
+  
+  execute: async (params: ConversionRequest): Promise<ConversionResult> => {
+    if (typeof params.value !== 'number' || isNaN(params.value)) {
+      throw new Error('Value must be a valid number');
+    }
+    
+    if (!params.fromUnit || !params.toUnit) {
+      throw new Error('Both fromUnit and toUnit are required');
+    }
+    
+    return await performConversion(params);
+  }
+};
