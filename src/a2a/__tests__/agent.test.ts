@@ -329,7 +329,8 @@ describe('A2A Agent', () => {
         messages: [],
         currentAgentName: 'TestAgent',
         context: {},
-        turnCount: 0
+        turnCount: 0,
+        approvals: new Map()
       };
       const instructions = jafAgent.instructions(mockRunState);
 

@@ -26,7 +26,7 @@ import {
 // ========== Tool Creation ==========
 
 export const createFunctionTool = (config: FunctionToolConfig): Tool => {
-  const { name, description, execute, parameters = [], metadata } = config;
+  const { name, description, execute, parameters = [], metadata, needsApproval } = config;
   
   const toolMetadata: ToolMetadata = {
     source: ToolSource.FUNCTION,
@@ -67,7 +67,8 @@ export const createFunctionTool = (config: FunctionToolConfig): Tool => {
     description,
     parameters,
     execute: executor,
-    metadata: toolMetadata
+    metadata: toolMetadata,
+    needsApproval,
   };
 };
 

@@ -136,7 +136,8 @@ export const transformToRunState = (
   messages: state.messages,
   currentAgentName: agentName,
   context,
-  turnCount: 0
+  turnCount: 0,
+  approvals: new Map(),
 });
 
 // Pure async generator function to process agent query
@@ -166,13 +167,21 @@ export const processAgentQuery = async function* (
         newState: finalState,
         timestamp: new Date().toISOString()
       };
-    } else {
+    } else if (result.outcome.status === 'error') {
       const finalState = updateStateFromRunResult(newState, result.outcome);
       yield {
         isTaskComplete: true,
         content: `Error: ${JSON.stringify(result.outcome.error)}`,
         newState: finalState,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+      };
+    } else {
+      const finalState = updateStateFromRunResult(newState, result.outcome);
+      yield {
+        isTaskComplete: true,
+        content: `Interrupted`,
+        newState: finalState,
+        timestamp: new Date().toISOString(),
       };
     }
   } catch (error) {
