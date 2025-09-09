@@ -116,7 +116,7 @@ export type RunState<Ctx> = {
   readonly currentAgentName: string;
   readonly context: Readonly<Ctx>;
   readonly turnCount: number;
-  readonly approvals: ReadonlyMap<string, ApprovalValue>;
+  readonly approvals?: ReadonlyMap<string, ApprovalValue>;
 };
 
 export type JAFError =

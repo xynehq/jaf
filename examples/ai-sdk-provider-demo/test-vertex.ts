@@ -92,7 +92,7 @@ async function main() {
 
         try {
           // Use safe math evaluator instead of eval
-          const result = "4";
+          const result = eval(sanitized); // In production, replace with a proper math parser/evaluator
           return ToolResponse.success(`${args.expression} = ${result}`, {
             originalExpression: args.expression,
             result,
@@ -160,7 +160,7 @@ async function main() {
       process.exit(1);
     }
   } else {
-    console.error("[vertex-ai-provider-demo] FAIL:", result.outcome.error);
+    console.error("[vertex-ai-provider-demo] FAIL:", result.outcome.status);
     process.exit(1);
   }
 }
