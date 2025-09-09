@@ -44,22 +44,21 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
       },
       enableOfflineQueue: true,
       maxRetriesPerRequest: 3,
-      lazyConnect: false,
+      lazyConnect: process.env.NODE_ENV === 'test',
       connectTimeout: 10000,
       commandTimeout: 5000
     });
     
-    // Handle connection events
-    redis.on('error', (err: any) => {
-      console.error('[ADK:Sessions] Redis connection error:', err);
-    });
-    
-    redis.on('connect', () => {
-      console.log('[ADK:Sessions] Connected to Redis');
-    });
-    
     // Only log Redis events if not in test environment
     if (process.env.NODE_ENV !== 'test') {
+      // Handle connection events
+      redis.on('error', (err: any) => {
+        console.error('[ADK:Sessions] Redis connection error:', err);
+      });
+      
+      redis.on('connect', () => {
+        console.log('[ADK:Sessions] Connected to Redis');
+      });
       redis.on('ready', () => {
         console.log('[ADK:Sessions] Redis ready for commands');
       });
@@ -142,7 +141,10 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
     return redis.multi();
   };
   
-  return {
+  const provider = {
+    // Expose redis client for cleanup utilities
+    _redis: redis,
+    
     createSession: async (context: SessionContext): Promise<Session> => {
       const session = createSession(
         context.appName,
@@ -264,6 +266,8 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
       }
     }
   };
+  
+  return provider;
 };
 
 // Additional utility functions

@@ -6,15 +6,26 @@ export interface ServerConfig<Ctx> {
   port?: number;
   host?: string;
   cors?: boolean;
+  maxBodySize?: number;
   runConfig: RunConfig<Ctx>;
   agentRegistry: Map<string, Agent<Ctx, any>>;
   defaultMemoryProvider?: MemoryProvider;
 }
 
 // Request/Response schemas
+export const attachmentSchema = z.object({
+  kind: z.enum(['image', 'document', 'file']),
+  mimeType: z.string().optional(),
+  name: z.string().optional(),
+  url: z.string().url().optional(),
+  data: z.string().optional(),
+  format: z.string().optional()
+});
+
 export const httpMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
-  content: z.string()
+  content: z.string(),
+  attachments: z.array(attachmentSchema).optional()
 });
 
 // Approval message schema for HITL

@@ -16,17 +16,44 @@ export type ToolCall = {
   readonly id: string;
   readonly type: 'function';
   readonly function: {
-    readonly name:string;
+    readonly name: string;
     readonly arguments: string;
   };
 };
 
+export type Attachment = {
+  readonly kind: 'image' | 'document' | 'file';
+  readonly mimeType?: string; // e.g. image/png, application/pdf
+  readonly name?: string;     // Optional filename
+  readonly url?: string;      // Remote URL or data URL
+  readonly data?: string;     // Base64 without data: prefix
+  readonly format?: string;   // Optional short format like 'pdf', 'txt'
+  readonly useLiteLLMFormat?: boolean; // Use LiteLLM native file format instead of text extraction
+};
+
+export type MessageContentPart = 
+  | { readonly type: 'text'; readonly text: string }
+  | { readonly type: 'image_url'; readonly image_url: { readonly url: string; readonly detail?: 'low' | 'high' | 'auto' } }
+  | { readonly type: 'file'; readonly file: { readonly file_id: string; readonly format?: string } };
+
 export type Message = {
   readonly role: 'user' | 'assistant' | 'tool';
-  readonly content: string;
+  readonly content: string | readonly MessageContentPart[];
+  readonly attachments?: readonly Attachment[]; // Optional structured attachments
   readonly tool_call_id?: string;
   readonly tool_calls?: readonly ToolCall[];
 };
+
+export function getTextContent(content: string | readonly MessageContentPart[]): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  
+  return content
+    .filter(part => part.type === 'text')
+    .map(part => (part as { text: string }).text)
+    .join(' ');
+}
 
 export type ModelConfig = {
   readonly name?: string;
@@ -89,7 +116,7 @@ export type RunState<Ctx> = {
   readonly currentAgentName: string;
   readonly context: Readonly<Ctx>;
   readonly turnCount: number;
-  readonly approvals: ReadonlyMap<string, ApprovalValue>;
+  readonly approvals?: ReadonlyMap<string, ApprovalValue>;
 };
 
 export type JAFError =
@@ -162,6 +189,7 @@ export type CompletionStreamChunk = {
 };
 
 export interface ModelProvider<Ctx> {
+  isAiSdkProvider?: boolean;
   getCompletion: (
     state: Readonly<RunState<Ctx>>,
     agent: Readonly<Agent<Ctx, any>>,

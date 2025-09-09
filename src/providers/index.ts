@@ -3,4 +3,12 @@
 
 export * from './model';
 export * from './mcp';
+export {
+  createAiSdkProvider,
+  type AiSdkFunctionTool,
+  type AiSdkChatMessageParam,
+  type AiSdkChatRequest,
+  type AiSdkChatResponse,
+  type AiSdkClient,
+} from './ai-sdk';
 
