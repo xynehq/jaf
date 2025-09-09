@@ -400,23 +400,7 @@ async function runInternal<Ctx, Out>(
     data: llmCallData
   });
 
-  let llmResponse: {
-    message?: {
-      content?: string | null;
-      tool_calls?: Array<{
-        id: string;
-        type: 'function';
-        function: {
-          name: string;
-          arguments: string;
-        };
-      }>;
-    };
-    usage?: any;
-    model?: string;
-    id?: string;
-    created?: number;
-  };
+  let llmResponse: any;
   let streamingUsed = false;
   let assistantEventStreamed = false;
 

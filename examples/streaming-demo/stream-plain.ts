@@ -72,6 +72,7 @@ async function main() {
     currentAgentName: agent.name,
     context: { userId: 'demo' },
     turnCount: 0,
+    approvals: new Map()
   };
 
   const agentRegistry = new Map<string, Agent<DemoCtx, any>>([[agent.name, agent]]);
