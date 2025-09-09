@@ -93,9 +93,10 @@ export const makeLiteLLMProvider = <Ctx>(
         content: agent.instructions(state)
       };
 
+      const convertedMessages = await Promise.all(state.messages.map(convertMessage));
       const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         systemMessage,
-        ...state.messages.map(convertMessage)
+        ...convertedMessages
       ];
 
       const tools = agent.tools?.map(t => ({
