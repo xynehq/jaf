@@ -1,274 +1,172 @@
+#!/usr/bin/env tsx
 /**
- * Dictionary Tool Example
+ * Dictionary Tool Example - Core Implementation
  * 
- * Demonstrates how to use the dictionary tool for looking up
- * payment and fintech terms with the JAF framework.
+ * Demonstrates using the core dictionary tool with the JAF framework
  */
 
-import { createAgent, createSession, runAgent } from '../src/adk/agents';
-import { Model } from '../src/adk/models';
+import { createEngine } from '../src/core/engine';
+import { createTraceId, createRunId } from '../src/core/types';
 import { 
-  createDictionaryTool, 
-  createBatchDictionaryTool,
-  createListCategoriesTool,
-  createSearchGlossaryTool 
-} from '../src/adk/tools/dictionaryTool';
+  dictionaryTool, 
+  batchDictionaryTool,
+  searchGlossaryTool,
+  listCategoriesTool 
+} from '../src/tools/dictionaryTool';
 
-// Example 1: Simple term lookup
-async function exampleSimpleLookup() {
-  console.log('\n=== Example 1: Simple Term Lookup ===\n');
+async function exampleDictionaryLookup() {
+  console.log('╔════════════════════════════════════════════════════════════════╗');
+  console.log('║      Payment Dictionary Tool - Core Implementation Demo        ║');
+  console.log('╚════════════════════════════════════════════════════════════════╝\n');
   
-  // Create the dictionary tool
-  const dictionaryTool = createDictionaryTool();
-  
-  // Create an agent with the dictionary tool
-  const agent = createAgent({
-    name: 'PaymentExpert',
-    model: Model.GEMINI_15_FLASH,
-    instruction: 'You are a payment industry expert. Help users understand payment terms and concepts.',
-    tools: [dictionaryTool]
+  // Create an engine with dictionary tools
+  const engine = createEngine({
+    model: 'gpt-4o-mini',
+    tools: [dictionaryTool, batchDictionaryTool, searchGlossaryTool, listCategoriesTool]
   });
   
-  // Create a session
-  const session = createSession('dictionary-demo', 'user123');
+  const traceId = createTraceId('dict-demo-' + Date.now());
+  const runId = createRunId('run-' + Date.now());
   
-  // Example: Look up "UPI collect"
-  console.log('Q: What is UPI collect?');
-  const response1 = await runAgent(
-    agent,
-    session,
-    'What is UPI collect?'
-  );
-  console.log('A:', response1.content);
-  
-  // Example: Look up "two-factor authentication"  
-  console.log('\nQ: Explain two-factor authentication');
-  const response2 = await runAgent(
-    agent,
-    session,
-    'Explain two-factor authentication'
-  );
-  console.log('A:', response2.content);
-}
-
-// Example 2: Contextual explanations
-async function exampleContextualLookup() {
-  console.log('\n=== Example 2: Contextual Explanations ===\n');
-  
-  const dictionaryTool = createDictionaryTool();
-  
-  const agent = createAgent({
-    name: 'ImplementationHelper',
-    model: Model.GEMINI_15_FLASH,
-    instruction: 'Help developers understand payment terms in their implementation context.',
-    tools: [dictionaryTool]
+  // Example 1: Ask about UPI collect
+  console.log('═══ Example 1: What is UPI collect? ═══\n');
+  const response1 = await engine({
+    messages: [
+      { 
+        role: 'user', 
+        content: 'What is UPI collect? Please use the dictionary tool to look it up.' 
+      }
+    ],
+    context: {},
+    traceId,
+    runId
   });
   
-  const session = createSession('context-demo', 'dev456');
+  if (response1.type === 'success') {
+    console.log('Assistant:', response1.content);
+  }
   
-  // Look up term with context
-  console.log('Q: What is tokenization in the context of storing card details?');
-  const response = await runAgent(
-    agent,
-    session,
-    'What is tokenization in the context of storing card details for recurring payments?'
-  );
-  console.log('A:', response.content);
-}
-
-// Example 3: Batch lookups
-async function exampleBatchLookup() {
-  console.log('\n=== Example 3: Batch Term Lookups ===\n');
-  
-  const batchTool = createBatchDictionaryTool();
-  
-  const agent = createAgent({
-    name: 'OnboardingAssistant',
-    model: Model.GEMINI_15_FLASH,
-    instruction: 'Help new team members understand multiple payment terms quickly.',
-    tools: [batchTool]
+  // Example 2: Explain two-factor authentication
+  console.log('\n═══ Example 2: Two-Factor Authentication ═══\n');
+  const response2 = await engine({
+    messages: [
+      { 
+        role: 'user', 
+        content: 'Look up "two-factor authentication" in the dictionary and explain it.' 
+      }
+    ],
+    context: {},
+    traceId,
+    runId: createRunId('run-2fa-' + Date.now())
   });
   
-  const session = createSession('batch-demo', 'new789');
+  if (response2.type === 'success') {
+    console.log('Assistant:', response2.content);
+  }
   
-  console.log('Q: Explain these terms: PSP, MDR, 3DS, KYC');
-  const response = await runAgent(
-    agent,
-    session,
-    'Please explain these payment terms I need to know: PSP, MDR, 3DS, KYC'
-  );
-  console.log('A:', response.content);
-}
-
-// Example 4: Searching the glossary
-async function exampleSearch() {
-  console.log('\n=== Example 4: Searching Glossary ===\n');
-  
-  const searchTool = createSearchGlossaryTool();
-  const dictionaryTool = createDictionaryTool();
-  
-  const agent = createAgent({
-    name: 'SearchAssistant',
-    model: Model.GEMINI_15_FLASH,
-    instruction: 'Help users find and understand relevant payment terms.',
-    tools: [searchTool, dictionaryTool]
+  // Example 3: Batch lookup
+  console.log('\n═══ Example 3: Multiple Terms ═══\n');
+  const response3 = await engine({
+    messages: [
+      { 
+        role: 'user', 
+        content: 'Look up these payment terms for me: PSP, MDR, and 3DS' 
+      }
+    ],
+    context: {},
+    traceId,
+    runId: createRunId('run-batch-' + Date.now())
   });
   
-  const session = createSession('search-demo', 'search101');
+  if (response3.type === 'success') {
+    console.log('Assistant:', response3.content);
+  }
   
-  console.log('Q: Show me all terms related to "payment methods"');
-  const response = await runAgent(
-    agent,
-    session,
-    'What payment methods are available in the glossary?'
-  );
-  console.log('A:', response.content);
-}
-
-// Example 5: Category exploration
-async function exampleCategories() {
-  console.log('\n=== Example 5: Exploring Categories ===\n');
-  
-  const categoriesTool = createListCategoriesTool();
-  const searchTool = createSearchGlossaryTool();
-  
-  const agent = createAgent({
-    name: 'CategoryExplorer',
-    model: Model.GEMINI_15_FLASH,
-    instruction: 'Help users explore payment terms by category.',
-    tools: [categoriesTool, searchTool]
+  // Example 4: Search for terms
+  console.log('\n═══ Example 4: Search for Security Terms ═══\n');
+  const response4 = await engine({
+    messages: [
+      { 
+        role: 'user', 
+        content: 'Search the glossary for terms related to "security"' 
+      }
+    ],
+    context: {},
+    traceId,
+    runId: createRunId('run-search-' + Date.now())
   });
   
-  const session = createSession('category-demo', 'cat202');
+  if (response4.type === 'success') {
+    console.log('Assistant:', response4.content);
+  }
   
-  console.log('Q: What categories of payment terms are available?');
-  const response = await runAgent(
-    agent,
-    session,
-    'Show me all the categories of payment terms you have'
-  );
-  console.log('A:', response.content);
-}
-
-// Example 6: Direct tool execution (without agent)
-async function exampleDirectToolUse() {
-  console.log('\n=== Example 6: Direct Tool Execution ===\n');
-  
-  const dictionaryTool = createDictionaryTool();
-  
-  // Mock context for direct execution
-  const mockContext = {
-    agent: {} as any,
-    session: {} as any,
-    message: {} as any,
-    actions: {}
-  };
-  
-  // Look up UPI
-  console.log('Looking up "UPI" directly:');
-  const upiResult = await dictionaryTool.execute(
-    { term: 'UPI', detailed: true },
-    mockContext
-  );
-  console.log(JSON.stringify(upiResult, null, 2));
-  
-  // Look up with context
-  console.log('\nLooking up "3DS" with context:');
-  const threedsResult = await dictionaryTool.execute(
-    { 
-      term: '3DS', 
-      context: 'implementing checkout flow for European customers',
-      detailed: true 
-    },
-    mockContext
-  );
-  console.log(JSON.stringify(threedsResult, null, 2));
-}
-
-// Example 7: Building a chatbot with dictionary
-async function exampleChatbot() {
-  console.log('\n=== Example 7: Payment Terms Chatbot ===\n');
-  
-  // Create all dictionary tools
-  const tools = [
-    createDictionaryTool(),
-    createBatchDictionaryTool(),
-    createSearchGlossaryTool(),
-    createListCategoriesTool()
-  ];
-  
-  const chatbot = createAgent({
-    name: 'PaymentGlossaryBot',
-    model: Model.GEMINI_15_FLASH,
-    instruction: `You are a helpful payment terms assistant. You can:
-    1. Explain individual payment/fintech terms
-    2. Look up multiple terms at once
-    3. Search for terms by keyword
-    4. Show available categories
-    5. Provide contextual explanations for implementation
-    
-    Always use the appropriate tool to provide accurate definitions from the glossary.`,
-    tools
+  // Example 5: List categories
+  console.log('\n═══ Example 5: Available Categories ═══\n');
+  const response5 = await engine({
+    messages: [
+      { 
+        role: 'user', 
+        content: 'What categories of payment terms are available in the dictionary?' 
+      }
+    ],
+    context: {},
+    traceId,
+    runId: createRunId('run-categories-' + Date.now())
   });
   
-  const session = createSession('chatbot-demo', 'chat303');
-  
-  // Simulate conversation
-  const queries = [
-    "What payment methods do you know about?",
-    "Explain UPI and how it works",
-    "What's the difference between PSP and payment gateway?",
-    "I'm implementing card payments - what security terms should I know?",
-    "Search for all terms related to compliance"
-  ];
-  
-  for (const query of queries) {
-    console.log(`User: ${query}`);
-    const response = await runAgent(chatbot, session, query);
-    console.log(`Bot: ${response.content}\n`);
+  if (response5.type === 'success') {
+    console.log('Assistant:', response5.content);
   }
 }
 
-// Main execution
+// Direct tool execution example
+async function exampleDirectExecution() {
+  console.log('\n╔════════════════════════════════════════════════════════════════╗');
+  console.log('║                  Direct Tool Execution Demo                     ║');
+  console.log('╚════════════════════════════════════════════════════════════════╝\n');
+  
+  // Execute dictionary tool directly
+  console.log('Looking up "tokenization" directly:\n');
+  const result = await dictionaryTool.execute(
+    { term: 'tokenization', detailed: true },
+    {} // Empty context for direct execution
+  );
+  console.log(result);
+  
+  // Batch lookup
+  console.log('\n\nBatch lookup for EMI, BNPL, KYC:\n');
+  const batchResult = await batchDictionaryTool.execute(
+    { terms: ['EMI', 'BNPL', 'KYC'] },
+    {}
+  );
+  console.log(batchResult);
+  
+  // Search
+  console.log('\n\nSearching for "payment" in payment-method category:\n');
+  const searchResult = await searchGlossaryTool.execute(
+    { keyword: 'payment', category: 'payment-method' },
+    {}
+  );
+  console.log(searchResult);
+}
+
+// Main function
 async function main() {
   try {
-    // Run examples based on command line argument
-    const example = process.argv[2];
+    const mode = process.argv[2];
     
-    switch (example) {
-      case '1':
-        await exampleSimpleLookup();
-        break;
-      case '2':
-        await exampleContextualLookup();
-        break;
-      case '3':
-        await exampleBatchLookup();
-        break;
-      case '4':
-        await exampleSearch();
-        break;
-      case '5':
-        await exampleCategories();
-        break;
-      case '6':
-        await exampleDirectToolUse();
-        break;
-      case '7':
-        await exampleChatbot();
-        break;
-      default:
-        console.log('Running all examples...\n');
-        await exampleSimpleLookup();
-        await exampleContextualLookup();
-        await exampleBatchLookup();
-        await exampleSearch();
-        await exampleCategories();
-        await exampleDirectToolUse();
-        await exampleChatbot();
+    if (mode === 'direct') {
+      await exampleDirectExecution();
+    } else {
+      await exampleDictionaryLookup();
     }
+    
+    console.log('\n═══════════════════════════════════════════════════════════════');
+    console.log('                        Demo Complete!                          ');
+    console.log('═══════════════════════════════════════════════════════════════\n');
+    
   } catch (error) {
-    console.error('Error running examples:', error);
+    console.error('Error running example:', error);
     process.exit(1);
   }
 }
@@ -276,33 +174,11 @@ async function main() {
 // Run if executed directly
 if (require.main === module) {
   console.log(`
-╔══════════════════════════════════════════════╗
-║     Payment Dictionary Tool Examples         ║
-║                                              ║
-║  Usage: npm run example:dictionary [number]  ║
-║                                              ║
-║  Examples:                                   ║
-║  1 - Simple term lookup                      ║
-║  2 - Contextual explanations                 ║
-║  3 - Batch lookups                          ║
-║  4 - Search glossary                        ║
-║  5 - Explore categories                     ║
-║  6 - Direct tool execution                  ║
-║  7 - Payment chatbot                        ║
-║                                              ║
-║  Run without number to see all examples     ║
-╚══════════════════════════════════════════════╝
+Usage:
+  npm run example:dictionary         # Run with engine/agent
+  npm run example:dictionary direct  # Run direct tool execution
 `);
-  
-  main().catch(console.error);
+  main();
 }
 
-export {
-  exampleSimpleLookup,
-  exampleContextualLookup,
-  exampleBatchLookup,
-  exampleSearch,
-  exampleCategories,
-  exampleDirectToolUse,
-  exampleChatbot
-};
+export { exampleDictionaryLookup, exampleDirectExecution };

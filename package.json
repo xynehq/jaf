@@ -104,7 +104,6 @@
     "a2a:client": "tsx src/a2a/examples/client-example.ts",
     "a2a:dev": "tsx watch src/a2a/examples/server-example.ts",
     "example:dictionary": "tsx examples/dictionary.ts",
-    "example:dictionary:standalone": "tsx examples/dictionary-standalone.ts",
     "build:all": "pnpm -r build",
     "typecheck:all": "pnpm -r typecheck",
     "test:all": "pnpm -r test"
