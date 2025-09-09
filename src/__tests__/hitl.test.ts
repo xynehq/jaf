@@ -121,7 +121,7 @@ describe('HITL approvals', () => {
     expect(toolMsg).toBeTruthy();
     if (toolMsg) {
       const payload = JSON.parse(getTextContent(toolMsg.content));
-      expect(payload.error).toBe('approval_denied');
+      expect(payload.status).toBe('approval_denied');
       expect(payload.rejection_reason).toBe('nope');
     }
   });
