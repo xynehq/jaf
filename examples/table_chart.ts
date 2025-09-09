@@ -9,8 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { tableChartTool } from '../src/adk/tools/tableChartTool';
-import { ToolContext } from '../src/adk/types';
+import { tableChartTool } from '../src/tools/tableChartTool';
 
 async function runExample() {
   console.log('🎯 Table & Chart Generator Tool Demo\n');
@@ -20,106 +19,75 @@ async function runExample() {
   const csvPath = path.join(__dirname, 'orders.csv');
   const csvData = fs.readFileSync(csvPath, 'utf-8');
   
-  // Create a mock context
-  const context: ToolContext = {
-    agentId: 'demo-agent',
-    sessionId: 'demo-session',
-    timestamp: new Date()
-  };
-  
   // Example 1: Convert CSV to Markdown Table (top 10 orders)
   console.log('\n📊 Example 1: CSV to Markdown Table (Top 10 Orders by Amount)');
   console.log('-'.repeat(50));
   
-  const tableResult = await tableChartTool.execute({
-    data: csvData,
-    format: 'csv',
-    options: {
-      outputMode: 'table',
-      sortBy: 'total_amount',
-      sortOrder: 'desc',
-      limit: 10
-    }
-  }, context);
+  const tableResult = tableChartTool(csvData, 'csv', {
+    outputMode: 'table',
+    sortBy: 'total_amount',
+    sortOrder: 'desc',
+    limit: 10
+  });
   
-  if (tableResult.success && tableResult.data) {
-    console.log('Generated Table:\n');
-    console.log(tableResult.data.content);
-    console.log(`\n✅ Total rows: ${tableResult.data.rowCount}`);
-  }
+  console.log('Generated Table:\n');
+  console.log(tableResult.content);
+  console.log(`\n✅ Total rows: ${tableResult.rowCount}`);
   
   // Example 2: Generate Bar Chart Spec for Sales by Category
   console.log('\n📈 Example 2: Bar Chart - Sales by Category (Highcharts)');
   console.log('-'.repeat(50));
   
-  const barChartResult = await tableChartTool.execute({
-    data: csvData,
-    format: 'csv',
-    options: {
-      outputMode: 'chart',
-      chartType: 'bar',
-      chartLibrary: 'highcharts',
-      xAxis: 'category',
-      yAxis: 'total_amount',
-      groupBy: 'category',
-      aggregation: 'sum'
-    }
-  }, context);
+  const barChartResult = tableChartTool(csvData, 'csv', {
+    outputMode: 'chart',
+    chartType: 'bar',
+    chartLibrary: 'highcharts',
+    xAxis: 'category',
+    yAxis: 'total_amount',
+    groupBy: 'category',
+    aggregation: 'sum'
+  });
   
-  if (barChartResult.success && barChartResult.data) {
-    console.log('Generated Highcharts Config:');
-    console.log(JSON.stringify(barChartResult.data.spec, null, 2));
-    console.log(`\n✅ Data points: ${barChartResult.data.dataPoints}`);
-  }
+  console.log('Generated Highcharts Config:');
+  console.log(JSON.stringify(barChartResult.spec, null, 2));
+  console.log(`\n✅ Data points: ${barChartResult.dataPoints}`);
   
   // Example 3: Generate Line Chart for Sales Over Time
   console.log('\n📉 Example 3: Line Chart - Daily Sales Trend (Recharts)');
   console.log('-'.repeat(50));
   
-  const lineChartResult = await tableChartTool.execute({
-    data: csvData,
-    format: 'csv',
-    options: {
-      outputMode: 'chart',
-      chartType: 'line',
-      chartLibrary: 'recharts',
-      xAxis: 'date',
-      yAxis: 'total_amount',
-      groupBy: 'date',
-      aggregation: 'sum',
-      sortBy: 'date',
-      sortOrder: 'asc'
-    }
-  }, context);
+  const lineChartResult = tableChartTool(csvData, 'csv', {
+    outputMode: 'chart',
+    chartType: 'line',
+    chartLibrary: 'recharts',
+    xAxis: 'date',
+    yAxis: 'total_amount',
+    groupBy: 'date',
+    aggregation: 'sum',
+    sortBy: 'date',
+    sortOrder: 'asc'
+  });
   
-  if (lineChartResult.success && lineChartResult.data) {
-    console.log('Generated Recharts Config:');
-    console.log(JSON.stringify(lineChartResult.data.spec, null, 2));
-    console.log(`\n✅ Chart type: ${lineChartResult.data.spec.type}`);
-  }
+  console.log('Generated Recharts Config:');
+  console.log(JSON.stringify(lineChartResult.spec, null, 2));
+  console.log(`\n✅ Chart type: ${lineChartResult.spec.type}`);
   
   // Example 4: Generate Pie Chart for Sales by Region
   console.log('\n🥧 Example 4: Pie Chart - Sales Distribution by Region');
   console.log('-'.repeat(50));
   
-  const pieChartResult = await tableChartTool.execute({
-    data: csvData,
-    format: 'csv',
-    options: {
-      outputMode: 'chart',
-      chartType: 'pie',
-      chartLibrary: 'highcharts',
-      xAxis: 'region',
-      yAxis: 'total_amount',
-      groupBy: 'region',
-      aggregation: 'sum'
-    }
-  }, context);
+  const pieChartResult = tableChartTool(csvData, 'csv', {
+    outputMode: 'chart',
+    chartType: 'pie',
+    chartLibrary: 'highcharts',
+    xAxis: 'region',
+    yAxis: 'total_amount',
+    groupBy: 'region',
+    aggregation: 'sum'
+  });
   
-  if (pieChartResult.success && pieChartResult.data) {
-    console.log('Generated Pie Chart Config:');
-    console.log(JSON.stringify(pieChartResult.data.spec, null, 2));
-  }
+  console.log('Generated Pie Chart Config:');
+  console.log(JSON.stringify(pieChartResult.spec, null, 2));
   
   // Example 5: JSON Input - Product Performance Table
   console.log('\n📋 Example 5: JSON to Table - Product Performance');
@@ -132,49 +100,37 @@ async function runExample() {
     { product: 'Standing Desk', sold: 3, revenue: 1799.97, avgPrice: 599.99 }
   ]);
   
-  const jsonTableResult = await tableChartTool.execute({
-    data: jsonData,
-    format: 'json',
-    options: {
-      outputMode: 'table',
-      sortBy: 'revenue',
-      sortOrder: 'desc'
-    }
-  }, context);
+  const jsonTableResult = tableChartTool(jsonData, 'json', {
+    outputMode: 'table',
+    sortBy: 'revenue',
+    sortOrder: 'desc'
+  });
   
-  if (jsonTableResult.success && jsonTableResult.data) {
-    console.log('Product Performance Table:\n');
-    console.log(jsonTableResult.data.content);
-  }
+  console.log('Product Performance Table:\n');
+  console.log(jsonTableResult.content);
   
   // Example 6: Multi-series Line Chart
   console.log('\n📊 Example 6: Multi-series Chart - Quantity vs Revenue');
   console.log('-'.repeat(50));
   
-  const multiSeriesResult = await tableChartTool.execute({
-    data: csvData,
-    format: 'csv',
-    options: {
-      outputMode: 'chart',
-      chartType: 'line',
-      chartLibrary: 'highcharts',
-      xAxis: 'date',
-      yAxis: ['quantity', 'total_amount'],
-      groupBy: 'date',
-      aggregation: 'sum',
-      sortBy: 'date',
-      sortOrder: 'asc'
-    }
-  }, context);
+  const multiSeriesResult = tableChartTool(csvData, 'csv', {
+    outputMode: 'chart',
+    chartType: 'line',
+    chartLibrary: 'highcharts',
+    xAxis: 'date',
+    yAxis: ['quantity', 'total_amount'],
+    groupBy: 'date',
+    aggregation: 'sum',
+    sortBy: 'date',
+    sortOrder: 'asc'
+  });
   
-  if (multiSeriesResult.success && multiSeriesResult.data) {
-    console.log('Multi-series Chart Config Generated');
-    console.log(`Series count: ${multiSeriesResult.data.spec.series?.length || 0}`);
-    if (multiSeriesResult.data.spec.series) {
-      multiSeriesResult.data.spec.series.forEach((s: any) => {
-        console.log(`  - ${s.name}: ${s.data?.length || 0} data points`);
-      });
-    }
+  console.log('Multi-series Chart Config Generated');
+  console.log(`Series count: ${multiSeriesResult.spec.series?.length || 0}`);
+  if (multiSeriesResult.spec.series) {
+    multiSeriesResult.spec.series.forEach((s: any) => {
+      console.log(`  - ${s.name}: ${s.data?.length || 0} data points`);
+    });
   }
   
   console.log('\n' + '='.repeat(50));
