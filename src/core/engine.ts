@@ -10,6 +10,7 @@ import {
   Tool,
   ToolCall,
   Interruption,
+  getTextContent,
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
 
@@ -270,7 +271,7 @@ async function runInternal<Ctx, Out>(
     const firstUserMessage = state.messages.find(m => m.role === 'user');
     if (firstUserMessage && config.initialInputGuardrails) {
       for (const guardrail of config.initialInputGuardrails) {
-        const result = await guardrail(firstUserMessage.content);
+        const result = await guardrail(getTextContent(firstUserMessage.content));
         if (!result.isValid) {
           // Emit guardrail violation for input stage
           const errorMessage = !result.isValid ? result.errorMessage : '';
@@ -579,7 +580,7 @@ async function runInternal<Ctx, Out>(
         const cleanedNewMessages = newMessages.filter(msg => {
           if (msg.role !== 'tool') return true;
           try {
-            const content = JSON.parse(msg.content);
+            const content = JSON.parse(getTextContent(msg.content));
             if (content.status === 'halted') {
               // Remove this halted message if we have a new result for the same tool_call_id
               return !toolResults.some(result => result.message.tool_call_id === msg.tool_call_id);
@@ -607,7 +608,7 @@ async function runInternal<Ctx, Out>(
     const cleanedNewMessages = newMessages.filter(msg => {
       if (msg.role !== 'tool') return true;
       try {
-        const content = JSON.parse(msg.content);
+        const content = JSON.parse(getTextContent(msg.content));
         if (content.status === 'halted') {
           // Remove this halted message if we have a new result for the same tool_call_id
           return !toolResults.some(result => result.message.tool_call_id === msg.tool_call_id);
@@ -1074,7 +1075,7 @@ async function loadConversationHistory<Ctx>(
   const memoryMessages = allMemoryMessages.filter(msg => {
     if (msg.role !== 'tool') return true;
     try {
-      const content = JSON.parse(msg.content);
+      const content = JSON.parse(getTextContent(msg.content));
       return content.status !== 'halted';
     } catch {
       return true; // Keep non-JSON tool messages
@@ -1103,9 +1104,9 @@ async function loadConversationHistory<Ctx>(
   if (storedApprovals) {
     console.log(`[JAF:MEMORY] Loaded ${Object.keys(storedApprovals).length} approvals from memory`);
   }
-  console.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
-  console.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
-  console.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: m.content?.substring(0, 100) + '...' })));
+  console.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+  console.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+  console.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
   
   return {
     ...initialState,

@@ -54,14 +54,30 @@
   },
   "typesVersions": {
     "*": {
-      "adk": ["dist/adk/index.d.ts"],
-      "server": ["dist/server/index.d.ts"],
-      "providers": ["dist/providers/index.d.ts"],
-      "policies": ["dist/policies/index.d.ts"],
-      "memory": ["dist/memory/index.d.ts"],
-      "core": ["dist/core/index.d.ts"],
-      "visualization": ["dist/visualization/index.d.ts"],
-      "utils": ["dist/utils/index.d.ts"]
+      "adk": [
+        "dist/adk/index.d.ts"
+      ],
+      "server": [
+        "dist/server/index.d.ts"
+      ],
+      "providers": [
+        "dist/providers/index.d.ts"
+      ],
+      "policies": [
+        "dist/policies/index.d.ts"
+      ],
+      "memory": [
+        "dist/memory/index.d.ts"
+      ],
+      "core": [
+        "dist/core/index.d.ts"
+      ],
+      "visualization": [
+        "dist/visualization/index.d.ts"
+      ],
+      "utils": [
+        "dist/utils/index.d.ts"
+      ]
     }
   },
   "files": [
@@ -118,11 +134,17 @@
     "@fastify/cors": "^9.0.1",
     "express": "^4.18.2",
     "@modelcontextprotocol/sdk": "^1.17.4",
+    "@types/yauzl": "^2.10.3",
     "eventsource": "^2.0.2",
     "fastify": "^4.29.1",
+    "mammoth": "^1.10.0",
     "mathjs": "^14.6.0",
     "openai": "^4.0.0",
+    "papaparse": "^5.5.3",
+    "pdf-parse": "^1.1.1",
     "uuid": "^9.0.0",
+    "xlsx": "^0.18.5",
+    "yauzl": "^3.2.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {
@@ -130,6 +152,8 @@
     "@types/express": "^4.17.17",
     "@types/jest": "^29.0.0",
     "@types/node": "^20.0.0",
+    "@types/papaparse": "^5.3.16",
+    "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.15.5",
     "@types/uuid": "^9.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",

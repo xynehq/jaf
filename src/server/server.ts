@@ -42,6 +42,81 @@ function computeToolCallSignature(tc: { function: { name: string; arguments: str
   return `${tc.function.name}:${stableStringify(tryParseJSON(tc.function.arguments))}`;
 }
 
+// Shared JSON Schema definitions to avoid duplication
+const messageContentPartSchema = {
+  type: 'object',
+  properties: {
+    type: { type: 'string', enum: ['text', 'image_url'] },
+    text: { type: 'string' },
+    image_url: {
+      type: 'object',
+      properties: {
+        url: { type: 'string' },
+        detail: { type: 'string', enum: ['low', 'high', 'auto'] }
+      },
+      required: ['url']
+    }
+  },
+  required: ['type']
+};
+
+const attachmentSchema = {
+  type: 'object',
+  properties: {
+    kind: { type: 'string', enum: ['image', 'audio', 'video', 'document', 'file'] },
+    mimeType: { type: 'string' },
+    name: { type: 'string' },
+    url: { type: 'string' },
+    data: { type: 'string' },
+    format: { type: 'string' }
+  }
+};
+
+const httpMessageSchema = {
+  type: 'object',
+  properties: {
+    role: { type: 'string', enum: ['user', 'assistant', 'system'] },
+    content: { 
+      oneOf: [
+        { type: 'string' },
+        {
+          type: 'array',
+          items: messageContentPartSchema
+        }
+      ]
+    },
+    attachments: {
+      type: 'array',
+      items: attachmentSchema
+    }
+  },
+  required: ['role', 'content']
+};
+
+const chatRequestBodySchema = {
+  type: 'object',
+  properties: {
+    messages: {
+      type: 'array',
+      items: httpMessageSchema
+    },
+    agentName: { type: 'string' },
+    context: {},
+    maxTurns: { type: 'number' },
+    stream: { type: 'boolean', default: false },
+    conversationId: { type: 'string' },
+    memory: {
+      type: 'object',
+      properties: {
+        autoStore: { type: 'boolean', default: true },
+        maxMessages: { type: 'number' },
+        compressionThreshold: { type: 'number' }
+      }
+    }
+  },
+  required: ['messages', 'agentName']
+};
+
 /**
  * Create and configure a JAF server instance
  * Functional implementation following JAF principles
@@ -93,6 +168,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
   
   const app = Fastify({ 
     logger: true,
+    bodyLimit: config.maxBodySize ?? 50 * 1024 * 1024, // Configurable body size limit
     ajv: {
       customOptions: {
         removeAdditional: false,
@@ -166,36 +242,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
     // Chat completion endpoint
     app.post('/chat', {
       schema: {
-        body: {
-          type: 'object',
-          properties: {
-            messages: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  role: { type: 'string', enum: ['user', 'assistant', 'system'] },
-                  content: { type: 'string' }
-                },
-                required: ['role', 'content']
-              }
-            },
-            agentName: { type: 'string' },
-            context: {},
-            maxTurns: { type: 'number' },
-            stream: { type: 'boolean', default: false },
-            conversationId: { type: 'string' },
-            memory: {
-              type: 'object',
-              properties: {
-                autoStore: { type: 'boolean', default: true },
-                maxMessages: { type: 'number' },
-                compressionThreshold: { type: 'number' }
-              }
-            }
-          },
-          required: ['messages', 'agentName']
-        }
+        body: chatRequestBodySchema
       }
     }, async (request: FastifyRequest<{ Body: ChatRequest }>, reply: FastifyReply): Promise<ChatResponse> => {
       const requestStartTime = Date.now();
@@ -216,7 +263,8 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         // Convert HTTP messages to JAF messages
         const jafMessages: Message[] = validatedRequest.messages.map(msg => ({
           role: msg.role === 'system' ? 'user' : msg.role as 'user' | 'assistant',
-          content: msg.content
+          content: msg.content,
+          attachments: (msg as any).attachments
         }));
 
         // Create initial state
@@ -518,7 +566,8 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
             // Regular user/assistant messages
             return {
               role: msg.role as 'user' | 'assistant',
-              content: msg.content
+              content: msg.content,
+              ...(msg.attachments ? { attachments: msg.attachments } : {})
             };
           }
         });
@@ -597,35 +646,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
           },
           required: ['agentName']
         },
-        body: {
-          type: 'object',
-          properties: {
-            messages: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  role: { type: 'string', enum: ['user', 'assistant', 'system'] },
-                  content: { type: 'string' }
-                },
-                required: ['role', 'content']
-              }
-            },
-            context: {},
-            maxTurns: { type: 'number' },
-            stream: { type: 'boolean', default: false },
-            conversationId: { type: 'string' },
-            memory: {
-              type: 'object',
-              properties: {
-                autoStore: { type: 'boolean', default: true },
-                maxMessages: { type: 'number' },
-                compressionThreshold: { type: 'number' }
-              }
-            }
-          },
-          required: ['messages']
-        }
+        body: chatRequestBodySchema
       }
     }, async (
       request: FastifyRequest<{ 
