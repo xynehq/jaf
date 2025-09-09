@@ -1,0 +1,11 @@
+{
+  "generatedAt": "2025-09-09T17:29:53.378Z",
+  "summary": {
+    "orders": 10,
+    "revenue": 2254.84,
+    "topProduct": {
+      "product": "Headphones",
+      "totalQuantity": 3
+    }
+  }
+}
