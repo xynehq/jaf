@@ -42,8 +42,8 @@ importers:
         specifier: ^5.5.3
         version: 5.5.3
       pdf-parse:
-        specifier: ^1.1.1
-        version: 1.1.1
+        specifier: github:harshpreet931/pdf-parse
+        version: https://codeload.github.com/harshpreet931/pdf-parse/tar.gz/17b8a0fb55eabdccc62c43439e5b554f9720f572
       uuid:
         specifier: ^9.0.0
         version: 9.0.1
@@ -2813,8 +2813,9 @@ packages:
     resolution: {integrity: sha512-gDKb8aZMDeD/tZWs9P6+q0J9Mwkdl6xMV8TjnGP3qJVJ06bdMgkbBlLU8IdfOsIsFz2BW1rNVT3XuNEl8zPAvw==}
     engines: {node: '>=8'}
 
-  pdf-parse@1.1.1:
-    resolution: {integrity: sha512-v6ZJ/efsBpGrGGknjtq9J/oC8tZWq0KWL5vQrk2GlzLEQPUDB1ex+13Rmidl1neNN358Jn9EHZw5y07FFtaC7A==}
+  pdf-parse@https://codeload.github.com/harshpreet931/pdf-parse/tar.gz/17b8a0fb55eabdccc62c43439e5b554f9720f572:
+    resolution: {tarball: https://codeload.github.com/harshpreet931/pdf-parse/tar.gz/17b8a0fb55eabdccc62c43439e5b554f9720f572}
+    version: 1.1.1
     engines: {node: '>=6.8.1'}
 
   pend@1.2.0:
@@ -6434,7 +6435,7 @@ snapshots:
 
   path-type@4.0.0: {}
 
-  pdf-parse@1.1.1:
+  pdf-parse@https://codeload.github.com/harshpreet931/pdf-parse/tar.gz/17b8a0fb55eabdccc62c43439e5b554f9720f572:
     dependencies:
       debug: 3.2.7
       node-ensure: 0.0.0
