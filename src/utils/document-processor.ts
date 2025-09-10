@@ -1,5 +1,5 @@
 import type { Attachment } from '../core/types.js';
-import pdfParse from 'pdf-parse';
+import pdfParse from '../../dependencies/pdf-parse';
 import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
 import Papa from 'papaparse';

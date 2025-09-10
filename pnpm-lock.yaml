@@ -47,9 +47,6 @@ importers:
       papaparse:
         specifier: ^5.5.3
         version: 5.5.3
-      pdf-parse:
-        specifier: link:./dependencies/pdf-parse
-        version: link:dependencies/pdf-parse
       uuid:
         specifier: ^9.0.0
         version: 9.0.1
