@@ -79,6 +79,17 @@ export type Tool<A, Ctx> = {
       ) => Promise<boolean> | boolean);
 };
 
+export type AdvancedGuardrailsConfig = {
+  readonly inputPrompt?: string;
+  readonly outputPrompt?: string;
+  readonly requireCitations?: boolean;
+  readonly fastModel?: string;
+};
+
+export type AdvancedConfig = {
+  readonly guardrails?: AdvancedGuardrailsConfig;
+};
+
 export type Agent<Ctx, Out> = {
   readonly name: string;
   readonly instructions: (state: Readonly<RunState<Ctx>>) => string;
@@ -86,6 +97,7 @@ export type Agent<Ctx, Out> = {
   readonly outputCodec?: z.ZodType<Out>;
   readonly handoffs?: readonly string[];
   readonly modelConfig?: ModelConfig;
+  readonly advancedConfig?: AdvancedConfig;
 };
 
 export type Guardrail<I> = (
@@ -218,4 +230,13 @@ export type RunConfig<Ctx> = {
   readonly memory?: MemoryConfig;
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;
+  readonly defaultFastModel?: string;
+};
+
+export const jsonParseLLMOutput = (text: string): any => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
 };

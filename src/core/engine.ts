@@ -11,8 +11,82 @@ import {
   ToolCall,
   Interruption,
   getTextContent,
+  ValidationResult,
+  jsonParseLLMOutput,
+  createRunId,
+  createTraceId,
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
+
+/**
+ * LLM-based guardrail evaluator that uses a model to validate content against rules
+ */
+async function createLLMGuardrail<Ctx>(
+  config: RunConfig<Ctx>,
+  stage: "input" | "output",
+  rulePrompt: string,
+  fastModel?: string
+): Promise<(content: string) => Promise<ValidationResult>> {
+  return async (content: string) => {
+    const modelToUse = fastModel || config.defaultFastModel;
+    if (!modelToUse) {
+      console.warn('[JAF:GUARDRAILS] No fast model available for LLM guardrail evaluation, defaulting to allow');
+      return { isValid: true as const };
+    }
+
+    // Compose a strict JSON-only evaluation prompt
+    const evalPrompt = `You are a guardrail validator for ${stage}.
+Rules:
+${rulePrompt}
+
+Decide if the ${stage === "input" ? "user message" : "assistant output"} complies with the rules.
+Return a JSON object with keys: {"allowed": boolean, "reason": string}. Do not include extra text.
+${stage === "input" ? "User message" : "Assistant output"}:
+"""
+${content}
+"""`;
+
+    try {
+      // Create a minimal state for the LLM call
+      const tempState: RunState<Ctx> = {
+        runId: createRunId('guardrail-eval'),
+        traceId: createTraceId('guardrail-eval'),
+        messages: [{ role: 'user', content: evalPrompt }],
+        currentAgentName: 'guardrail-evaluator',
+        context: {} as Readonly<Ctx>,
+        turnCount: 0
+      };
+
+      // Create a minimal agent for evaluation
+      const evalAgent: Agent<Ctx, any> = {
+        name: 'guardrail-evaluator',
+        instructions: () => 'You are a guardrail validator. Return only valid JSON.',
+        modelConfig: { name: modelToUse }
+      };
+
+      const response = await config.modelProvider.getCompletion(tempState, evalAgent, {
+        ...config,
+        modelOverride: modelToUse
+      });
+
+      if (!response.message?.content) {
+        return { isValid: true as const };
+      }
+
+      const parsed = jsonParseLLMOutput(response.message.content);
+      const allowed = Boolean(parsed?.allowed);
+      const reason = typeof parsed?.reason === "string" ? parsed.reason : "Guardrail violation";
+      
+      return allowed
+        ? { isValid: true as const }
+        : ({ isValid: false as const, errorMessage: reason } as const);
+    } catch (e) {
+      // On evaluation failure, default to pass to avoid blocking valid requests due to infra issues
+      console.warn('[JAF:GUARDRAILS] Guardrail evaluation failed, defaulting to allow:', e);
+      return { isValid: true as const };
+    }
+  };
+}
 
 export async function run<Ctx, Out>(
   initialState: RunState<Ctx>,
@@ -266,33 +340,6 @@ async function runInternal<Ctx, Out>(
   const resumed = await tryResumePendingToolCalls<Ctx, Out>(state, config);
   if (resumed) return resumed;
 
-  if (state.turnCount === 0) {
-    const firstUserMessage = state.messages.find(m => m.role === 'user');
-    if (firstUserMessage && config.initialInputGuardrails) {
-      for (const guardrail of config.initialInputGuardrails) {
-        const result = await guardrail(getTextContent(firstUserMessage.content));
-        if (!result.isValid) {
-          // Emit guardrail violation for input stage
-          const errorMessage = !result.isValid ? result.errorMessage : '';
-          config.onEvent?.({
-            type: 'guardrail_violation',
-            data: { stage: 'input', reason: errorMessage }
-          });
-          return {
-            finalState: state,
-            outcome: {
-              status: 'error',
-              error: {
-                _tag: 'InputGuardrailTripwire',
-                reason: errorMessage
-              }
-            }
-          };
-        }
-      }
-    }
-  }
-
   const maxTurns = config.maxTurns ?? 50;
   if (state.turnCount >= maxTurns) {
     return {
@@ -319,6 +366,104 @@ async function runInternal<Ctx, Out>(
         }
       }
     };
+  }
+
+  // Store input guardrails for parallel execution
+  let inputGuardrailsToRun: any[] = [];
+
+  // Build advanced guardrails from agent configuration FIRST
+  try {
+    const guardrailsCfg = currentAgent.advancedConfig?.guardrails || {};
+
+    // Helper: model-backed guardrail evaluator
+    const llmGuardrail = async (
+      stage: "input" | "output",
+      rulePrompt: string,
+      content: string,
+    ) => {
+      console.log(`[JAF:GUARDRAILS] Evaluating ${stage} guardrail`);
+      config.onEvent?.({
+        type: 'guardrail_check',
+        data: { guardrailName: `${stage}-guardrail`, content, isValid: undefined }
+      });
+      const evaluator = await createLLMGuardrail(config, stage, rulePrompt, guardrailsCfg.fastModel);
+      const result = await evaluator(content);
+      console.log(`[JAF:GUARDRAILS] ${stage} guardrail result:`, result);
+      config.onEvent?.({
+        type: 'guardrail_check',
+        data: { guardrailName: `${stage}-guardrail`, content, isValid: result.isValid, errorMessage: result.isValid ? undefined : result.errorMessage }
+      });
+      return result;
+    };
+
+    // Attach initial input guardrail if inputPrompt is provided
+    if (guardrailsCfg?.inputPrompt && typeof guardrailsCfg.inputPrompt === "string" && guardrailsCfg.inputPrompt.trim().length > 0) {
+      const inputPrompt: string = guardrailsCfg.inputPrompt;
+      const dynamicInputGuardrails = [
+        async (userText: string) => {
+          const content = typeof userText === "string" ? userText : String(userText);
+          return llmGuardrail("input", inputPrompt, content);
+        },
+      ];
+      
+      // Merge with existing input guardrails
+      (config as any).initialInputGuardrails = [
+        ...(config.initialInputGuardrails || []),
+        ...dynamicInputGuardrails
+      ];
+    }
+
+    // Store input guardrails for parallel execution
+    inputGuardrailsToRun = (state.turnCount === 0 && config.initialInputGuardrails) 
+      ? config.initialInputGuardrails 
+      : [];
+
+    // Prepare final output guardrails array
+    const dynamicOutputGuardrails: any[] = [];
+
+    // Existing citation guardrail
+    if (guardrailsCfg?.requireCitations) {
+      dynamicOutputGuardrails.push((output: any) => {
+        const findText = (val: any): string => {
+          if (typeof val === "string") return val;
+          if (Array.isArray(val)) return val.map(findText).join(" ");
+          if (val && typeof val === "object") return Object.values(val).map(findText).join(" ");
+          return "";
+        };
+        const str = typeof output === "string" ? output : findText(output);
+        const ok = /\[(\d+)\]/.test(str);
+        return ok
+          ? ({ isValid: true as const } as const)
+          : ({ isValid: false as const, errorMessage: "Missing required [n] citation in output" } as const);
+      });
+    }
+
+    // Output prompt-based guardrail
+    if (guardrailsCfg?.outputPrompt && typeof guardrailsCfg.outputPrompt === "string" && guardrailsCfg.outputPrompt.trim().length > 0) {
+      const outputPrompt: string = guardrailsCfg.outputPrompt;
+      dynamicOutputGuardrails.push(async (output: any) => {
+        const toString = (val: any): string => {
+          try {
+            if (typeof val === "string") return val;
+            return JSON.stringify(val);
+          } catch {
+            return String(val);
+          }
+        };
+        const content = toString(output);
+        return llmGuardrail("output", outputPrompt, content);
+      });
+    }
+
+    if (dynamicOutputGuardrails.length > 0) {
+      // Merge with existing output guardrails
+      (config as any).finalOutputGuardrails = [
+        ...(config.finalOutputGuardrails || []),
+        ...dynamicOutputGuardrails
+      ];
+    }
+  } catch (e) {
+    console.error('[JAF:GUARDRAILS] Failed to configure advanced guardrails:', e);
   }
 
   console.log(`[JAF:ENGINE] Using agent: ${currentAgent.name}`);
@@ -401,39 +546,194 @@ async function runInternal<Ctx, Out>(
     data: llmCallData
   });
 
+  // PARALLEL EXECUTION: Run input guardrails and LLM call concurrently
   let llmResponse: any;
+  let inputGuardrailResults: any[] = [];
   let streamingUsed = false;
   let assistantEventStreamed = false;
-
-  if (typeof config.modelProvider.getCompletionStream === 'function') {
-    try {
-      streamingUsed = true;
-      const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
-      let aggregatedText = '';
-      const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
-
-      for await (const chunk of stream) {
-        if (chunk?.delta) {
-          aggregatedText += chunk.delta;
+  
+  if (inputGuardrailsToRun.length > 0 && state.turnCount === 0) {
+    const firstUserMessage = state.messages.find(m => m.role === 'user');
+    if (firstUserMessage) {
+      console.log(`[JAF:GUARDRAILS] Starting parallel execution: ${inputGuardrailsToRun.length} input guardrails + LLM call`);
+      
+      // Create promises for both input guardrails and LLM call
+      const inputGuardrailPromises = inputGuardrailsToRun.map(async (guardrail, index) => {
+        try {
+          console.log(`[JAF:GUARDRAILS] Starting input guardrail ${index + 1}`);
+          const result = await guardrail(getTextContent(firstUserMessage.content));
+          console.log(`[JAF:GUARDRAILS] Input guardrail ${index + 1} completed:`, result);
+          return result;
+        } catch (error) {
+          console.error(`[JAF:GUARDRAILS] Input guardrail ${index + 1} failed:`, error);
+          return { isValid: true }; // Default to pass on error
         }
-        if (chunk?.toolCallDelta) {
-          const idx = chunk.toolCallDelta.index ?? 0;
-          while (toolCalls.length <= idx) {
-            toolCalls.push({ id: undefined, type: 'function', function: { name: undefined, arguments: '' } });
+      });
+      
+      const llmPromise = config.modelProvider.getCompletion(state, currentAgent, config);
+      
+      // Wait for both to complete
+      const [guardrailResults, llmResult] = await Promise.all([
+        Promise.all(inputGuardrailPromises),
+        llmPromise
+      ]);
+      
+      inputGuardrailResults = guardrailResults;
+      llmResponse = llmResult;
+      
+      console.log(`[JAF:GUARDRAILS] Parallel execution completed. Checking guardrail results...`);
+      
+      // Check if any input guardrail failed
+      for (let i = 0; i < inputGuardrailResults.length; i++) {
+        const result = inputGuardrailResults[i];
+        if (!result.isValid) {
+          // Input guardrail failed - discard LLM response and return error
+          console.log(`🚨 Input guardrail ${i + 1} violation: ${result.errorMessage}`);
+          console.log(`[JAF:GUARDRAILS] Discarding LLM response due to input guardrail violation`);
+          config.onEvent?.({
+            type: 'guardrail_violation',
+            data: { stage: 'input', reason: result.errorMessage }
+          });
+          return {
+            finalState: state,
+            outcome: {
+              status: 'error',
+              error: {
+                _tag: 'InputGuardrailTripwire',
+                reason: result.errorMessage
+              }
+            }
+          };
+        }
+      }
+      
+      console.log(`✅ All input guardrails passed. Using LLM response.`);
+    } else {
+      // No user message found, try streaming then fallback to non-streaming
+      if (typeof config.modelProvider.getCompletionStream === 'function') {
+        try {
+          streamingUsed = true;
+          const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
+          let aggregatedText = '';
+          const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
+
+          for await (const chunk of stream) {
+            if (chunk?.delta) {
+              aggregatedText += chunk.delta;
+            }
+            if (chunk?.toolCallDelta) {
+              const idx = chunk.toolCallDelta.index ?? 0;
+              while (toolCalls.length <= idx) {
+                toolCalls.push({ id: undefined, type: 'function', function: { name: undefined, arguments: '' } });
+              }
+              const target = toolCalls[idx];
+              if (chunk.toolCallDelta.id) target.id = chunk.toolCallDelta.id;
+              if (chunk.toolCallDelta.function?.name) target.function.name = chunk.toolCallDelta.function.name;
+              if (chunk.toolCallDelta.function?.argumentsDelta) {
+                target.function.arguments += chunk.toolCallDelta.function.argumentsDelta;
+              }
+            }
+
+            if (chunk?.delta || chunk?.toolCallDelta) {
+              assistantEventStreamed = true;
+              const partialMessage: Message = {
+                role: 'assistant',
+                content: aggregatedText,
+                ...(toolCalls.length > 0
+                  ? {
+                      tool_calls: toolCalls.map((tc, i) => ({
+                        id: tc.id ?? `call_${i}`,
+                        type: 'function' as const,
+                        function: {
+                          name: tc.function.name ?? '',
+                          arguments: tc.function.arguments
+                        }
+                      }))
+                    }
+                  : {})
+              };
+              try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { console.error('Error in config.onEvent:', err); }
+            }
           }
-          const target = toolCalls[idx];
-          if (chunk.toolCallDelta.id) target.id = chunk.toolCallDelta.id;
-          if (chunk.toolCallDelta.function?.name) target.function.name = chunk.toolCallDelta.function.name;
-          if (chunk.toolCallDelta.function?.argumentsDelta) {
-            target.function.arguments += chunk.toolCallDelta.function.argumentsDelta;
+
+          llmResponse = {
+            message: {
+              content: aggregatedText || undefined,
+              ...(toolCalls.length > 0
+                ? {
+                    tool_calls: toolCalls.map((tc, i) => ({
+                      id: tc.id ?? `call_${i}`,
+                      type: 'function' as const,
+                      function: {
+                        name: tc.function.name ?? '',
+                        arguments: tc.function.arguments
+                      }
+                    }))
+                  }
+                : {})
+            }
+          };
+        } catch (e) {
+          // Fallback to non-streaming on error
+          streamingUsed = false;
+          assistantEventStreamed = false;
+          llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+        }
+      } else {
+        llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+      }
+    }
+  } else {
+    // No input guardrails to run, just execute LLM call
+    if (typeof config.modelProvider.getCompletionStream === 'function') {
+      try {
+        streamingUsed = true;
+        const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
+        let aggregatedText = '';
+        const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
+
+        for await (const chunk of stream) {
+          if (chunk?.delta) {
+            aggregatedText += chunk.delta;
+          }
+          if (chunk?.toolCallDelta) {
+            const idx = chunk.toolCallDelta.index ?? 0;
+            while (toolCalls.length <= idx) {
+              toolCalls.push({ id: undefined, type: 'function', function: { name: undefined, arguments: '' } });
+            }
+            const target = toolCalls[idx];
+            if (chunk.toolCallDelta.id) target.id = chunk.toolCallDelta.id;
+            if (chunk.toolCallDelta.function?.name) target.function.name = chunk.toolCallDelta.function.name;
+            if (chunk.toolCallDelta.function?.argumentsDelta) {
+              target.function.arguments += chunk.toolCallDelta.function.argumentsDelta;
+            }
+          }
+
+          if (chunk?.delta || chunk?.toolCallDelta) {
+            assistantEventStreamed = true;
+            const partialMessage: Message = {
+              role: 'assistant',
+              content: aggregatedText,
+              ...(toolCalls.length > 0
+                ? {
+                    tool_calls: toolCalls.map((tc, i) => ({
+                      id: tc.id ?? `call_${i}`,
+                      type: 'function' as const,
+                      function: {
+                        name: tc.function.name ?? '',
+                        arguments: tc.function.arguments
+                      }
+                    }))
+                  }
+                : {})
+            };
+            try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { console.error('Error in config.onEvent:', err); }
           }
         }
 
-        if (chunk?.delta || chunk?.toolCallDelta) {
-          assistantEventStreamed = true;
-          const partialMessage: Message = {
-            role: 'assistant',
-            content: aggregatedText,
+        llmResponse = {
+          message: {
+            content: aggregatedText || undefined,
             ...(toolCalls.length > 0
               ? {
                   tool_calls: toolCalls.map((tc, i) => ({
@@ -446,36 +746,17 @@ async function runInternal<Ctx, Out>(
                   }))
                 }
               : {})
-          };
-          try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { console.error('Error in config.onEvent:', err); }
-        }
+          }
+        };
+      } catch (e) {
+        // Fallback to non-streaming on error
+        streamingUsed = false;
+        assistantEventStreamed = false;
+        llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
       }
-
-      llmResponse = {
-        message: {
-          content: aggregatedText || undefined,
-          ...(toolCalls.length > 0
-            ? {
-                tool_calls: toolCalls.map((tc, i) => ({
-                  id: tc.id ?? `call_${i}`,
-                  type: 'function' as const,
-                  function: {
-                    name: tc.function.name ?? '',
-                    arguments: tc.function.arguments
-                  }
-                }))
-              }
-            : {})
-        }
-      };
-    } catch (e) {
-      // Fallback to non-streaming on error
-      streamingUsed = false;
-      assistantEventStreamed = false;
+    } else {
       llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
     }
-  } else {
-    llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
   }
   
   // Extract usage data for enhanced events
@@ -732,11 +1013,13 @@ async function runInternal<Ctx, Out>(
       }
 
       if (config.finalOutputGuardrails) {
+        console.log(`[JAF:GUARDRAILS] Checking ${config.finalOutputGuardrails.length} output guardrails (parsed output)`);
         for (const guardrail of config.finalOutputGuardrails) {
           const result = await guardrail(parseResult.data);
           if (!result.isValid) {
             // Emit guardrail violation (output)
-            const errorMessage = !result.isValid ? result.errorMessage : '';
+            const errorMessage = result.errorMessage;
+            console.log(`🚨 Output guardrail violation: ${errorMessage}`);
             config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: errorMessage } });
             // End of turn
             config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -768,11 +1051,13 @@ async function runInternal<Ctx, Out>(
       };
     } else {
       if (config.finalOutputGuardrails) {
+        console.log(`[JAF:GUARDRAILS] Checking ${config.finalOutputGuardrails.length} output guardrails (raw content)`);
         for (const guardrail of config.finalOutputGuardrails) {
           const result = await guardrail(llmResponse.message.content);
           if (!result.isValid) {
             // Emit guardrail violation (output)
             const errorMessage = result.errorMessage;
+            console.log(`🚨 Output guardrail violation: ${errorMessage}`);
             config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: errorMessage } });
             // End of turn
             config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
