@@ -1,0 +1,288 @@
+{
+  "terms": {
+    "upi": {
+      "term": "UPI",
+      "fullForm": "Unified Payments Interface",
+      "definition": "A real-time payment system developed by the National Payments Corporation of India (NPCI) that facilitates inter-bank transactions instantly through mobile phones.",
+      "examples": ["UPI ID like user@paytm", "UPI collect request", "UPI mandate"],
+      "relatedTerms": ["NPCI", "IMPS", "VPA"],
+      "category": "payment-method"
+    },
+    "upi-collect": {
+      "term": "UPI Collect",
+      "definition": "A UPI transaction type where a payment request is sent to a payer's UPI ID, and the payer approves it from their UPI app to complete the payment.",
+      "examples": ["Merchant sends collect request to customer@upi", "Customer receives notification to approve payment"],
+      "relatedTerms": ["UPI", "VPA", "Push Payment"],
+      "category": "payment-flow"
+    },
+    "vpa": {
+      "term": "VPA",
+      "fullForm": "Virtual Payment Address",
+      "definition": "A unique identifier used in UPI that acts as a financial address mapped to a person's bank account. Format is typically username@bankname.",
+      "examples": ["john@paytm", "merchant@icici", "shop.name@ybl"],
+      "relatedTerms": ["UPI", "UPI ID"],
+      "category": "identifier"
+    },
+    "2fa": {
+      "term": "2FA",
+      "fullForm": "Two-Factor Authentication",
+      "definition": "A security process that requires two different authentication factors to verify a user's identity, typically something you know (password) and something you have (OTP on phone).",
+      "examples": ["Password + SMS OTP", "PIN + Biometric", "Password + Authenticator app code"],
+      "relatedTerms": ["MFA", "OTP", "3DS"],
+      "category": "security"
+    },
+    "3ds": {
+      "term": "3DS",
+      "fullForm": "3D Secure",
+      "definition": "An authentication protocol used to prevent fraud in online credit and debit card transactions. Version 2.0 enables frictionless authentication using risk-based analysis.",
+      "examples": ["Verified by Visa", "Mastercard SecureCode", "American Express SafeKey"],
+      "relatedTerms": ["2FA", "PSD2", "SCA"],
+      "category": "security"
+    },
+    "psp": {
+      "term": "PSP",
+      "fullForm": "Payment Service Provider",
+      "definition": "A third-party company that helps businesses accept and process electronic payments through various payment methods including cards, wallets, and bank transfers.",
+      "examples": ["Stripe", "PayPal", "Razorpay", "Juspay"],
+      "relatedTerms": ["Payment Gateway", "Acquirer", "Payment Aggregator"],
+      "category": "infrastructure"
+    },
+    "payment-gateway": {
+      "term": "Payment Gateway",
+      "definition": "A technology infrastructure that captures and transfers payment data from the customer to the acquirer and then transfers the payment acceptance or decline back to the customer.",
+      "examples": ["Processing card payments on e-commerce sites", "Tokenizing card data", "Routing transactions to banks"],
+      "relatedTerms": ["PSP", "Acquirer", "Payment Processor"],
+      "category": "infrastructure"
+    },
+    "tokenization": {
+      "term": "Tokenization",
+      "definition": "The process of replacing sensitive payment card data with a unique identifier (token) that retains essential information without compromising security.",
+      "examples": ["Card number replaced with token like 'tok_1234abcd'", "Network tokens from Visa/Mastercard"],
+      "relatedTerms": ["PCI DSS", "Card Vault", "Network Token"],
+      "category": "security"
+    },
+    "pci-dss": {
+      "term": "PCI DSS",
+      "fullForm": "Payment Card Industry Data Security Standard",
+      "definition": "A set of security standards designed to ensure all companies that accept, process, store, or transmit credit card information maintain a secure environment.",
+      "examples": ["Level 1 compliance for high-volume merchants", "SAQ (Self-Assessment Questionnaire)", "Quarterly vulnerability scans"],
+      "relatedTerms": ["Tokenization", "Card Vault", "Compliance"],
+      "category": "compliance"
+    },
+    "acquirer": {
+      "term": "Acquirer",
+      "fullForm": "Acquiring Bank",
+      "definition": "A bank or financial institution that processes credit or debit card payments on behalf of merchants and transfers funds to the merchant's account.",
+      "examples": ["HDFC Bank acquiring for Indian merchants", "Processing settlement files", "Merchant onboarding"],
+      "relatedTerms": ["Issuer", "Payment Processor", "Settlement"],
+      "category": "infrastructure"
+    },
+    "issuer": {
+      "term": "Issuer",
+      "fullForm": "Issuing Bank",
+      "definition": "A bank or financial institution that provides payment cards to consumers and is responsible for authorizing transactions and billing cardholders.",
+      "examples": ["SBI issuing credit cards", "Authorizing transactions", "Setting credit limits"],
+      "relatedTerms": ["Acquirer", "Card Network", "Authorization"],
+      "category": "infrastructure"
+    },
+    "mdr": {
+      "term": "MDR",
+      "fullForm": "Merchant Discount Rate",
+      "definition": "The fee charged to a merchant by a bank for accepting payments from customers through credit and debit cards. Usually a percentage of transaction value.",
+      "examples": ["2% MDR on credit cards", "0.9% MDR on debit cards", "Zero MDR on UPI"],
+      "relatedTerms": ["Interchange Fee", "Processing Fee", "Transaction Fee"],
+      "category": "pricing"
+    },
+    "chargeback": {
+      "term": "Chargeback",
+      "definition": "A reversal of a credit card payment that comes directly from the bank, initiated when a customer disputes a transaction with their card issuer.",
+      "examples": ["Customer claims non-delivery", "Fraudulent transaction dispute", "Processing error reversal"],
+      "relatedTerms": ["Refund", "Dispute", "Reversal"],
+      "category": "risk"
+    },
+    "mandate": {
+      "term": "Mandate",
+      "fullForm": "E-Mandate",
+      "definition": "A standing instruction given by a customer to debit their account automatically for recurring payments. Can be set up via cards, UPI, or net banking.",
+      "examples": ["Monthly subscription billing", "EMI auto-debit", "UPI AutoPay"],
+      "relatedTerms": ["Recurring Payment", "Standing Instruction", "AutoPay"],
+      "category": "payment-method"
+    },
+    "npci": {
+      "term": "NPCI",
+      "fullForm": "National Payments Corporation of India",
+      "definition": "An umbrella organization for operating retail payments and settlement systems in India, responsible for UPI, IMPS, RuPay, and other payment systems.",
+      "examples": ["Operating UPI infrastructure", "Managing RuPay card network", "AEPS (Aadhaar Enabled Payment System)"],
+      "relatedTerms": ["UPI", "IMPS", "RuPay"],
+      "category": "infrastructure"
+    },
+    "imps": {
+      "term": "IMPS",
+      "fullForm": "Immediate Payment Service",
+      "definition": "An instant interbank electronic fund transfer service available 24x7 through mobile phones, internet, and ATMs in India.",
+      "examples": ["Transfer using mobile number", "Transfer using account number + IFSC", "Maximum limit ₹5 lakhs per transaction"],
+      "relatedTerms": ["NEFT", "RTGS", "UPI"],
+      "category": "payment-method"
+    },
+    "webhook": {
+      "term": "Webhook",
+      "definition": "An HTTP callback that sends real-time payment event notifications to merchant servers when specific events occur, like successful payment or refund.",
+      "examples": ["Payment success notification", "Refund processed event", "Subscription renewed callback"],
+      "relatedTerms": ["Callback", "Event", "Notification"],
+      "category": "integration"
+    },
+    "reconciliation": {
+      "term": "Reconciliation",
+      "definition": "The process of matching and verifying payment transactions between different systems to ensure accuracy in financial records and settlements.",
+      "examples": ["Matching bank statements with transaction logs", "Verifying settlement amounts", "Identifying missing transactions"],
+      "relatedTerms": ["Settlement", "Reporting", "Accounting"],
+      "category": "operations"
+    },
+    "emi": {
+      "term": "EMI",
+      "fullForm": "Equated Monthly Installment",
+      "definition": "A fixed payment amount made by a borrower to a lender at a specified date each month, commonly used for converting large purchases into smaller monthly payments.",
+      "examples": ["6-month no-cost EMI", "Credit card EMI", "Debit card EMI with bank partnership"],
+      "relatedTerms": ["BNPL", "Credit", "Installment"],
+      "category": "payment-method"
+    },
+    "bnpl": {
+      "term": "BNPL",
+      "fullForm": "Buy Now Pay Later",
+      "definition": "A payment option that allows customers to purchase items immediately and pay for them over time through installments, often interest-free.",
+      "examples": ["Pay in 3 installments", "30-day payment deferral", "Simpl, LazyPay, Postpe"],
+      "relatedTerms": ["EMI", "Credit", "Deferred Payment"],
+      "category": "payment-method"
+    },
+    "pg-aggregator": {
+      "term": "Payment Aggregator",
+      "definition": "A service provider that allows merchants to accept various payment methods without setting up individual merchant accounts with banks or card networks.",
+      "examples": ["Razorpay", "Cashfree", "PayU", "CCAvenue"],
+      "relatedTerms": ["Payment Gateway", "Sub-merchant", "Master Merchant"],
+      "category": "infrastructure"
+    },
+    "kyc": {
+      "term": "KYC",
+      "fullForm": "Know Your Customer",
+      "definition": "The mandatory process of identifying and verifying the client's identity when opening an account or onboarding for financial services.",
+      "examples": ["Aadhaar-based eKYC", "Video KYC", "Document upload verification"],
+      "relatedTerms": ["AML", "Compliance", "Verification"],
+      "category": "compliance"
+    },
+    "cvv": {
+      "term": "CVV",
+      "fullForm": "Card Verification Value",
+      "definition": "A 3 or 4-digit security code on payment cards used as an additional security measure for card-not-present transactions.",
+      "examples": ["3-digit code on back of Visa/Mastercard", "4-digit code on front of Amex", "Dynamic CVV on some cards"],
+      "relatedTerms": ["CVC", "Security Code", "Card Security"],
+      "category": "security"
+    },
+    "otp": {
+      "term": "OTP",
+      "fullForm": "One-Time Password",
+      "definition": "A password that is valid for only one login session or transaction, commonly sent via SMS or email for authentication.",
+      "examples": ["6-digit SMS OTP", "TOTP from authenticator app", "Email verification code"],
+      "relatedTerms": ["2FA", "Authentication", "Security"],
+      "category": "security"
+    },
+    "refund": {
+      "term": "Refund",
+      "definition": "The process of returning money to a customer for a completed transaction, typically initiated by the merchant through the payment gateway.",
+      "examples": ["Full refund for cancelled order", "Partial refund for damaged item", "Instant refund to source"],
+      "relatedTerms": ["Reversal", "Chargeback", "Credit"],
+      "category": "operations"
+    },
+    "settlement": {
+      "term": "Settlement",
+      "definition": "The process of transferring funds from the acquiring bank to the merchant's bank account after successful payment transactions.",
+      "examples": ["T+1 settlement (next day)", "Instant settlement", "Weekly batch settlement"],
+      "relatedTerms": ["Reconciliation", "Payout", "Clearing"],
+      "category": "operations"
+    },
+    "payment-link": {
+      "term": "Payment Link",
+      "definition": "A URL that directs customers to a payment page where they can complete a transaction without integration on merchant website.",
+      "examples": ["SMS payment link", "WhatsApp payment link", "Email invoice with payment link"],
+      "relatedTerms": ["Invoice", "Payment Page", "No-code Payment"],
+      "category": "payment-method"
+    },
+    "sandbox": {
+      "term": "Sandbox",
+      "definition": "A testing environment that simulates the production payment system, allowing developers to test integrations without processing real transactions.",
+      "examples": ["Test API keys", "Mock payment responses", "Simulated bank responses"],
+      "relatedTerms": ["Test Mode", "Development Environment", "Staging"],
+      "category": "integration"
+    },
+    "subscription": {
+      "term": "Subscription",
+      "definition": "A recurring payment model where customers are charged periodically (daily, weekly, monthly, yearly) for continued access to a product or service.",
+      "examples": ["Monthly SaaS subscription", "Annual membership", "Weekly content subscription"],
+      "relatedTerms": ["Recurring Payment", "Mandate", "Billing Cycle"],
+      "category": "payment-model"
+    },
+    "split-payment": {
+      "term": "Split Payment",
+      "definition": "Distribution of a single payment transaction amount among multiple parties or accounts according to predefined rules.",
+      "examples": ["Marketplace vendor payouts", "Platform fee deduction", "Commission splitting"],
+      "relatedTerms": ["Route", "Marketplace", "Multi-party Payment"],
+      "category": "payment-flow"
+    },
+    "virtual-account": {
+      "term": "Virtual Account",
+      "definition": "A unique bank account number assigned to each customer for collecting payments via bank transfer, automatically reconciled with the customer.",
+      "examples": ["Customer-specific account for NEFT/RTGS", "QR code with embedded VA", "Auto-reconciliation of payments"],
+      "relatedTerms": ["Bank Transfer", "Collection", "Reconciliation"],
+      "category": "payment-method"
+    },
+    "soft-descriptor": {
+      "term": "Soft Descriptor",
+      "definition": "The merchant name and details that appear on a customer's card statement for a transaction, helping customers recognize the charge.",
+      "examples": ["COMPANY*PRODUCT", "DBA name on statement", "Dynamic descriptor with order ID"],
+      "relatedTerms": ["Statement Descriptor", "Merchant Name", "DBA"],
+      "category": "operations"
+    },
+    "moto": {
+      "term": "MOTO",
+      "fullForm": "Mail Order/Telephone Order",
+      "definition": "Card-not-present transactions where payment details are provided via mail, phone, or other non-internet channels.",
+      "examples": ["Phone booking with card details", "Mail-in order form", "Call center payments"],
+      "relatedTerms": ["CNP", "Card-not-present", "Manual Entry"],
+      "category": "payment-method"
+    },
+    "bin": {
+      "term": "BIN",
+      "fullForm": "Bank Identification Number",
+      "definition": "The first 6-8 digits of a payment card number that identify the issuing bank, card type, and country.",
+      "examples": ["4111 for Visa", "5105 for Mastercard", "Card type detection"],
+      "relatedTerms": ["IIN", "Card Network", "Issuer"],
+      "category": "identifier"
+    },
+    "surcharge": {
+      "term": "Surcharge",
+      "definition": "An additional fee charged to customers who pay with certain payment methods, typically credit cards, to offset processing costs.",
+      "examples": ["2% credit card surcharge", "Convenience fee", "Processing fee"],
+      "relatedTerms": ["MDR", "Convenience Fee", "Processing Cost"],
+      "category": "pricing"
+    },
+    "payment-orchestration": {
+      "term": "Payment Orchestration",
+      "definition": "A layer that manages multiple payment providers, methods, and services through a single integration, optimizing routing and success rates.",
+      "examples": ["Smart routing between gateways", "Automatic failover", "Unified reporting across PSPs"],
+      "relatedTerms": ["Smart Routing", "Gateway Management", "Optimization"],
+      "category": "infrastructure"
+    }
+  },
+  "categories": {
+    "payment-method": "Different ways to accept or make payments",
+    "payment-flow": "How payments move through the system",
+    "security": "Security and authentication measures",
+    "infrastructure": "Core payment system components",
+    "compliance": "Regulatory and compliance requirements",
+    "operations": "Day-to-day payment operations",
+    "integration": "Technical integration aspects",
+    "identifier": "Unique identifiers in payments",
+    "pricing": "Costs and pricing models",
+    "risk": "Risk and fraud management",
+    "payment-model": "Business models for payments"
+  }
+}
