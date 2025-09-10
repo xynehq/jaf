@@ -1,6 +1,8 @@
 import OpenAI from "openai";
 import { ModelProvider, Message, MessageContentPart, getTextContent, type RunState, type Agent, type RunConfig } from '../core/types.js';
 import { extractDocumentContent, isDocumentSupported, getDocumentDescription } from '../utils/document-processor.js';
+import { HttpsProxyAgent } from "https-proxy-agent";
+import { HttpProxyAgent } from "http-proxy-agent";
 
 interface ProxyConfig {
   httpProxy?: string;
@@ -18,9 +20,6 @@ function createProxyAgent(url?: any,proxyConfig?: ProxyConfig) {
   }
 
   try {
-    const { HttpsProxyAgent } = require('https-proxy-agent');
-    const { HttpProxyAgent } = require('http-proxy-agent');
-    
     console.log(`[JAF:PROXY] Configuring proxy agents:`);
     if (httpProxy) console.log(`HTTP_PROXY: ${httpProxy}`);
     if (httpsProxy) console.log(`HTTPS_PROXY: ${httpsProxy}`);
