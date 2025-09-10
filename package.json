@@ -150,14 +150,13 @@
     "mathjs": "^14.6.0",
     "openai": "^4.0.0",
     "papaparse": "^5.5.3",
-    "pdf-parse": "github:harshpreet931/pdf-parse",
+    "pdf-parse": "link:./dependencies/pdf-parse",
     "uuid": "^9.0.0",
     "xlsx": "^0.18.5",
     "yauzl": "^3.2.0",
     "zod": "^3.22.0",
     "http-proxy-agent": "^7.0.2",
-    "https-proxy-agent": "^7.0.6",
-    "ai": "^5.0.35"
+    "https-proxy-agent": "^7.0.6"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
