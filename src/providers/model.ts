@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { ModelProvider, Message, MessageContentPart, getTextContent } from '../core/types.js';
+import { ModelProvider, Message, MessageContentPart, getTextContent, type RunState, type Agent, type RunConfig } from '../core/types.js';
 import { extractDocumentContent, isDocumentSupported, getDocumentDescription } from '../utils/document-processor.js';
 
 interface ProxyConfig {
@@ -65,62 +65,12 @@ export const makeLiteLLMProvider = <Ctx>(
 
   return {
     async getCompletion(state, agent, config) {
-      const model = config.modelOverride ?? agent.modelConfig?.name;
+      const { model, params } = await buildChatCompletionParams(state, agent, config, baseURL);
 
-      if (!model) {
-        throw new Error(`Model not specified for agent ${agent.name}`);
-      }
-
-      // Check if any message contains image content or image attachments
-      const hasImageContent = state.messages.some(msg => 
-        (Array.isArray(msg.content) && 
-         msg.content.some(part => part.type === 'image_url')) ||
-        (msg.attachments && 
-         msg.attachments.some(att => att.kind === 'image'))
+      console.log(`📞 Calling model: ${model} with params: ${JSON.stringify(params, null, 2)}`);
+      const resp = await client.chat.completions.create(
+        params as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
       );
-
-      if (hasImageContent) {
-        const supportsVision = await isVisionModel(model, baseURL);
-        if (!supportsVision) {
-          throw new Error(`Model ${model} does not support vision capabilities. Please use a vision-capable model like gpt-4o, claude-3-5-sonnet, or gemini-1.5-pro.`);
-        }
-      }
-
-      const systemMessage: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
-        role: "system",
-        content: agent.instructions(state)
-      };
-
-      const convertedMessages = await Promise.all(state.messages.map(convertMessage));
-      const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-        systemMessage,
-        ...convertedMessages
-      ];
-
-      const tools = agent.tools?.map(t => ({
-        type: "function" as const,
-        function: {
-          name: t.schema.name,
-          description: t.schema.description,
-          parameters: zodSchemaToJsonSchema(t.schema.parameters),
-        },
-      }));
-
-      const lastMessage = state.messages[state.messages.length - 1];
-      const isAfterToolCall = lastMessage?.role === 'tool';
-
-      const requestParams: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
-        model,
-        messages,
-        temperature: agent.modelConfig?.temperature,
-        max_tokens: agent.modelConfig?.maxTokens,
-        tools: tools && tools.length > 0 ? tools : undefined,
-        tool_choice: (tools && tools.length > 0) ? (isAfterToolCall ? "auto" : undefined) : undefined,
-        response_format: agent.outputCodec ? { type: "json_object" } : undefined,
-      };
-
-      console.log(`📞 Calling model: ${model} with params: ${JSON.stringify(requestParams, null, 2)}`);
-      const resp = await client.chat.completions.create(requestParams);
 
       // Return the choice with usage data attached for tracing
       return {
@@ -130,6 +80,64 @@ export const makeLiteLLMProvider = <Ctx>(
         id: resp.id,
         created: resp.created
       };
+    },
+
+    async *getCompletionStream(state, agent, config) {
+      const { model, params: baseParams } = await buildChatCompletionParams(state, agent, config, baseURL);
+
+      console.log(`📡 Streaming model: ${model} with params: ${JSON.stringify(baseParams, null, 2)}`);
+
+      // Enable streaming on request
+      const streamParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
+        ...baseParams,
+        stream: true,
+      };
+      const stream = await client.chat.completions.create(streamParams);
+
+      // Iterate OpenAI streaming chunks (choices[].delta.*)
+      for await (const chunk of stream) {
+        const choice = chunk?.choices?.[0];
+        const delta = choice?.delta;
+
+        if (!delta) {
+          // Some keep-alive frames may not contain deltas
+          const finish = choice?.finish_reason;
+          if (finish) {
+            yield { isDone: true, finishReason: finish, raw: chunk };
+          }
+          continue;
+        }
+
+        // Text content delta
+        if (delta.content) {
+          yield { delta: delta.content, raw: chunk };
+        }
+
+        // Tool call delta(s)
+        if (Array.isArray(delta.tool_calls)) {
+          for (const toolCall of delta.tool_calls) {
+            const fn = toolCall.function || {};
+            yield {
+              toolCallDelta: {
+                index: toolCall.index ?? 0,
+                id: toolCall.id,
+                type: 'function',
+                function: {
+                  name: fn.name,
+                  argumentsDelta: fn.arguments,
+                },
+              },
+              raw: chunk,
+            };
+          }
+        }
+
+        // Completion ended
+        const finish = choice?.finish_reason;
+        if (finish) {
+          yield { isDone: true, finishReason: finish, raw: chunk };
+        }
+      }
     },
   };
 };
@@ -201,6 +209,72 @@ async function isVisionModel(model: string, baseURL: string): Promise<boolean> {
   visionModelCache.set(cacheKey, { supports: isKnownVisionModel, timestamp: Date.now() });
   
   return isKnownVisionModel;
+}
+
+/**
+ * Build common Chat Completions request parameters shared by both
+ * getCompletion and getCompletionStream to avoid logic duplication.
+ */
+async function buildChatCompletionParams<Ctx>(
+  state: Readonly<RunState<Ctx>>,
+  agent: Readonly<Agent<Ctx, any>>,
+  config: Readonly<RunConfig<Ctx>>,
+  baseURL: string,
+): Promise<{ model: string; params: OpenAI.Chat.Completions.ChatCompletionCreateParams }> {
+  const model = config.modelOverride ?? agent.modelConfig?.name;
+
+  if (!model) {
+    throw new Error(`Model not specified for agent ${agent.name}`);
+  }
+
+  // Vision capability check if any image payload present
+  const hasImageContent = state.messages.some(msg =>
+    (Array.isArray(msg.content) && msg.content.some(part => (part as any).type === 'image_url')) ||
+    (!!msg.attachments && msg.attachments.some(att => att.kind === 'image'))
+  );
+  if (hasImageContent) {
+    const supportsVision = await isVisionModel(model, baseURL);
+    if (!supportsVision) {
+      throw new Error(
+        `Model ${model} does not support vision capabilities. Please use a vision-capable model like gpt-4o, claude-3-5-sonnet, or gemini-1.5-pro.`
+      );
+    }
+  }
+
+  const systemMessage: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
+    role: 'system',
+    content: agent.instructions(state),
+  };
+
+  const convertedMessages = await Promise.all(state.messages.map(convertMessage));
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+    systemMessage,
+    ...convertedMessages,
+  ];
+
+  const tools = agent.tools?.map(t => ({
+    type: 'function' as const,
+    function: {
+      name: t.schema.name,
+      description: t.schema.description,
+      parameters: zodSchemaToJsonSchema(t.schema.parameters),
+    },
+  }));
+
+  const lastMessage = state.messages[state.messages.length - 1];
+  const isAfterToolCall = lastMessage?.role === 'tool';
+
+  const params: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
+    model,
+    messages,
+    temperature: agent.modelConfig?.temperature,
+    max_tokens: agent.modelConfig?.maxTokens,
+    tools: tools && tools.length > 0 ? tools : undefined,
+    tool_choice: tools && tools.length > 0 ? (isAfterToolCall ? 'auto' : undefined) : undefined,
+    response_format: agent.outputCodec ? { type: 'json_object' } : undefined,
+  };
+
+  return { model, params };
 }
 
 async function convertMessage(msg: Message): Promise<OpenAI.Chat.Completions.ChatCompletionMessageParam> {
