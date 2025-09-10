@@ -13,6 +13,9 @@ export * from './policies/handoff';
 
 export * from './server';
 
+// Built-in tools
+export * from './tools';
+
 // Memory providers
 export * from './memory/types';
 export * from './memory/factory';
