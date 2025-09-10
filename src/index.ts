@@ -27,6 +27,9 @@ export * from './a2a';
 // Re-export specific ADK modules to avoid conflicts
 export * as ADK from './adk';
 
+// Core Tools
+export * from './tools';
+
 import { v4 as uuidv4 } from 'uuid';
 import { TraceId, RunId, createTraceId, createRunId } from './core/types';
 
