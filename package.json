@@ -132,24 +132,22 @@
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
-    "express": "^4.18.2",
     "@modelcontextprotocol/sdk": "^1.17.4",
     "@types/yauzl": "^2.10.3",
+    "ai": "^5.0.35",
     "eventsource": "^2.0.2",
+    "express": "^4.18.2",
     "fastify": "^4.29.1",
     "mammoth": "^1.10.0",
     "mathjs": "^14.6.0",
     "openai": "^4.0.0",
     "papaparse": "^5.5.3",
     "pdf-parse": "^1.1.1",
+    "tunnel": "^0.0.6",
     "uuid": "^9.0.0",
     "xlsx": "^0.18.5",
     "yauzl": "^3.2.0",
-    "zod": "^3.22.0",
-    "http-proxy-agent": "^7.0.2",
-    "https-proxy-agent": "^7.0.6",
-    "ai": "^5.0.35"
-    
+    "zod": "^3.22.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -159,6 +157,7 @@
     "@types/papaparse": "^5.3.16",
     "@types/pdf-parse": "^1.1.5",
     "@types/pg": "^8.15.5",
+    "@types/tunnel": "^0.0.7",
     "@types/uuid": "^9.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
@@ -173,9 +172,9 @@
   },
   "optionalDependencies": {
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/sdk-node": "^0.54.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.54.0",
     "@opentelemetry/resources": "^1.28.0",
+    "@opentelemetry/sdk-node": "^0.54.0",
     "@opentelemetry/semantic-conventions": "^1.28.0"
   }
 }

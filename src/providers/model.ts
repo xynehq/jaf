@@ -1,7 +1,7 @@
 import OpenAI from "openai";
+import tunnel from 'tunnel';
 import { ModelProvider, Message, MessageContentPart, getTextContent } from '../core/types.js';
 import { extractDocumentContent, isDocumentSupported, getDocumentDescription } from '../utils/document-processor.js';
-
 interface ProxyConfig {
   httpProxy?: string;
   httpsProxy?: string;
@@ -10,30 +10,44 @@ interface ProxyConfig {
 
 function createProxyAgent(url?: any,proxyConfig?: ProxyConfig) {
   const httpProxy = proxyConfig?.httpProxy || process.env.HTTP_PROXY;
-  const httpsProxy = proxyConfig?.httpsProxy || process.env.HTTPS_PROXY;
   const noProxy = proxyConfig?.noProxy || process.env.NO_PROXY;
   
-  if (noProxy?.includes(url)  || (!httpProxy && !httpsProxy)) {
+  if (noProxy?.includes(url)  || !httpProxy ) {
     return undefined;
   }
 
   try {
-    const { HttpsProxyAgent } = require('https-proxy-agent');
-    const { HttpProxyAgent } = require('http-proxy-agent');
-    
     console.log(`[JAF:PROXY] Configuring proxy agents:`);
     if (httpProxy) console.log(`HTTP_PROXY: ${httpProxy}`);
-    if (httpsProxy) console.log(`HTTPS_PROXY: ${httpsProxy}`);
     if (noProxy) console.log(`NO_PROXY: ${noProxy}`);
 
     return {
-      httpAgent: httpProxy ? new HttpProxyAgent(httpProxy) : undefined,
-      httpsAgent: httpsProxy ? new HttpsProxyAgent(httpsProxy) : undefined
+      httpAgent: httpProxy ? createTunnelAgent(httpProxy) : undefined,
     };
   } catch (error) {
     console.warn(`[JAF:PROXY] Failed to create proxy agents. Install 'https-proxy-agent' and 'http-proxy-agent' packages for proxy support:`, error instanceof Error ? error.message : String(error));
     return undefined;
   }
+}
+
+
+const createTunnelAgent = (proxyUrl: string) => {
+  const url = new URL(proxyUrl);
+  
+  // Create tunnel agent for HTTPS through HTTP proxy
+  return tunnel.httpsOverHttp({
+    proxy: {
+      host: url.hostname,
+      port: parseInt(url.port)
+    },
+    rejectUnauthorized: false
+  });
+};
+
+interface ProxyConfig {
+  httpProxy?: string;
+  httpsProxy?: string;
+  noProxy?: string;
 }
 
 export const makeLiteLLMProvider = <Ctx>(
@@ -52,9 +66,6 @@ export const makeLiteLLMProvider = <Ctx>(
   if (proxyAgents) {
     if (proxyAgents.httpAgent) {
       clientConfig.httpAgent = proxyAgents.httpAgent;
-    }
-    if (proxyAgents.httpsAgent) {
-      clientConfig.httpsAgent = proxyAgents.httpsAgent;
     }
     console.log(`[JAF:PROXY] LiteLLM provider configured with proxy support`);
   } else {
