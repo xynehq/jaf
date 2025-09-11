@@ -9,7 +9,7 @@ When users send you attachments, analyze them carefully and provide helpful, det
 
 For images: Describe what you see in detail.
 For documents: Analyze and summarize the content, structure, or data as appropriate.
-Supported document types: PDF, DOCX, XLSX, CSV, TXT, JSON, ZIP files.`,
+Supported document types: DOCX, XLSX, CSV, TXT, JSON, ZIP files.`,
   modelConfig: {
     name: 'claude-sonnet-4', 
     temperature: 0.7,
@@ -122,26 +122,6 @@ server.start().then(() => {
 
 
 
-  console.log('4. PDF document:');
-  console.log(`curl -X POST http://localhost:3002/chat \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "agentName": "attachment-analyst",
-    "messages": [
-      {
-        "role": "user",
-        "content": "What can you tell me about this PDF document?",
-        "attachments": [
-          {
-            "kind": "document",
-            "mimeType": "application/pdf",
-            "name": "sample.pdf",
-            "data": "your_pdf_base64_data_here"
-          }
-        ]
-      }
-    ]
-  }'\n`);
 
   console.log('5. Text file:');
   console.log(`curl -X POST http://localhost:3002/chat \\
@@ -209,7 +189,7 @@ server.start().then(() => {
 
 
 
-  console.log('8. LiteLLM format - Large PDF via URL (efficient):');
+  console.log('8. LiteLLM format - Large document via URL (efficient):');
   console.log(`curl -X POST http://localhost:3002/chat \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -217,13 +197,13 @@ server.start().then(() => {
     "messages": [
       {
         "role": "user",
-        "content": "Analyze this large PDF using LiteLLM format",
+        "content": "Analyze this large document using LiteLLM format",
         "attachments": [
           {
             "kind": "document",
-            "mimeType": "application/pdf",
-            "name": "large-pdf.pdf",
-            "url": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+            "mimeType": "application/json",
+            "name": "large-config.json",
+            "data": "ewogICJuYW1lIjogIkxhcmdlIENvbmZpZ3VyYXRpb24iLAogICJ2ZXJzaW9uIjogIjIuMC4wIiwKICAiZGVzY3JpcHRpb24iOiAiQSBjb21wbGV4IGNvbmZpZ3VyYXRpb24gZmlsZSB3aXRoIG1hbnkgc2V0dGluZ3MiLAogICJzZXJ2aWNlcyI6IHsKICAgICJkYXRhYmFzZSI6IHsKICAgICAgImhvc3QiOiAibG9jYWxob3N0IiwKICAgICAgInBvcnQiOiA1NDMyLAogICAgICAibmFtZSI6ICJhcHBfZGIiCiAgICB9LAogICAgInJlZGlzIjogewogICAgICAiaG9zdCI6ICJsb2NhbGhvc3QiLAogICAgICAicG9ydCI6IDYzNzkKICAgIH0KICB9Cn0=",
             "useLiteLLMFormat": true
           }
         ]
@@ -243,9 +223,9 @@ server.start().then(() => {
         "attachments": [
           {
             "kind": "document",
-            "mimeType": "application/pdf",
-            "name": "document.pdf",
-            "data": "JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCgoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovS2lkcyBbMyAwIFJdCi9Db3VudCAxCj4+CmVuZG9iagoKMyAwIG9iago8PAovVHlwZSAvUGFnZQovUGFyZW50IDIgMCBSCi9NZWRpYUJveCBbMCAwIDYxMiA3OTJdCi9Db250ZW50cyA0IDAgUgo+PgplbmRvYmoKCjQgMCBvYmoKPDwKL0xlbmd0aCA0NAo+PgpzdHJlYW0KQlQKL0YxIDEyIFRmCjEwMCA3MDAgVGQKKEhlbGxvIFdvcmxkKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCgp4cmVmCjAgNQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTAgMDAwMDAgbiAKMDAwMDAwMDA1MyAwMDAwMCBuIAowMDAwMDAwMTI1IDAwMDAwIG4gCjAwMDAwMDAyMTAgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSA1Ci9Sb290IDEgMCBSCj4+CnN0YXJ0eHJlZgoyNjQKJSVFT0Y=",
+            "mimeType": "application/json",
+            "name": "config.json",
+            "data": "ewogICJuYW1lIjogIlNhbXBsZSBBcHAiLAogICJ2ZXJzaW9uIjogIjEuMC4wIiwKICAiZGVzY3JpcHRpb24iOiAiQSBzYW1wbGUgYXBwbGljYXRpb24gZm9yIGRlbW9uc3RyYXRpb24gcHVycG9zZXMiLAogICJhdXRob3IiOiAiSm9obiBEb2UiLAogICJsaWNlbnNlIjogIk1JVCIsCiAgImRlcGVuZGVuY2llcyI6IHsKICAgICJleHByZXNzIjogIl40LjE4LjIiLAogICAgImxvZGFzaCI6ICJeNC4xNy4yMSIsCiAgICAiYXhpb3MiOiAiXjEuNi4yIgogIH0sCiAgInNjcmlwdHMiOiB7CiAgICAic3RhcnQiOiAibm9kZSBpbmRleC5qcyIsCiAgICAidGVzdCI6ICJucG0gcnVuIGplc3QiCiAgfQp9",
             "useLiteLLMFormat": true
           }
         ]
@@ -306,9 +286,9 @@ server.start().then(() => {
   console.log('Configuration:');
   console.log('- Use Ctrl+C to stop the server');
   console.log('- Image attachments: Full visual analysis');
-  console.log('- Document attachments: Text extraction and analysis for PDF, DOCX, XLSX, CSV, TXT, JSON, ZIP');
+  console.log('- Document attachments: Text extraction and analysis for DOCX, XLSX, CSV, TXT, JSON, ZIP');
   console.log('- LiteLLM format: Use "useLiteLLMFormat": true for efficient large file processing');
-  console.log('  * Large PDFs: No context window waste, native model processing');
+  console.log('  * Large documents: No context window waste, native model processing');
   console.log('  * Better layout understanding, tables, images preserved');
   console.log('  * Automatic provider optimization (Bedrock, Gemini, OpenAI)');
   console.log('- URL support: Both remote URLs and base64 data supported');

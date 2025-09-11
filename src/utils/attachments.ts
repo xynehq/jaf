@@ -15,7 +15,7 @@ const ALLOWED_IMAGE_MIME_TYPES = [
   'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'
 ];
 const ALLOWED_DOCUMENT_MIME_TYPES = [
-  'application/pdf', 'text/plain', 'text/csv', 'application/json',
+  'text/plain', 'text/csv', 'application/json',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 ];
