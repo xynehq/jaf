@@ -1,6 +1,6 @@
 {
   "name": "@xynehq/jaf",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "description": "Juspay Agent Framework - A purely functional agent framework with immutable state and composable tools",
   "packageManager": "pnpm@9.0.0",
   "main": "dist/index.js",
@@ -50,6 +50,11 @@
       "import": "./dist/utils/index.js",
       "require": "./dist/utils/index.js",
       "types": "./dist/utils/index.d.ts"
+    },
+    "./tools": {
+      "import": "./dist/tools/index.js",
+      "require": "./dist/tools/index.js",
+      "types": "./dist/tools/index.d.ts"
     }
   },
   "typesVersions": {
@@ -77,6 +82,9 @@
       ],
       "utils": [
         "dist/utils/index.d.ts"
+      ],
+      "tools": [
+        "dist/tools/index.d.ts"
       ]
     }
   },

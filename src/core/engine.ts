@@ -401,7 +401,82 @@ async function runInternal<Ctx, Out>(
     data: llmCallData
   });
 
-  const llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+  let llmResponse: any;
+  let streamingUsed = false;
+  let assistantEventStreamed = false;
+
+  if (typeof config.modelProvider.getCompletionStream === 'function') {
+    try {
+      streamingUsed = true;
+      const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
+      let aggregatedText = '';
+      const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
+
+      for await (const chunk of stream) {
+        if (chunk?.delta) {
+          aggregatedText += chunk.delta;
+        }
+        if (chunk?.toolCallDelta) {
+          const idx = chunk.toolCallDelta.index ?? 0;
+          while (toolCalls.length <= idx) {
+            toolCalls.push({ id: undefined, type: 'function', function: { name: undefined, arguments: '' } });
+          }
+          const target = toolCalls[idx];
+          if (chunk.toolCallDelta.id) target.id = chunk.toolCallDelta.id;
+          if (chunk.toolCallDelta.function?.name) target.function.name = chunk.toolCallDelta.function.name;
+          if (chunk.toolCallDelta.function?.argumentsDelta) {
+            target.function.arguments += chunk.toolCallDelta.function.argumentsDelta;
+          }
+        }
+
+        if (chunk?.delta || chunk?.toolCallDelta) {
+          assistantEventStreamed = true;
+          const partialMessage: Message = {
+            role: 'assistant',
+            content: aggregatedText,
+            ...(toolCalls.length > 0
+              ? {
+                  tool_calls: toolCalls.map((tc, i) => ({
+                    id: tc.id ?? `call_${i}`,
+                    type: 'function' as const,
+                    function: {
+                      name: tc.function.name ?? '',
+                      arguments: tc.function.arguments
+                    }
+                  }))
+                }
+              : {})
+          };
+          try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { console.error('Error in config.onEvent:', err); }
+        }
+      }
+
+      llmResponse = {
+        message: {
+          content: aggregatedText || undefined,
+          ...(toolCalls.length > 0
+            ? {
+                tool_calls: toolCalls.map((tc, i) => ({
+                  id: tc.id ?? `call_${i}`,
+                  type: 'function' as const,
+                  function: {
+                    name: tc.function.name ?? '',
+                    arguments: tc.function.arguments
+                  }
+                }))
+              }
+            : {})
+        }
+      };
+    } catch (e) {
+      // Fallback to non-streaming on error
+      streamingUsed = false;
+      assistantEventStreamed = false;
+      llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+    }
+  } else {
+    llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+  }
   
   // Extract usage data for enhanced events
   const usage = (llmResponse as any)?.usage;
@@ -463,10 +538,12 @@ async function runInternal<Ctx, Out>(
   };
 
   // Emit assistant message received (could include tool calls and/or content)
-  config.onEvent?.({
-    type: 'assistant_message',
-    data: { message: assistantMessage }
-  });
+  if (!assistantEventStreamed) {
+    config.onEvent?.({
+      type: 'assistant_message',
+      data: { message: assistantMessage }
+    });
+  }
 
   const newMessages = [...state.messages, assistantMessage];
   // Increment turnCount after each AI invocation
@@ -478,7 +555,8 @@ async function runInternal<Ctx, Out>(
     
     // Emit tool request(s) event with parsed args
     try {
-      const requests = llmResponse.message.tool_calls.map(tc => ({
+      const toolCallsArr = llmResponse.message.tool_calls as Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
+      const requests = toolCallsArr.map((tc) => ({
         id: tc.id,
         name: tc.function.name,
         args: tryParseJSON(tc.function.arguments)
