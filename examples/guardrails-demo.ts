@@ -59,7 +59,6 @@ const modelProvider = makeLiteLLMProvider(
 const serverConfig = {
   port: 3003,
   host: 'localhost',
-  agentRegistry,
   runConfig: {
     agentRegistry,
     modelProvider,

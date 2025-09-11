@@ -8,7 +8,7 @@ export interface ServerConfig<Ctx> {
   cors?: boolean;
   maxBodySize?: number;
   runConfig: RunConfig<Ctx>;
-  agentRegistry: Map<string, Agent<Ctx, any>>;
+  // agentRegistry is now only in runConfig to avoid duplication
   defaultMemoryProvider?: MemoryProvider;
 }
 

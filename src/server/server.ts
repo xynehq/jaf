@@ -215,7 +215,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
     // List available agents
     app.get('/agents', async (request: FastifyRequest, reply: FastifyReply): Promise<AgentListResponse> => {
       try {
-        const agents = Array.from((config.agentRegistry || config.runConfig.agentRegistry).entries()).map(([name, agent]) => ({
+        const agents = Array.from(config.runConfig.agentRegistry.entries()).map(([name, agent]) => ({
           name,
           description: typeof agent.instructions === 'function' 
             ? 'Agent description' // Safe fallback since we don't have context
@@ -252,11 +252,10 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         const validatedRequest = chatRequestSchema.parse(request.body);
         
         // Check if agent exists
-        const agentRegistry = config.agentRegistry || config.runConfig.agentRegistry;
-        if (!agentRegistry.has(validatedRequest.agentName)) {
+        if (!config.runConfig.agentRegistry.has(validatedRequest.agentName)) {
           const response: ChatResponse = {
             success: false,
-            error: `Agent '${validatedRequest.agentName}' not found. Available agents: ${Array.from(agentRegistry.keys()).join(', ')}`
+            error: `Agent '${validatedRequest.agentName}' not found. Available agents: ${Array.from(config.runConfig.agentRegistry.keys()).join(', ')}`
           };
           return reply.code(404).send(response);
         }
@@ -879,7 +878,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       console.log(`🔧 Fastify server started successfully`);
       
       console.log(`🚀 JAF Server running on http://${host}:${port}`);
-      console.log(`📋 Available agents: ${Array.from((config.agentRegistry || config.runConfig.agentRegistry).keys()).join(', ')}`);
+      console.log(`📋 Available agents: ${Array.from(config.runConfig.agentRegistry.keys()).join(', ')}`);
       console.log(`🏥 Health check: http://${host}:${port}/health`);
       console.log(`🤖 Agents list: http://${host}:${port}/agents`);
       console.log(`💬 Chat endpoint: http://${host}:${port}/chat`);

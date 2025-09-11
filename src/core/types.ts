@@ -84,6 +84,7 @@ export type AdvancedGuardrailsConfig = {
   readonly outputPrompt?: string;
   readonly requireCitations?: boolean;
   readonly fastModel?: string;
+  readonly failSafe?: 'allow' | 'block'; // What to do when guardrail evaluation fails
 };
 
 export type AdvancedConfig = {
