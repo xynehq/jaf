@@ -1,0 +1,1099 @@
+diff --git a/examples/attachment-demo-server.ts b/examples/attachment-demo-server.ts
+index 371d79f..03e44bf 100644
+--- a/examples/attachment-demo-server.ts
++++ b/examples/attachment-demo-server.ts
+@@ -9,7 +9,7 @@ When users send you attachments, analyze them carefully and provide helpful, det
+ 
+ For images: Describe what you see in detail.
+ For documents: Analyze and summarize the content, structure, or data as appropriate.
+-Supported document types: PDF, DOCX, XLSX, CSV, TXT, JSON, ZIP files.`,
++Supported document types: DOCX, XLSX, CSV, TXT, JSON, ZIP files.`,
+   modelConfig: {
+     name: 'claude-sonnet-4', 
+     temperature: 0.7,
+@@ -122,26 +122,6 @@ server.start().then(() => {
+ 
+ 
+ 
+-  console.log('4. PDF document:');
+-  console.log(`curl -X POST http://localhost:3002/chat \\
+-  -H "Content-Type: application/json" \\
+-  -d '{
+-    "agentName": "attachment-analyst",
+-    "messages": [
+-      {
+-        "role": "user",
+-        "content": "What can you tell me about this PDF document?",
+-        "attachments": [
+-          {
+-            "kind": "document",
+-            "mimeType": "application/pdf",
+-            "name": "sample.pdf",
+-            "data": "your_pdf_base64_data_here"
+-          }
+-        ]
+-      }
+-    ]
+-  }'\n`);
+ 
+   console.log('5. Text file:');
+   console.log(`curl -X POST http://localhost:3002/chat \\
+@@ -209,7 +189,7 @@ server.start().then(() => {
+ 
+ 
+ 
+-  console.log('8. LiteLLM format - Large PDF via URL (efficient):');
++  console.log('8. LiteLLM format - Large document via URL (efficient):');
+   console.log(`curl -X POST http://localhost:3002/chat \\
+   -H "Content-Type: application/json" \\
+   -d '{
+@@ -217,13 +197,13 @@ server.start().then(() => {
+     "messages": [
+       {
+         "role": "user",
+-        "content": "Analyze this large PDF using LiteLLM format",
++        "content": "Analyze this large document using LiteLLM format",
+         "attachments": [
+           {
+             "kind": "document",
+-            "mimeType": "application/pdf",
+-            "name": "large-pdf.pdf",
+-            "url": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
++            "mimeType": "application/json",
++            "name": "large-config.json",
++            "data": "ewogICJuYW1lIjogIkxhcmdlIENvbmZpZ3VyYXRpb24iLAogICJ2ZXJzaW9uIjogIjIuMC4wIiwKICAiZGVzY3JpcHRpb24iOiAiQSBjb21wbGV4IGNvbmZpZ3VyYXRpb24gZmlsZSB3aXRoIG1hbnkgc2V0dGluZ3MiLAogICJzZXJ2aWNlcyI6IHsKICAgICJkYXRhYmFzZSI6IHsKICAgICAgImhvc3QiOiAibG9jYWxob3N0IiwKICAgICAgInBvcnQiOiA1NDMyLAogICAgICAibmFtZSI6ICJhcHBfZGIiCiAgICB9LAogICAgInJlZGlzIjogewogICAgICAiaG9zdCI6ICJsb2NhbGhvc3QiLAogICAgICAicG9ydCI6IDYzNzkKICAgIH0KICB9Cn0=",
+             "useLiteLLMFormat": true
+           }
+         ]
+@@ -243,9 +223,9 @@ server.start().then(() => {
+         "attachments": [
+           {
+             "kind": "document",
+-            "mimeType": "application/pdf",
+-            "name": "document.pdf",
+-            "data": "JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCgoyIDAgb2JqCjw8Ci9UeXBlIC9QYWdlcwovS2lkcyBbMyAwIFJdCi9Db3VudCAxCj4+CmVuZG9iagoKMyAwIG9iago8PAovVHlwZSAvUGFnZQovUGFyZW50IDIgMCBSCi9NZWRpYUJveCBbMCAwIDYxMiA3OTJdCi9Db250ZW50cyA0IDAgUgo+PgplbmRvYmoKCjQgMCBvYmoKPDwKL0xlbmd0aCA0NAo+PgpzdHJlYW0KQlQKL0YxIDEyIFRmCjEwMCA3MDAgVGQKKEhlbGxvIFdvcmxkKSBUagpFVAplbmRzdHJlYW0KZW5kb2JqCgp4cmVmCjAgNQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTAgMDAwMDAgbiAKMDAwMDAwMDA1MyAwMDAwMCBuIAowMDAwMDAwMTI1IDAwMDAwIG4gCjAwMDAwMDAyMTAgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSA1Ci9Sb290IDEgMCBSCj4+CnN0YXJ0eHJlZgoyNjQKJSVFT0Y=",
++            "mimeType": "application/json",
++            "name": "config.json",
++            "data": "ewogICJuYW1lIjogIlNhbXBsZSBBcHAiLAogICJ2ZXJzaW9uIjogIjEuMC4wIiwKICAiZGVzY3JpcHRpb24iOiAiQSBzYW1wbGUgYXBwbGljYXRpb24gZm9yIGRlbW9uc3RyYXRpb24gcHVycG9zZXMiLAogICJhdXRob3IiOiAiSm9obiBEb2UiLAogICJsaWNlbnNlIjogIk1JVCIsCiAgImRlcGVuZGVuY2llcyI6IHsKICAgICJleHByZXNzIjogIl40LjE4LjIiLAogICAgImxvZGFzaCI6ICJeNC4xNy4yMSIsCiAgICAiYXhpb3MiOiAiXjEuNi4yIgogIH0sCiAgInNjcmlwdHMiOiB7CiAgICAic3RhcnQiOiAibm9kZSBpbmRleC5qcyIsCiAgICAidGVzdCI6ICJucG0gcnVuIGplc3QiCiAgfQp9",
+             "useLiteLLMFormat": true
+           }
+         ]
+@@ -306,9 +286,9 @@ server.start().then(() => {
+   console.log('Configuration:');
+   console.log('- Use Ctrl+C to stop the server');
+   console.log('- Image attachments: Full visual analysis');
+-  console.log('- Document attachments: Text extraction and analysis for PDF, DOCX, XLSX, CSV, TXT, JSON, ZIP');
++  console.log('- Document attachments: Text extraction and analysis for DOCX, XLSX, CSV, TXT, JSON, ZIP');
+   console.log('- LiteLLM format: Use "useLiteLLMFormat": true for efficient large file processing');
+-  console.log('  * Large PDFs: No context window waste, native model processing');
++  console.log('  * Large documents: No context window waste, native model processing');
+   console.log('  * Better layout understanding, tables, images preserved');
+   console.log('  * Automatic provider optimization (Bedrock, Gemini, OpenAI)');
+   console.log('- URL support: Both remote URLs and base64 data supported');
+diff --git a/examples/guardrails-demo.ts b/examples/guardrails-demo.ts
+new file mode 100644
+index 0000000..746d31c
+--- /dev/null
++++ b/examples/guardrails-demo.ts
+@@ -0,0 +1,99 @@
++import { createJAFServer } from '../src/server/server.js';
++import { makeLiteLLMProvider } from '../src/providers/model.js';
++import { Agent } from '../src/core/types.js';
++
++// Example agent with advanced guardrails configuration
++const guardrailsAgent: Agent<any, string> = {
++  name: 'safe-assistant',
++  instructions: () => `You are a helpful AI assistant that provides accurate and safe responses.`,
++  modelConfig: {
++    name: 'claude-sonnet-4', 
++    temperature: 0.7,
++    maxTokens: 1000
++  },
++  advancedConfig: {
++    guardrails: {
++      // Input guardrail: Check for harmful content
++      inputPrompt: `Check if the user message contains:
++1. Requests for illegal activities
++2. Harmful or offensive language
++3. Attempts to bypass safety measures
++
++The message should be ALLOWED unless it clearly violates these rules.`,
++
++      // Output guardrail: Ensure responses are helpful and safe
++      outputPrompt: `Check if the assistant response:
++1. Provides helpful information
++2. Avoids harmful or inappropriate content
++3. Does not include personal information or unsafe advice
++
++The response should be ALLOWED unless it clearly violates these rules.`,
++
++      fastModel: 'claude-sonnet-4'
++    }
++  }
++};
++
++const agentRegistry = new Map([
++  ['safe-assistant', guardrailsAgent]
++]);
++
++const litellmBaseUrl = process.env.LITELLM_BASE_URL;
++const litellmApiKey = process.env.LITELLM_API_KEY;
++
++if (!litellmBaseUrl || litellmBaseUrl === 'null') {
++  console.warn('⚠️  LITELLM_BASE_URL not set. Server will start but model calls will fail.');
++  console.warn('   Set LITELLM_BASE_URL environment variable to use a real LiteLLM endpoint.');
++}
++
++if (!litellmApiKey || litellmApiKey === 'null') {
++  console.warn('⚠️  LITELLM_API_KEY not set. Server will start but model calls may fail.');
++  console.warn('   Set LITELLM_API_KEY environment variable if your LiteLLM endpoint requires authentication.');
++}
++
++const modelProvider = makeLiteLLMProvider(
++  litellmBaseUrl || 'https://api.openai.com/v1',
++  litellmApiKey || 'your-api-key-here'
++);
++
++const serverConfig = {
++  port: 3003,
++  host: 'localhost',
++  runConfig: {
++    agentRegistry,
++    modelProvider,
++    maxTurns: 10,
++    defaultFastModel: 'claude-sonnet-4',
++    onEvent: (event: any) => {
++      if (event.type === 'guardrail_violation') {
++        console.log(`🚨 Guardrail violation (${event.data.stage}): ${event.data.reason}`);
++      } else if (event.type === 'guardrail_check') {
++        console.log(`🛡️  Guardrail check: ${event.data.guardrailName} - ${event.data.isValid ? 'PASSED' : 'FAILED'}`);
++      }
++    }
++  }
++};
++
++console.log('🚀 Starting JAF Server with Advanced Guardrails Demo...');
++console.log('📋 Features demonstrated:');
++console.log('   • Input validation using LLM-based guardrails');
++console.log('   • Output validation using LLM-based guardrails');
++console.log('   • Citation requirement enforcement');
++console.log('   • Backwards compatibility with existing guardrails');
++console.log('   • Graceful error handling for guardrail failures');
++console.log('');
++console.log('🧪 Test with these messages:');
++console.log('   ✅ Good: "Tell me about renewable energy"');
++console.log('   ❌ Bad: "How do I break into someone\'s house?"');
++console.log('   📚 Citation test: Ask for information that should include sources');
++console.log('');
++
++const server = createJAFServer(serverConfig);
++
++console.log('Example curl command:');
++console.log(`curl -X POST http://${serverConfig.host}:${serverConfig.port}/chat \\`);
++console.log('  -H "Content-Type: application/json" \\');
++console.log('  -d \'{"messages": [{"role": "user", "content": "Tell me about renewable energy with citations"}], "agentName": "safe-assistant"}\'');
++
++// Actually start the server
++server.start().catch(console.error);
+\ No newline at end of file
+diff --git a/package.json b/package.json
+index a71f8b0..67aee07 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "@xynehq/jaf",
+-  "version": "0.1.10",
++  "version": "0.1.11",
+   "description": "Juspay Agent Framework - A purely functional agent framework with immutable state and composable tools",
+   "packageManager": "pnpm@9.0.0",
+   "main": "dist/index.js",
+@@ -150,7 +150,6 @@
+     "mathjs": "^14.6.0",
+     "openai": "^4.0.0",
+     "papaparse": "^5.5.3",
+-    "pdf-parse": "^1.1.1",
+     "tunnel": "^0.0.6",
+     "uuid": "^9.0.0",
+     "xlsx": "^0.18.5",
+@@ -163,7 +162,6 @@
+     "@types/jest": "^29.0.0",
+     "@types/node": "^20.0.0",
+     "@types/papaparse": "^5.3.16",
+-    "@types/pdf-parse": "^1.1.5",
+     "@types/pg": "^8.15.5",
+     "@types/tunnel": "^0.0.7",
+     "@types/uuid": "^9.0.0",
+diff --git a/pnpm-lock.yaml b/pnpm-lock.yaml
+index 755d470..5cac41d 100644
+--- a/pnpm-lock.yaml
++++ b/pnpm-lock.yaml
+@@ -41,9 +41,6 @@ importers:
+       papaparse:
+         specifier: ^5.5.3
+         version: 5.5.3
+-      pdf-parse:
+-        specifier: ^1.1.1
+-        version: 1.1.1
+       tunnel:
+         specifier: ^0.0.6
+         version: 0.0.6
+@@ -91,9 +88,6 @@ importers:
+       '@types/papaparse':
+         specifier: ^5.3.16
+         version: 5.3.16
+-      '@types/pdf-parse':
+-        specifier: ^1.1.5
+-        version: 1.1.5
+       '@types/pg':
+         specifier: ^8.15.5
+         version: 8.15.5
+@@ -1275,9 +1269,6 @@ packages:
+   '@types/papaparse@5.3.16':
+     resolution: {integrity: sha512-T3VuKMC2H0lgsjI9buTB3uuKj3EMD2eap1MOuEQuBQ44EnDx/IkGhU6EwiTf9zG3za4SKlmwKAImdDKdNnCsXg==}
+ 
+-  '@types/pdf-parse@1.1.5':
+-    resolution: {integrity: sha512-kBfrSXsloMnUJOKi25s3+hRmkycHfLK6A09eRGqF/N8BkQoPUmaCr+q8Cli5FnfohEz/rsv82zAiPz/LXtOGhA==}
+-
+   '@types/pg@8.15.5':
+     resolution: {integrity: sha512-LF7lF6zWEKxuT3/OR8wAZGzkg4ENGXFNyiV/JeOt9z5B+0ZVwbql9McqX5c/WStFq1GaGso7H1AzP/qSzmlCKQ==}
+ 
+@@ -1719,14 +1710,6 @@ packages:
+       supports-color:
+         optional: true
+ 
+-  debug@3.2.7:
+-    resolution: {integrity: sha512-CFjzYYAi4ThfiQvizrFQevTTXHtnCqWfe7x1AhgEscTz6ZbLbfoLRLPugTQyBth6f8ZERVUSyWHFD/7Wu4t1XQ==}
+-    peerDependencies:
+-      supports-color: '*'
+-    peerDependenciesMeta:
+-      supports-color:
+-        optional: true
+-
+   debug@4.4.1:
+     resolution: {integrity: sha512-KcKCqiftBJcZr++7ykoDIEwSa3XWowTfNPo92BYxjXiyYEVrUQh2aLyhxBCwww+heortUFxEJYcRzosstTEBYQ==}
+     engines: {node: '>=6.0'}
+@@ -2707,9 +2690,6 @@ packages:
+     engines: {node: '>=10.5.0'}
+     deprecated: Use your platform's native DOMException instead
+ 
+-  node-ensure@0.0.0:
+-    resolution: {integrity: sha512-DRI60hzo2oKN1ma0ckc6nQWlHU69RH6xN0sjQTjMpChPfTYvKZdcQFfdYK2RWbJcKyUizSIy/l8OTGxMAM1QDw==}
+-
+   node-fetch@2.7.0:
+     resolution: {integrity: sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==}
+     engines: {node: 4.x || >=6.0.0}
+@@ -2841,10 +2821,6 @@ packages:
+     resolution: {integrity: sha512-gDKb8aZMDeD/tZWs9P6+q0J9Mwkdl6xMV8TjnGP3qJVJ06bdMgkbBlLU8IdfOsIsFz2BW1rNVT3XuNEl8zPAvw==}
+     engines: {node: '>=8'}
+ 
+-  pdf-parse@1.1.1:
+-    resolution: {integrity: sha512-v6ZJ/efsBpGrGGknjtq9J/oC8tZWq0KWL5vQrk2GlzLEQPUDB1ex+13Rmidl1neNN358Jn9EHZw5y07FFtaC7A==}
+-    engines: {node: '>=6.8.1'}
+-
+   pend@1.2.0:
+     resolution: {integrity: sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg==}
+ 
+@@ -4554,10 +4530,6 @@ snapshots:
+     dependencies:
+       '@types/node': 20.19.11
+ 
+-  '@types/pdf-parse@1.1.5':
+-    dependencies:
+-      '@types/node': 20.19.11
+-
+   '@types/pg@8.15.5':
+     dependencies:
+       '@types/node': 20.19.11
+@@ -5046,10 +5018,6 @@ snapshots:
+     dependencies:
+       ms: 2.0.0
+ 
+-  debug@3.2.7:
+-    dependencies:
+-      ms: 2.1.3
+-
+   debug@4.4.1:
+     dependencies:
+       ms: 2.1.3
+@@ -6359,8 +6327,6 @@ snapshots:
+ 
+   node-domexception@1.0.0: {}
+ 
+-  node-ensure@0.0.0: {}
+-
+   node-fetch@2.7.0:
+     dependencies:
+       whatwg-url: 5.0.0
+@@ -6470,13 +6436,6 @@ snapshots:
+ 
+   path-type@4.0.0: {}
+ 
+-  pdf-parse@1.1.1:
+-    dependencies:
+-      debug: 3.2.7
+-      node-ensure: 0.0.0
+-    transitivePeerDependencies:
+-      - supports-color
+-
+   pend@1.2.0: {}
+ 
+   pg-cloudflare@1.2.7:
+diff --git a/src/core/engine.ts b/src/core/engine.ts
+index 57f351b..aa4aa30 100644
+--- a/src/core/engine.ts
++++ b/src/core/engine.ts
+@@ -11,9 +11,100 @@ import {
+   ToolCall,
+   Interruption,
+   getTextContent,
++  ValidationResult,
++  jsonParseLLMOutput,
++  createRunId,
++  createTraceId,
+ } from './types.js';
+ import { setToolRuntime } from './tool-runtime.js';
+ 
++/**
++ * LLM-based guardrail evaluator that uses a model to validate content against rules
++ */
++async function createLLMGuardrail<Ctx>(
++  config: RunConfig<Ctx>,
++  stage: "input" | "output",
++  rulePrompt: string,
++  fastModel?: string,
++  failSafe: 'allow' | 'block' = 'allow'
++): Promise<(content: string) => Promise<ValidationResult>> {
++  return async (content: string) => {
++    const modelToUse = fastModel || config.defaultFastModel;
++    if (!modelToUse) {
++      const message = `[JAF:GUARDRAILS] No fast model available for LLM guardrail evaluation, using failSafe: ${failSafe}`;
++      console.warn(message);
++      return failSafe === 'allow'
++        ? { isValid: true as const }
++        : { isValid: false as const, errorMessage: 'No model available for guardrail evaluation' };
++    }
++
++    // Compose a strict JSON-only evaluation prompt
++    const evalPrompt = `You are a guardrail validator for ${stage}.
++Rules:
++${rulePrompt}
++
++Decide if the ${stage === "input" ? "user message" : "assistant output"} complies with the rules.
++Return a JSON object with keys: {"allowed": boolean, "reason": string}. Do not include extra text.
++${stage === "input" ? "User message" : "Assistant output"}:
++"""
++${content}
++"""`;
++
++    try {
++      // Create a minimal state for the LLM call
++      const tempState: RunState<Ctx> = {
++        runId: createRunId('guardrail-eval'),
++        traceId: createTraceId('guardrail-eval'),
++        messages: [{ role: 'user', content: evalPrompt }],
++        currentAgentName: 'guardrail-evaluator',
++        context: {} as Readonly<Ctx>,
++        turnCount: 0
++      };
++
++      // Create a minimal agent for evaluation
++      const evalAgent: Agent<Ctx, any> = {
++        name: 'guardrail-evaluator',
++        instructions: () => 'You are a guardrail validator. Return only valid JSON.',
++        modelConfig: { name: modelToUse }
++      };
++
++      // Create a clean config for guardrail evaluation (no guardrails to avoid recursion)
++      const guardrailConfig: RunConfig<Ctx> = {
++        modelProvider: config.modelProvider,
++        agentRegistry: config.agentRegistry,
++        maxTurns: 1,
++        defaultFastModel: config.defaultFastModel,
++        modelOverride: modelToUse,
++        // Explicitly exclude all guardrails to prevent recursion
++        initialInputGuardrails: undefined,
++        finalOutputGuardrails: undefined,
++        onEvent: undefined // Avoid recursive events
++      };
++
++      const response = await config.modelProvider.getCompletion(tempState, evalAgent, guardrailConfig);
++
++      if (!response.message?.content) {
++        return { isValid: true as const };
++      }
++
++      const parsed = jsonParseLLMOutput(response.message.content);
++      const allowed = Boolean(parsed?.allowed);
++      const reason = typeof parsed?.reason === "string" ? parsed.reason : "Guardrail violation";
++      
++      return allowed
++        ? { isValid: true as const }
++        : ({ isValid: false as const, errorMessage: reason } as const);
++    } catch (e) {
++      // On evaluation failure, use configured failSafe behavior
++      const message = `[JAF:GUARDRAILS] Guardrail evaluation failed, using failSafe: ${failSafe}`;
++      console.warn(message, e);
++      return failSafe === 'allow'
++        ? { isValid: true as const }
++        : { isValid: false as const, errorMessage: `Guardrail evaluation failed: ${e instanceof Error ? e.message : 'Unknown error'}` };
++    }
++  };
++}
++
+ export async function run<Ctx, Out>(
+   initialState: RunState<Ctx>,
+   config: RunConfig<Ctx>
+@@ -266,33 +357,6 @@ async function runInternal<Ctx, Out>(
+   const resumed = await tryResumePendingToolCalls<Ctx, Out>(state, config);
+   if (resumed) return resumed;
+ 
+-  if (state.turnCount === 0) {
+-    const firstUserMessage = state.messages.find(m => m.role === 'user');
+-    if (firstUserMessage && config.initialInputGuardrails) {
+-      for (const guardrail of config.initialInputGuardrails) {
+-        const result = await guardrail(getTextContent(firstUserMessage.content));
+-        if (!result.isValid) {
+-          // Emit guardrail violation for input stage
+-          const errorMessage = !result.isValid ? result.errorMessage : '';
+-          config.onEvent?.({
+-            type: 'guardrail_violation',
+-            data: { stage: 'input', reason: errorMessage }
+-          });
+-          return {
+-            finalState: state,
+-            outcome: {
+-              status: 'error',
+-              error: {
+-                _tag: 'InputGuardrailTripwire',
+-                reason: errorMessage
+-              }
+-            }
+-          };
+-        }
+-      }
+-    }
+-  }
+-
+   const maxTurns = config.maxTurns ?? 50;
+   if (state.turnCount >= maxTurns) {
+     return {
+@@ -321,6 +385,111 @@ async function runInternal<Ctx, Out>(
+     };
+   }
+ 
++  // Build complete guardrails lists from agent configuration
++  let effectiveInputGuardrails: any[] = [];
++  let effectiveOutputGuardrails: any[] = [];
++  
++  try {
++    const guardrailsCfg = currentAgent.advancedConfig?.guardrails || {};
++
++    // Validate fastModel is available
++    const fastModel = guardrailsCfg.fastModel || config.defaultFastModel;
++    if (!fastModel && (guardrailsCfg.inputPrompt || guardrailsCfg.outputPrompt)) {
++      console.warn('[JAF:GUARDRAILS] No fast model available for LLM guardrails - skipping LLM-based validation');
++    }
++
++    // Helper: model-backed guardrail evaluator
++    const llmGuardrail = async (
++      stage: "input" | "output",
++      rulePrompt: string,
++      content: string,
++    ) => {
++      const failSafe = guardrailsCfg.failSafe || 'allow';
++      
++      if (!fastModel) {
++        console.warn(`[JAF:GUARDRAILS] No model available for ${stage} guardrail - using failSafe: ${failSafe}`);
++        return failSafe === 'allow'
++          ? { isValid: true as const }
++          : { isValid: false as const, errorMessage: 'No model available for guardrail evaluation' };
++      }
++      
++      console.log(`[JAF:GUARDRAILS] Evaluating ${stage} guardrail`);
++      config.onEvent?.({
++        type: 'guardrail_check',
++        data: { guardrailName: `${stage}-guardrail`, content, isValid: undefined }
++      });
++      
++      const evaluator = await createLLMGuardrail(config, stage, rulePrompt, fastModel, failSafe);
++      const result = await evaluator(content);
++      
++      console.log(`[JAF:GUARDRAILS] ${stage} guardrail result:`, result);
++      config.onEvent?.({
++        type: 'guardrail_check',
++        data: { guardrailName: `${stage}-guardrail`, content, isValid: result.isValid, errorMessage: result.isValid ? undefined : result.errorMessage }
++      });
++      
++      return result;
++    };
++
++    // Build input guardrails list
++    effectiveInputGuardrails = [...(config.initialInputGuardrails || [])];
++    
++    if (guardrailsCfg?.inputPrompt && typeof guardrailsCfg.inputPrompt === "string" && guardrailsCfg.inputPrompt.trim().length > 0) {
++      const inputPrompt: string = guardrailsCfg.inputPrompt;
++      effectiveInputGuardrails.push(async (userText: string) => {
++        const content = typeof userText === "string" ? userText : String(userText);
++        return llmGuardrail("input", inputPrompt, content);
++      });
++    }
++
++    // Build output guardrails list
++    effectiveOutputGuardrails = [...(config.finalOutputGuardrails || [])];
++
++    // Citation guardrail
++    if (guardrailsCfg?.requireCitations) {
++      effectiveOutputGuardrails.push((output: any) => {
++        const findText = (val: any): string => {
++          if (typeof val === "string") return val;
++          if (Array.isArray(val)) return val.map(findText).join(" ");
++          if (val && typeof val === "object") return Object.values(val).map(findText).join(" ");
++          return "";
++        };
++        const str = typeof output === "string" ? output : findText(output);
++        const ok = /\[(\d+)\]/.test(str);
++        return ok
++          ? ({ isValid: true as const } as const)
++          : ({ isValid: false as const, errorMessage: "Missing required [n] citation in output" } as const);
++      });
++    }
++
++    // Output prompt-based guardrail
++    if (guardrailsCfg?.outputPrompt && typeof guardrailsCfg.outputPrompt === "string" && guardrailsCfg.outputPrompt.trim().length > 0) {
++      const outputPrompt: string = guardrailsCfg.outputPrompt;
++      effectiveOutputGuardrails.push(async (output: any) => {
++        const toString = (val: any): string => {
++          try {
++            if (typeof val === "string") return val;
++            return JSON.stringify(val);
++          } catch {
++            return String(val);
++          }
++        };
++        const content = toString(output);
++        return llmGuardrail("output", outputPrompt, content);
++      });
++    }
++  } catch (e) {
++    console.error('[JAF:GUARDRAILS] Failed to configure advanced guardrails:', e);
++    // Use original guardrails on error
++    effectiveInputGuardrails = [...(config.initialInputGuardrails || [])];
++    effectiveOutputGuardrails = [...(config.finalOutputGuardrails || [])];
++  }
++
++  // Determine input guardrails to run for this turn
++  const inputGuardrailsToRun = (state.turnCount === 0 && effectiveInputGuardrails.length > 0) 
++    ? effectiveInputGuardrails 
++    : [];
++
+   console.log(`[JAF:ENGINE] Using agent: ${currentAgent.name}`);
+   console.log(`[JAF:ENGINE] Agent has ${currentAgent.tools?.length || 0} tools available`);
+   if (currentAgent.tools) {
+@@ -401,39 +570,194 @@ async function runInternal<Ctx, Out>(
+     data: llmCallData
+   });
+ 
++  // PARALLEL EXECUTION: Run input guardrails and LLM call concurrently
+   let llmResponse: any;
++  let inputGuardrailResults: any[] = [];
+   let streamingUsed = false;
+   let assistantEventStreamed = false;
++  
++  if (inputGuardrailsToRun.length > 0 && state.turnCount === 0) {
++    const firstUserMessage = state.messages.find(m => m.role === 'user');
++    if (firstUserMessage) {
++      console.log(`[JAF:GUARDRAILS] Starting parallel execution: ${inputGuardrailsToRun.length} input guardrails + LLM call`);
++      
++      // Create promises for both input guardrails and LLM call
++      const inputGuardrailPromises = inputGuardrailsToRun.map(async (guardrail, index) => {
++        try {
++          console.log(`[JAF:GUARDRAILS] Starting input guardrail ${index + 1}`);
++          const result = await guardrail(getTextContent(firstUserMessage.content));
++          console.log(`[JAF:GUARDRAILS] Input guardrail ${index + 1} completed:`, result);
++          return result;
++        } catch (error) {
++          console.error(`[JAF:GUARDRAILS] Input guardrail ${index + 1} failed:`, error);
++          return { isValid: true }; // Default to pass on error
++        }
++      });
++      
++      const llmPromise = config.modelProvider.getCompletion(state, currentAgent, config);
++      
++      // Wait for both to complete
++      const [guardrailResults, llmResult] = await Promise.all([
++        Promise.all(inputGuardrailPromises),
++        llmPromise
++      ]);
++      
++      inputGuardrailResults = guardrailResults;
++      llmResponse = llmResult;
++      
++      console.log(`[JAF:GUARDRAILS] Parallel execution completed. Checking guardrail results...`);
++      
++      // Check if any input guardrail failed
++      for (let i = 0; i < inputGuardrailResults.length; i++) {
++        const result = inputGuardrailResults[i];
++        if (!result.isValid) {
++          // Input guardrail failed - discard LLM response and return error
++          console.log(`🚨 Input guardrail ${i + 1} violation: ${result.errorMessage}`);
++          console.log(`[JAF:GUARDRAILS] Discarding LLM response due to input guardrail violation`);
++          config.onEvent?.({
++            type: 'guardrail_violation',
++            data: { stage: 'input', reason: result.errorMessage }
++          });
++          return {
++            finalState: state,
++            outcome: {
++              status: 'error',
++              error: {
++                _tag: 'InputGuardrailTripwire',
++                reason: result.errorMessage
++              }
++            }
++          };
++        }
++      }
++      
++      console.log(`✅ All input guardrails passed. Using LLM response.`);
++    } else {
++      // No user message found, try streaming then fallback to non-streaming
++      if (typeof config.modelProvider.getCompletionStream === 'function') {
++        try {
++          streamingUsed = true;
++          const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
++          let aggregatedText = '';
++          const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
++
++          for await (const chunk of stream) {
++            if (chunk?.delta) {
++              aggregatedText += chunk.delta;
++            }
++            if (chunk?.toolCallDelta) {
++              const idx = chunk.toolCallDelta.index ?? 0;
++              while (toolCalls.length <= idx) {
++                toolCalls.push({ id: undefined, type: 'function', function: { name: undefined, arguments: '' } });
++              }
++              const target = toolCalls[idx];
++              if (chunk.toolCallDelta.id) target.id = chunk.toolCallDelta.id;
++              if (chunk.toolCallDelta.function?.name) target.function.name = chunk.toolCallDelta.function.name;
++              if (chunk.toolCallDelta.function?.argumentsDelta) {
++                target.function.arguments += chunk.toolCallDelta.function.argumentsDelta;
++              }
++            }
+ 
+-  if (typeof config.modelProvider.getCompletionStream === 'function') {
+-    try {
+-      streamingUsed = true;
+-      const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
+-      let aggregatedText = '';
+-      const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
+-
+-      for await (const chunk of stream) {
+-        if (chunk?.delta) {
+-          aggregatedText += chunk.delta;
++            if (chunk?.delta || chunk?.toolCallDelta) {
++              assistantEventStreamed = true;
++              const partialMessage: Message = {
++                role: 'assistant',
++                content: aggregatedText,
++                ...(toolCalls.length > 0
++                  ? {
++                      tool_calls: toolCalls.map((tc, i) => ({
++                        id: tc.id ?? `call_${i}`,
++                        type: 'function' as const,
++                        function: {
++                          name: tc.function.name ?? '',
++                          arguments: tc.function.arguments
++                        }
++                      }))
++                    }
++                  : {})
++              };
++              try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { console.error('Error in config.onEvent:', err); }
++            }
++          }
++
++          llmResponse = {
++            message: {
++              content: aggregatedText || undefined,
++              ...(toolCalls.length > 0
++                ? {
++                    tool_calls: toolCalls.map((tc, i) => ({
++                      id: tc.id ?? `call_${i}`,
++                      type: 'function' as const,
++                      function: {
++                        name: tc.function.name ?? '',
++                        arguments: tc.function.arguments
++                      }
++                    }))
++                  }
++                : {})
++            }
++          };
++        } catch (e) {
++          // Fallback to non-streaming on error
++          streamingUsed = false;
++          assistantEventStreamed = false;
++          llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+         }
+-        if (chunk?.toolCallDelta) {
+-          const idx = chunk.toolCallDelta.index ?? 0;
+-          while (toolCalls.length <= idx) {
+-            toolCalls.push({ id: undefined, type: 'function', function: { name: undefined, arguments: '' } });
++      } else {
++        llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
++      }
++    }
++  } else {
++    // No input guardrails to run, just execute LLM call
++    if (typeof config.modelProvider.getCompletionStream === 'function') {
++      try {
++        streamingUsed = true;
++        const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
++        let aggregatedText = '';
++        const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
++
++        for await (const chunk of stream) {
++          if (chunk?.delta) {
++            aggregatedText += chunk.delta;
+           }
+-          const target = toolCalls[idx];
+-          if (chunk.toolCallDelta.id) target.id = chunk.toolCallDelta.id;
+-          if (chunk.toolCallDelta.function?.name) target.function.name = chunk.toolCallDelta.function.name;
+-          if (chunk.toolCallDelta.function?.argumentsDelta) {
+-            target.function.arguments += chunk.toolCallDelta.function.argumentsDelta;
++          if (chunk?.toolCallDelta) {
++            const idx = chunk.toolCallDelta.index ?? 0;
++            while (toolCalls.length <= idx) {
++              toolCalls.push({ id: undefined, type: 'function', function: { name: undefined, arguments: '' } });
++            }
++            const target = toolCalls[idx];
++            if (chunk.toolCallDelta.id) target.id = chunk.toolCallDelta.id;
++            if (chunk.toolCallDelta.function?.name) target.function.name = chunk.toolCallDelta.function.name;
++            if (chunk.toolCallDelta.function?.argumentsDelta) {
++              target.function.arguments += chunk.toolCallDelta.function.argumentsDelta;
++            }
++          }
++
++          if (chunk?.delta || chunk?.toolCallDelta) {
++            assistantEventStreamed = true;
++            const partialMessage: Message = {
++              role: 'assistant',
++              content: aggregatedText,
++              ...(toolCalls.length > 0
++                ? {
++                    tool_calls: toolCalls.map((tc, i) => ({
++                      id: tc.id ?? `call_${i}`,
++                      type: 'function' as const,
++                      function: {
++                        name: tc.function.name ?? '',
++                        arguments: tc.function.arguments
++                      }
++                    }))
++                  }
++                : {})
++            };
++            try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { console.error('Error in config.onEvent:', err); }
+           }
+         }
+ 
+-        if (chunk?.delta || chunk?.toolCallDelta) {
+-          assistantEventStreamed = true;
+-          const partialMessage: Message = {
+-            role: 'assistant',
+-            content: aggregatedText,
++        llmResponse = {
++          message: {
++            content: aggregatedText || undefined,
+             ...(toolCalls.length > 0
+               ? {
+                   tool_calls: toolCalls.map((tc, i) => ({
+@@ -446,36 +770,17 @@ async function runInternal<Ctx, Out>(
+                   }))
+                 }
+               : {})
+-          };
+-          try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { console.error('Error in config.onEvent:', err); }
+-        }
++          }
++        };
++      } catch (e) {
++        // Fallback to non-streaming on error
++        streamingUsed = false;
++        assistantEventStreamed = false;
++        llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+       }
+-
+-      llmResponse = {
+-        message: {
+-          content: aggregatedText || undefined,
+-          ...(toolCalls.length > 0
+-            ? {
+-                tool_calls: toolCalls.map((tc, i) => ({
+-                  id: tc.id ?? `call_${i}`,
+-                  type: 'function' as const,
+-                  function: {
+-                    name: tc.function.name ?? '',
+-                    arguments: tc.function.arguments
+-                  }
+-                }))
+-              }
+-            : {})
+-        }
+-      };
+-    } catch (e) {
+-      // Fallback to non-streaming on error
+-      streamingUsed = false;
+-      assistantEventStreamed = false;
++    } else {
+       llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+     }
+-  } else {
+-    llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+   }
+   
+   // Extract usage data for enhanced events
+@@ -555,8 +860,7 @@ async function runInternal<Ctx, Out>(
+     
+     // Emit tool request(s) event with parsed args
+     try {
+-      const toolCallsArr = llmResponse.message.tool_calls as Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }>;
+-      const requests = toolCallsArr.map((tc) => ({
++      const requests = llmResponse.message.tool_calls.map((tc: any) => ({
+         id: tc.id,
+         name: tc.function.name,
+         args: tryParseJSON(tc.function.arguments)
+@@ -731,12 +1035,14 @@ async function runInternal<Ctx, Out>(
+         };
+       }
+ 
+-      if (config.finalOutputGuardrails) {
+-        for (const guardrail of config.finalOutputGuardrails) {
++      if (effectiveOutputGuardrails.length > 0) {
++        console.log(`[JAF:GUARDRAILS] Checking ${effectiveOutputGuardrails.length} output guardrails (parsed output)`);
++        for (const guardrail of effectiveOutputGuardrails) {
+           const result = await guardrail(parseResult.data);
+           if (!result.isValid) {
+             // Emit guardrail violation (output)
+-            const errorMessage = !result.isValid ? result.errorMessage : '';
++            const errorMessage = result.errorMessage;
++            console.log(`🚨 Output guardrail violation: ${errorMessage}`);
+             config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: errorMessage } });
+             // End of turn
+             config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+@@ -767,12 +1073,14 @@ async function runInternal<Ctx, Out>(
+         }
+       };
+     } else {
+-      if (config.finalOutputGuardrails) {
+-        for (const guardrail of config.finalOutputGuardrails) {
++      if (effectiveOutputGuardrails.length > 0) {
++        console.log(`[JAF:GUARDRAILS] Checking ${effectiveOutputGuardrails.length} output guardrails (raw content)`);
++        for (const guardrail of effectiveOutputGuardrails) {
+           const result = await guardrail(llmResponse.message.content);
+           if (!result.isValid) {
+             // Emit guardrail violation (output)
+             const errorMessage = result.errorMessage;
++            console.log(`🚨 Output guardrail violation: ${errorMessage}`);
+             config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: errorMessage } });
+             // End of turn
+             config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+diff --git a/src/core/types.ts b/src/core/types.ts
+index bc9f9fa..d688d20 100644
+--- a/src/core/types.ts
++++ b/src/core/types.ts
+@@ -79,6 +79,18 @@ export type Tool<A, Ctx> = {
+       ) => Promise<boolean> | boolean);
+ };
+ 
++export type AdvancedGuardrailsConfig = {
++  readonly inputPrompt?: string;
++  readonly outputPrompt?: string;
++  readonly requireCitations?: boolean;
++  readonly fastModel?: string;
++  readonly failSafe?: 'allow' | 'block'; // What to do when guardrail evaluation fails
++};
++
++export type AdvancedConfig = {
++  readonly guardrails?: AdvancedGuardrailsConfig;
++};
++
+ export type Agent<Ctx, Out> = {
+   readonly name: string;
+   readonly instructions: (state: Readonly<RunState<Ctx>>) => string;
+@@ -86,6 +98,7 @@ export type Agent<Ctx, Out> = {
+   readonly outputCodec?: z.ZodType<Out>;
+   readonly handoffs?: readonly string[];
+   readonly modelConfig?: ModelConfig;
++  readonly advancedConfig?: AdvancedConfig;
+ };
+ 
+ export type Guardrail<I> = (
+@@ -218,4 +231,13 @@ export type RunConfig<Ctx> = {
+   readonly memory?: MemoryConfig;
+   readonly conversationId?: string;
+   readonly approvalStorage?: ApprovalStorage;
++  readonly defaultFastModel?: string;
++};
++
++export const jsonParseLLMOutput = (text: string): any => {
++  try {
++    return JSON.parse(text);
++  } catch {
++    return null;
++  }
+ };
+diff --git a/src/server/index.ts b/src/server/index.ts
+index 2689e76..f6d1e8a 100644
+--- a/src/server/index.ts
++++ b/src/server/index.ts
+@@ -64,8 +64,7 @@ export async function runServer<Ctx>(
+     host: '127.0.0.1',
+     cors: false,
+     ...options,
+-    runConfig: completeRunConfig,
+-    agentRegistry
++    runConfig: completeRunConfig
+   };
+ 
+   // Create and start functional server
+diff --git a/src/server/server.ts b/src/server/server.ts
+index 3ead8e2..330e205 100644
+--- a/src/server/server.ts
++++ b/src/server/server.ts
+@@ -9,9 +9,9 @@ import {
+   HttpMessage,
+   chatRequestSchema,
+   ApprovalMessage
+-} from './types';
+-import { run, runStream } from '../core/engine';
+-import { RunState, Message, createRunId, createTraceId } from '../core/types';
++} from './types.js';
++import { run, runStream } from '../core/engine.js';
++import { RunState, Message, createRunId, createTraceId } from '../core/types.js';
+ import { v4 as uuidv4 } from 'uuid';
+ 
+ // Helper: stable stringify to create deterministic signatures
+@@ -215,7 +215,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
+     // List available agents
+     app.get('/agents', async (request: FastifyRequest, reply: FastifyReply): Promise<AgentListResponse> => {
+       try {
+-        const agents = Array.from(config.agentRegistry.entries()).map(([name, agent]) => ({
++        const agents = Array.from(config.runConfig.agentRegistry.entries()).map(([name, agent]) => ({
+           name,
+           description: typeof agent.instructions === 'function' 
+             ? 'Agent description' // Safe fallback since we don't have context
+@@ -252,10 +252,10 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
+         const validatedRequest = chatRequestSchema.parse(request.body);
+         
+         // Check if agent exists
+-        if (!config.agentRegistry.has(validatedRequest.agentName)) {
++        if (!config.runConfig.agentRegistry.has(validatedRequest.agentName)) {
+           const response: ChatResponse = {
+             success: false,
+-            error: `Agent '${validatedRequest.agentName}' not found. Available agents: ${Array.from(config.agentRegistry.keys()).join(', ')}`
++            error: `Agent '${validatedRequest.agentName}' not found. Available agents: ${Array.from(config.runConfig.agentRegistry.keys()).join(', ')}`
+           };
+           return reply.code(404).send(response);
+         }
+@@ -878,7 +878,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
+       console.log(`🔧 Fastify server started successfully`);
+       
+       console.log(`🚀 JAF Server running on http://${host}:${port}`);
+-      console.log(`📋 Available agents: ${Array.from(config.agentRegistry.keys()).join(', ')}`);
++      console.log(`📋 Available agents: ${Array.from(config.runConfig.agentRegistry.keys()).join(', ')}`);
+       console.log(`🏥 Health check: http://${host}:${port}/health`);
+       console.log(`🤖 Agents list: http://${host}:${port}/agents`);
+       console.log(`💬 Chat endpoint: http://${host}:${port}/chat`);
+diff --git a/src/server/types.ts b/src/server/types.ts
+index 3d5ac29..9155dbb 100644
+--- a/src/server/types.ts
++++ b/src/server/types.ts
+@@ -8,7 +8,7 @@ export interface ServerConfig<Ctx> {
+   cors?: boolean;
+   maxBodySize?: number;
+   runConfig: RunConfig<Ctx>;
+-  agentRegistry: Map<string, Agent<Ctx, any>>;
++  // agentRegistry is now only in runConfig to avoid duplication
+   defaultMemoryProvider?: MemoryProvider;
+ }
+ 
+diff --git a/src/utils/attachments.ts b/src/utils/attachments.ts
+index f169398..c822f7c 100644
+--- a/src/utils/attachments.ts
++++ b/src/utils/attachments.ts
+@@ -15,7 +15,7 @@ const ALLOWED_IMAGE_MIME_TYPES = [
+   'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'
+ ];
+ const ALLOWED_DOCUMENT_MIME_TYPES = [
+-  'application/pdf', 'text/plain', 'text/csv', 'application/json',
++  'text/plain', 'text/csv', 'application/json',
+   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+ ];
+diff --git a/src/utils/document-processor.ts b/src/utils/document-processor.ts
+index e123cb1..b1e2441 100644
+--- a/src/utils/document-processor.ts
++++ b/src/utils/document-processor.ts
+@@ -1,5 +1,4 @@
+ import type { Attachment } from '../core/types.js';
+-import pdfParse from '../../dependencies/pdf-parse';
+ import * as XLSX from 'xlsx';
+ import mammoth from 'mammoth';
+ import Papa from 'papaparse';
+@@ -58,7 +57,6 @@ async function fetchUrlContent(url: string): Promise<{ buffer: Buffer; contentTy
+     const contentType = response.headers.get('content-type') || undefined;
+ 
+     // Basic size check (25MB limit)
+-    const maxSize = 25 * 1024 * 1024;
+     if (buffer.length > MAX_DOCUMENT_SIZE) {
+       throw new DocumentProcessingError(`File size (${Math.round(buffer.length / 1024 / 1024)}MB) exceeds maximum allowed size (${Math.round(MAX_DOCUMENT_SIZE / 1024 / 1024)}MB)`);
+     }
+@@ -100,7 +98,7 @@ export async function extractDocumentContent(attachment: Attachment): Promise<Pr
+ 
+   switch (mimeType) {
+     case 'application/pdf':
+-      return await extractPdfContent(buffer);
++      throw new DocumentProcessingError('PDF processing is not supported');
+     
+     case 'text/plain':
+     case 'text/csv':
+@@ -125,20 +123,6 @@ export async function extractDocumentContent(attachment: Attachment): Promise<Pr
+   }
+ }
+ 
+-async function extractPdfContent(buffer: Buffer): Promise<ProcessedDocument> {
+-  try {
+-    const data = await pdfParse(buffer);
+-    return {
+-      content: data.text.trim(),
+-      metadata: {
+-        pages: data.numpages,
+-        info: data.info
+-      }
+-    };
+-  } catch (error) {
+-    throw new DocumentProcessingError(`Failed to extract PDF content: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
+-  }
+-}
+ 
+ function extractTextContent(buffer: Buffer, mimeType: string): ProcessedDocument {
+   const content = buffer.toString('utf-8').trim();
+@@ -287,7 +271,6 @@ export function isDocumentSupported(mimeType?: string): boolean {
+   if (!mimeType) return false;
+   
+   const supportedTypes = [
+-    'application/pdf',
+     'text/plain',
+     'text/csv',
+     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+@@ -306,7 +289,7 @@ export function isDocumentSupported(mimeType?: string): boolean {
+ export function getDocumentDescription(mimeType?: string): string {
+   switch (mimeType?.toLowerCase()) {
+     case 'application/pdf':
+-      return 'PDF text content';
++      return 'PDF processing not supported';
+     case 'text/plain':
+       return 'plain text content';
+     case 'text/csv':

@@ -18,8 +18,137 @@ import {
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
 
+// Input sanitization and validation utilities
+const GUARDRAIL_LIMITS = {
+  MAX_CONTENT_LENGTH: 50000,
+  MAX_PROMPT_LENGTH: 10000,
+  EVALUATION_TIMEOUT: 30000, // 30 seconds
+  MAX_CONCURRENT_EVALUATIONS: 5
+} as const;
+
+// Active evaluation tracking to prevent resource exhaustion
+let activeEvaluations = 0;
+
+/**
+ * Sanitize content to prevent injection attacks and ensure reasonable size
+ */
+function sanitizeContent(content: string, maxLength: number = GUARDRAIL_LIMITS.MAX_CONTENT_LENGTH): string {
+  if (typeof content !== 'string') {
+    content = String(content);
+  }
+  
+  return content
+    .replace(/```/g, '\\`\\`\\`')  // Escape markdown code blocks
+    .replace(/"""/g, '\\"\\"\\"')    // Escape triple quotes
+    .replace(/\x00-\x1F/g, '')       // Remove control characters
+    .substring(0, maxLength);
+}
+
+/**
+ * Validate guardrail configuration
+ */
+function validateGuardrailConfig(config: any): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  
+  if (config.inputPrompt && typeof config.inputPrompt !== 'string') {
+    errors.push('inputPrompt must be a string');
+  }
+  if (config.inputPrompt && config.inputPrompt.length > GUARDRAIL_LIMITS.MAX_PROMPT_LENGTH) {
+    errors.push(`inputPrompt exceeds maximum length of ${GUARDRAIL_LIMITS.MAX_PROMPT_LENGTH}`);
+  }
+  if (config.outputPrompt && typeof config.outputPrompt !== 'string') {
+    errors.push('outputPrompt must be a string');
+  }
+  if (config.outputPrompt && config.outputPrompt.length > GUARDRAIL_LIMITS.MAX_PROMPT_LENGTH) {
+    errors.push(`outputPrompt exceeds maximum length of ${GUARDRAIL_LIMITS.MAX_PROMPT_LENGTH}`);
+  }
+  if (config.failSafe && !['allow', 'block'].includes(config.failSafe)) {
+    errors.push('failSafe must be either "allow" or "block"');
+  }
+  if (config.executionMode && !['parallel', 'sequential'].includes(config.executionMode)) {
+    errors.push('executionMode must be either "parallel" or "sequential"');
+  }
+  if (config.timeoutMs && (typeof config.timeoutMs !== 'number' || config.timeoutMs <= 0 || config.timeoutMs > 300000)) {
+    errors.push('timeoutMs must be a positive number <= 300000 (5 minutes)');
+  }
+  
+  return { valid: errors.length === 0, errors };
+}
+
+/**
+ * Execute guardrails with configurable parallel/sequential strategy
+ */
+async function executeGuardrails(
+  guardrails: any[],
+  input: any,
+  mode: 'parallel' | 'sequential' = 'parallel'
+): Promise<ValidationResult[]> {
+  if (guardrails.length === 0) {
+    return [];
+  }
+
+  if (mode === 'sequential') {
+    // Sequential execution - stop on first failure for faster fail-fast
+    const results: ValidationResult[] = [];
+    for (const guardrail of guardrails) {
+      try {
+        const result = await guardrail(input);
+        results.push(result);
+        if (!result.isValid) {
+          // Fast-fail on first violation in sequential mode
+          break;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        results.push({ isValid: false, errorMessage: `Guardrail execution error: ${errorMessage}` });
+        break;
+      }
+    }
+    return results;
+  } else {
+    // Parallel execution - run all guardrails concurrently
+    const promises = guardrails.map(async (guardrail, index) => {
+      try {
+        return await guardrail(input);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[JAF:GUARDRAILS] Guardrail ${index} failed:`, errorMessage);
+        return { isValid: false, errorMessage: `Guardrail execution error: ${errorMessage}` };
+      }
+    });
+    
+    return await Promise.all(promises);
+  }
+}
+
+/**
+ * Rate-limited LLM evaluation with timeout and circuit breaker
+ */
+async function evaluateWithTimeout<T>(
+  evaluator: () => Promise<T>,
+  timeoutMs: number = GUARDRAIL_LIMITS.EVALUATION_TIMEOUT
+): Promise<T> {
+  // Circuit breaker - prevent too many concurrent evaluations
+  if (activeEvaluations >= GUARDRAIL_LIMITS.MAX_CONCURRENT_EVALUATIONS) {
+    throw new Error('Too many concurrent guardrail evaluations - circuit breaker activated');
+  }
+  
+  activeEvaluations++;
+  
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error(`Guardrail evaluation timeout after ${timeoutMs}ms`)), timeoutMs);
+    });
+    
+    return await Promise.race([evaluator(), timeoutPromise]);
+  } finally {
+    activeEvaluations--;
+  }
+}
+
 /**
  * LLM-based guardrail evaluator that uses a model to validate content against rules
+ * Fixed for security, performance, and reliability
  */
 async function createLLMGuardrail<Ctx>(
   config: RunConfig<Ctx>,
@@ -28,6 +157,13 @@ async function createLLMGuardrail<Ctx>(
   fastModel?: string,
   failSafe: 'allow' | 'block' = 'allow'
 ): Promise<(content: string) => Promise<ValidationResult>> {
+  // Validate configuration up front
+  const configValidation = validateGuardrailConfig({ inputPrompt: rulePrompt, failSafe });
+  if (!configValidation.valid) {
+    console.error('[JAF:GUARDRAILS] Invalid configuration:', configValidation.errors);
+    throw new Error(`Invalid guardrail configuration: ${configValidation.errors.join(', ')}`);
+  }
+  
   return async (content: string) => {
     const modelToUse = fastModel || config.defaultFastModel;
     if (!modelToUse) {
@@ -38,69 +174,112 @@ async function createLLMGuardrail<Ctx>(
         : { isValid: false as const, errorMessage: 'No model available for guardrail evaluation' };
     }
 
-    // Compose a strict JSON-only evaluation prompt
-    const evalPrompt = `You are a guardrail validator for ${stage}.
-Rules:
-${rulePrompt}
-
-Decide if the ${stage === "input" ? "user message" : "assistant output"} complies with the rules.
-Return a JSON object with keys: {"allowed": boolean, "reason": string}. Do not include extra text.
-${stage === "input" ? "User message" : "Assistant output"}:
-"""
-${content}
-"""`;
+    // Sanitize inputs to prevent injection
+    const sanitizedContent = sanitizeContent(content);
+    const sanitizedPrompt = sanitizeContent(rulePrompt, GUARDRAIL_LIMITS.MAX_PROMPT_LENGTH);
+    
+    // More secure prompt construction
+    const evalPrompt = [
+      `You are a guardrail validator for ${stage}.`,
+      `Rules:`,
+      sanitizedPrompt,
+      ``,
+      `Decide if the ${stage === "input" ? "user message" : "assistant output"} complies with the rules.`,
+      `Return ONLY a JSON object with keys: {"allowed": boolean, "reason": string}.`,
+      `Do not include any other text or explanation.`,
+      ``,
+      `${stage === "input" ? "User message" : "Assistant output"}:`,
+      `---START---`,
+      sanitizedContent,
+      `---END---`
+    ].join('\n');
 
     try {
-      // Create a minimal state for the LLM call
-      const tempState: RunState<Ctx> = {
-        runId: createRunId('guardrail-eval'),
-        traceId: createTraceId('guardrail-eval'),
-        messages: [{ role: 'user', content: evalPrompt }],
-        currentAgentName: 'guardrail-evaluator',
-        context: {} as Readonly<Ctx>,
-        turnCount: 0
-      };
+      return await evaluateWithTimeout(async () => {
+        // Create a minimal state for the LLM call
+        const tempState: RunState<Ctx> = {
+          runId: createRunId('guardrail-eval'),
+          traceId: createTraceId('guardrail-eval'),
+          messages: [{ role: 'user', content: evalPrompt }],
+          currentAgentName: 'guardrail-evaluator',
+          context: {} as Readonly<Ctx>,
+          turnCount: 0
+        };
 
-      // Create a minimal agent for evaluation
-      const evalAgent: Agent<Ctx, any> = {
-        name: 'guardrail-evaluator',
-        instructions: () => 'You are a guardrail validator. Return only valid JSON.',
-        modelConfig: { name: modelToUse }
-      };
+        // Create a minimal agent for evaluation
+        const evalAgent: Agent<Ctx, any> = {
+          name: 'guardrail-evaluator',
+          instructions: () => 'You are a guardrail validator. Return only valid JSON.',
+          modelConfig: { name: modelToUse }
+        };
 
-      // Create a clean config for guardrail evaluation (no guardrails to avoid recursion)
-      const guardrailConfig: RunConfig<Ctx> = {
-        modelProvider: config.modelProvider,
-        agentRegistry: config.agentRegistry,
-        maxTurns: 1,
-        defaultFastModel: config.defaultFastModel,
-        modelOverride: modelToUse,
-        // Explicitly exclude all guardrails to prevent recursion
-        initialInputGuardrails: undefined,
-        finalOutputGuardrails: undefined,
-        onEvent: undefined // Avoid recursive events
-      };
+        // CRITICAL FIX: Create a completely isolated agent registry to prevent recursion
+        const isolatedAgentRegistry = new Map([
+          ['guardrail-evaluator', evalAgent]
+        ]);
 
-      const response = await config.modelProvider.getCompletion(tempState, evalAgent, guardrailConfig);
+        // Create a clean config for guardrail evaluation (no guardrails to avoid recursion)
+        const guardrailConfig: RunConfig<Ctx> = {
+          modelProvider: config.modelProvider,
+          agentRegistry: isolatedAgentRegistry, // ✅ FIXED: Use isolated registry
+          maxTurns: 1,
+          defaultFastModel: config.defaultFastModel,
+          modelOverride: modelToUse,
+          // Explicitly exclude all guardrails to prevent recursion
+          initialInputGuardrails: undefined,
+          finalOutputGuardrails: undefined,
+          onEvent: undefined // Avoid recursive events
+        };
 
-      if (!response.message?.content) {
-        return { isValid: true as const };
-      }
+        const response = await config.modelProvider.getCompletion(tempState, evalAgent, guardrailConfig);
 
-      const parsed = jsonParseLLMOutput(response.message.content);
-      const allowed = Boolean(parsed?.allowed);
-      const reason = typeof parsed?.reason === "string" ? parsed.reason : "Guardrail violation";
-      
-      return allowed
-        ? { isValid: true as const }
-        : ({ isValid: false as const, errorMessage: reason } as const);
+        if (!response.message?.content) {
+          console.warn('[JAF:GUARDRAILS] Empty response from guardrail evaluation, defaulting to failSafe');
+          return failSafe === 'allow'
+            ? { isValid: true as const }
+            : { isValid: false as const, errorMessage: 'Empty response from guardrail evaluation' };
+        }
+
+        // Parse and validate JSON response
+        const parsed = jsonParseLLMOutput(response.message.content);
+        
+        // Strict validation of response format
+        if (!parsed || typeof parsed !== 'object') {
+          console.warn('[JAF:GUARDRAILS] Invalid JSON response from guardrail evaluation');
+          return failSafe === 'allow'
+            ? { isValid: true as const }
+            : { isValid: false as const, errorMessage: 'Invalid response format from guardrail evaluation' };
+        }
+        
+        if (typeof parsed.allowed !== 'boolean') {
+          console.warn('[JAF:GUARDRAILS] Missing or invalid "allowed" field in guardrail response');
+          return failSafe === 'allow'
+            ? { isValid: true as const }
+            : { isValid: false as const, errorMessage: 'Invalid response format: missing allowed field' };
+        }
+        
+        const allowed = parsed.allowed;
+        const reason = typeof parsed.reason === "string" ? parsed.reason : "Guardrail violation";
+        
+        return allowed
+          ? { isValid: true as const }
+          : ({ isValid: false as const, errorMessage: reason } as const);
+      });
     } catch (e) {
-      // On evaluation failure, use configured failSafe behavior
-      const message = `[JAF:GUARDRAILS] Guardrail evaluation failed, using failSafe: ${failSafe}`;
-      console.warn(message, e);
+      // Enhanced error handling with different strategies for different error types
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+      
+      if (errorMessage.includes('timeout')) {
+        console.warn(`[JAF:GUARDRAILS] Guardrail evaluation timeout, using failSafe: ${failSafe}`);
+      } else if (errorMessage.includes('circuit breaker')) {
+        console.warn(`[JAF:GUARDRAILS] Circuit breaker activated, using failSafe: ${failSafe}`);
+      } else {
+        console.warn(`[JAF:GUARDRAILS] Guardrail evaluation failed: ${errorMessage}, using failSafe: ${failSafe}`);
+      }
+      
       return failSafe === 'allow'
         ? { isValid: true as const }
-        : { isValid: false as const, errorMessage: `Guardrail evaluation failed: ${e instanceof Error ? e.message : 'Unknown error'}` };
+        : { isValid: false as const, errorMessage: `Guardrail evaluation failed: ${errorMessage}` };
     }
   };
 }
@@ -392,95 +571,134 @@ async function runInternal<Ctx, Out>(
   try {
     const guardrailsCfg = currentAgent.advancedConfig?.guardrails || {};
 
-    // Validate fastModel is available
-    const fastModel = guardrailsCfg.fastModel || config.defaultFastModel;
-    if (!fastModel && (guardrailsCfg.inputPrompt || guardrailsCfg.outputPrompt)) {
-      console.warn('[JAF:GUARDRAILS] No fast model available for LLM guardrails - skipping LLM-based validation');
-    }
-
-    // Helper: model-backed guardrail evaluator
-    const llmGuardrail = async (
-      stage: "input" | "output",
-      rulePrompt: string,
-      content: string,
-    ) => {
-      const failSafe = guardrailsCfg.failSafe || 'allow';
-      
-      if (!fastModel) {
-        console.warn(`[JAF:GUARDRAILS] No model available for ${stage} guardrail - using failSafe: ${failSafe}`);
-        return failSafe === 'allow'
-          ? { isValid: true as const }
-          : { isValid: false as const, errorMessage: 'No model available for guardrail evaluation' };
-      }
-      
-      console.log(`[JAF:GUARDRAILS] Evaluating ${stage} guardrail`);
-      config.onEvent?.({
-        type: 'guardrail_check',
-        data: { guardrailName: `${stage}-guardrail`, content, isValid: undefined }
-      });
-      
-      const evaluator = await createLLMGuardrail(config, stage, rulePrompt, fastModel, failSafe);
-      const result = await evaluator(content);
-      
-      console.log(`[JAF:GUARDRAILS] ${stage} guardrail result:`, result);
-      config.onEvent?.({
-        type: 'guardrail_check',
-        data: { guardrailName: `${stage}-guardrail`, content, isValid: result.isValid, errorMessage: result.isValid ? undefined : result.errorMessage }
-      });
-      
-      return result;
-    };
-
-    // Build input guardrails list
+    // BACKWARDS COMPATIBILITY: Always start with existing RunConfig guardrails
     effectiveInputGuardrails = [...(config.initialInputGuardrails || [])];
-    
-    if (guardrailsCfg?.inputPrompt && typeof guardrailsCfg.inputPrompt === "string" && guardrailsCfg.inputPrompt.trim().length > 0) {
-      const inputPrompt: string = guardrailsCfg.inputPrompt;
-      effectiveInputGuardrails.push(async (userText: string) => {
-        const content = typeof userText === "string" ? userText : String(userText);
-        return llmGuardrail("input", inputPrompt, content);
-      });
-    }
-
-    // Build output guardrails list
     effectiveOutputGuardrails = [...(config.finalOutputGuardrails || [])];
 
-    // Citation guardrail
-    if (guardrailsCfg?.requireCitations) {
-      effectiveOutputGuardrails.push((output: any) => {
-        const findText = (val: any): string => {
-          if (typeof val === "string") return val;
-          if (Array.isArray(val)) return val.map(findText).join(" ");
-          if (val && typeof val === "object") return Object.values(val).map(findText).join(" ");
-          return "";
-        };
-        const str = typeof output === "string" ? output : findText(output);
-        const ok = /\[(\d+)\]/.test(str);
-        return ok
-          ? ({ isValid: true as const } as const)
-          : ({ isValid: false as const, errorMessage: "Missing required [n] citation in output" } as const);
-      });
-    }
+    // Validate guardrail configuration early
+    if (Object.keys(guardrailsCfg).length > 0) {
+      const validation = validateGuardrailConfig(guardrailsCfg);
+      if (!validation.valid) {
+        console.error('[JAF:GUARDRAILS] Invalid agent guardrail configuration:', validation.errors);
+        console.warn('[JAF:GUARDRAILS] Falling back to RunConfig guardrails only');
+        // Continue with just the RunConfig guardrails
+      } else {
+        // Validate fastModel is available for LLM-based guardrails
+        const fastModel = guardrailsCfg.fastModel || config.defaultFastModel;
+        if (!fastModel && (guardrailsCfg.inputPrompt || guardrailsCfg.outputPrompt)) {
+          console.warn('[JAF:GUARDRAILS] No fast model available for LLM guardrails - skipping LLM-based validation');
+        }
 
-    // Output prompt-based guardrail
-    if (guardrailsCfg?.outputPrompt && typeof guardrailsCfg.outputPrompt === "string" && guardrailsCfg.outputPrompt.trim().length > 0) {
-      const outputPrompt: string = guardrailsCfg.outputPrompt;
-      effectiveOutputGuardrails.push(async (output: any) => {
-        const toString = (val: any): string => {
+        // Helper: model-backed guardrail evaluator
+        const llmGuardrail = async (
+          stage: "input" | "output",
+          rulePrompt: string,
+          content: string,
+        ) => {
+          const failSafe = guardrailsCfg.failSafe || 'allow';
+          
+          if (!fastModel) {
+            console.warn(`[JAF:GUARDRAILS] No model available for ${stage} guardrail - using failSafe: ${failSafe}`);
+            return failSafe === 'allow'
+              ? { isValid: true as const }
+              : { isValid: false as const, errorMessage: 'No model available for guardrail evaluation' };
+          }
+          
+          console.log(`[JAF:GUARDRAILS] Evaluating ${stage} guardrail`);
+          config.onEvent?.({
+            type: 'guardrail_check',
+            data: { guardrailName: `${stage}-guardrail`, content, isValid: undefined }
+          });
+          
           try {
-            if (typeof val === "string") return val;
-            return JSON.stringify(val);
-          } catch {
-            return String(val);
+            const customTimeout = guardrailsCfg.timeoutMs || GUARDRAIL_LIMITS.EVALUATION_TIMEOUT;
+            const evaluator = await createLLMGuardrail(config, stage, rulePrompt, fastModel, failSafe);
+            
+            // Apply custom timeout if configured
+            const result = await evaluateWithTimeout(
+              () => evaluator(content),
+              customTimeout
+            );
+            
+            console.log(`[JAF:GUARDRAILS] ${stage} guardrail result:`, result);
+            config.onEvent?.({
+              type: 'guardrail_check',
+              data: { guardrailName: `${stage}-guardrail`, content, isValid: result.isValid, errorMessage: result.isValid ? undefined : result.errorMessage }
+            });
+            
+            return result;
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            console.error(`[JAF:GUARDRAILS] ${stage} guardrail evaluation failed:`, errorMessage);
+            config.onEvent?.({
+              type: 'guardrail_check', 
+              data: { guardrailName: `${stage}-guardrail`, content, isValid: false, errorMessage }
+            });
+            
+            // Use failSafe on evaluation error
+            return failSafe === 'allow'
+              ? { isValid: true as const }
+              : { isValid: false as const, errorMessage: `Guardrail evaluation error: ${errorMessage}` };
           }
         };
-        const content = toString(output);
-        return llmGuardrail("output", outputPrompt, content);
-      });
+
+        // Add LLM-based input guardrail if configured
+        if (guardrailsCfg?.inputPrompt && typeof guardrailsCfg.inputPrompt === "string" && guardrailsCfg.inputPrompt.trim().length > 0) {
+          const inputPrompt: string = guardrailsCfg.inputPrompt;
+          effectiveInputGuardrails.push(async (userText: string) => {
+            const content = typeof userText === "string" ? userText : String(userText);
+            return llmGuardrail("input", inputPrompt, content);
+          });
+        }
+
+        // Add citation guardrail if configured
+        if (guardrailsCfg?.requireCitations) {
+          effectiveOutputGuardrails.push((output: any) => {
+            try {
+              const findText = (val: any): string => {
+                if (typeof val === "string") return val;
+                if (Array.isArray(val)) return val.map(findText).join(" ");
+                if (val && typeof val === "object") return Object.values(val).map(findText).join(" ");
+                return "";
+              };
+              const str = typeof output === "string" ? output : findText(output);
+              const ok = /\[(\d+)\]/.test(str);
+              return ok
+                ? ({ isValid: true as const } as const)
+                : ({ isValid: false as const, errorMessage: "Missing required [n] citation in output" } as const);
+            } catch (error) {
+              console.error('[JAF:GUARDRAILS] Citation check failed:', error);
+              return { isValid: true as const }; // Default to allow on error
+            }
+          });
+        }
+
+        // Add LLM-based output guardrail if configured  
+        if (guardrailsCfg?.outputPrompt && typeof guardrailsCfg.outputPrompt === "string" && guardrailsCfg.outputPrompt.trim().length > 0) {
+          const outputPrompt: string = guardrailsCfg.outputPrompt;
+          effectiveOutputGuardrails.push(async (output: any) => {
+            try {
+              const toString = (val: any): string => {
+                try {
+                  if (typeof val === "string") return val;
+                  return JSON.stringify(val);
+                } catch {
+                  return String(val);
+                }
+              };
+              const content = toString(output);
+              return llmGuardrail("output", outputPrompt, content);
+            } catch (error) {
+              console.error('[JAF:GUARDRAILS] Output guardrail preparation failed:', error);
+              return { isValid: true as const }; // Default to allow on error  
+            }
+          });
+        }
+      }
     }
   } catch (e) {
     console.error('[JAF:GUARDRAILS] Failed to configure advanced guardrails:', e);
-    // Use original guardrails on error
+    // BACKWARDS COMPATIBILITY: On error, keep just the original RunConfig guardrails
     effectiveInputGuardrails = [...(config.initialInputGuardrails || [])];
     effectiveOutputGuardrails = [...(config.finalOutputGuardrails || [])];
   }
@@ -570,53 +788,31 @@ async function runInternal<Ctx, Out>(
     data: llmCallData
   });
 
-  // PARALLEL EXECUTION: Run input guardrails and LLM call concurrently
+  // CONFIGURABLE EXECUTION: Run input guardrails and LLM call based on configuration
   let llmResponse: any;
-  let inputGuardrailResults: any[] = [];
+  let inputGuardrailResults: ValidationResult[] = [];
   let streamingUsed = false;
   let assistantEventStreamed = false;
   
   if (inputGuardrailsToRun.length > 0 && state.turnCount === 0) {
     const firstUserMessage = state.messages.find(m => m.role === 'user');
     if (firstUserMessage) {
-      console.log(`[JAF:GUARDRAILS] Starting parallel execution: ${inputGuardrailsToRun.length} input guardrails + LLM call`);
+      const executionMode = currentAgent.advancedConfig?.guardrails?.executionMode || 'parallel';
+      const userContent = getTextContent(firstUserMessage.content);
       
-      // Create promises for both input guardrails and LLM call
-      const inputGuardrailPromises = inputGuardrailsToRun.map(async (guardrail, index) => {
-        try {
-          console.log(`[JAF:GUARDRAILS] Starting input guardrail ${index + 1}`);
-          const result = await guardrail(getTextContent(firstUserMessage.content));
-          console.log(`[JAF:GUARDRAILS] Input guardrail ${index + 1} completed:`, result);
-          return result;
-        } catch (error) {
-          console.error(`[JAF:GUARDRAILS] Input guardrail ${index + 1} failed:`, error);
-          return { isValid: true }; // Default to pass on error
-        }
-      });
+      console.log(`[JAF:GUARDRAILS] Starting ${executionMode} execution: ${inputGuardrailsToRun.length} input guardrails + LLM call`);
       
-      const llmPromise = config.modelProvider.getCompletion(state, currentAgent, config);
-      
-      // Wait for both to complete
-      const [guardrailResults, llmResult] = await Promise.all([
-        Promise.all(inputGuardrailPromises),
-        llmPromise
-      ]);
-      
-      inputGuardrailResults = guardrailResults;
-      llmResponse = llmResult;
-      
-      console.log(`[JAF:GUARDRAILS] Parallel execution completed. Checking guardrail results...`);
-      
-      // Check if any input guardrail failed
-      for (let i = 0; i < inputGuardrailResults.length; i++) {
-        const result = inputGuardrailResults[i];
-        if (!result.isValid) {
-          // Input guardrail failed - discard LLM response and return error
-          console.log(`🚨 Input guardrail ${i + 1} violation: ${result.errorMessage}`);
-          console.log(`[JAF:GUARDRAILS] Discarding LLM response due to input guardrail violation`);
+      if (executionMode === 'sequential') {
+        // Sequential: Run guardrails first, then LLM if they pass
+        inputGuardrailResults = await executeGuardrails(inputGuardrailsToRun, userContent, 'sequential');
+        
+        // Check if any guardrail failed (fail-fast approach)
+        const failedGuardrail = inputGuardrailResults.find(result => !result.isValid);
+        if (failedGuardrail) {
+          console.log(`🚨 Input guardrail violation: ${failedGuardrail.errorMessage}`);
           config.onEvent?.({
             type: 'guardrail_violation',
-            data: { stage: 'input', reason: result.errorMessage }
+            data: { stage: 'input', reason: failedGuardrail.errorMessage }
           });
           return {
             finalState: state,
@@ -624,14 +820,54 @@ async function runInternal<Ctx, Out>(
               status: 'error',
               error: {
                 _tag: 'InputGuardrailTripwire',
-                reason: result.errorMessage
+                reason: failedGuardrail.errorMessage
               }
             }
           };
         }
+        
+        console.log(`✅ All input guardrails passed. Starting LLM call.`);
+        llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+      } else {
+        // Parallel: Run guardrails and LLM concurrently for better performance
+        const guardrailPromise = executeGuardrails(inputGuardrailsToRun, userContent, 'parallel');
+        const llmPromise = config.modelProvider.getCompletion(state, currentAgent, config);
+        
+        // Wait for both to complete
+        const [guardrailResults, llmResult] = await Promise.all([
+          guardrailPromise,
+          llmPromise
+        ]);
+        
+        inputGuardrailResults = guardrailResults;
+        llmResponse = llmResult;
+        
+        console.log(`[JAF:GUARDRAILS] Parallel execution completed. Checking guardrail results...`);
+        
+        // Check if any input guardrail failed
+        const failedGuardrail = inputGuardrailResults.find(result => !result.isValid);
+        if (failedGuardrail) {
+          // Input guardrail failed - discard LLM response and return error
+          console.log(`🚨 Input guardrail violation: ${failedGuardrail.errorMessage}`);
+          console.log(`[JAF:GUARDRAILS] Discarding LLM response due to input guardrail violation`);
+          config.onEvent?.({
+            type: 'guardrail_violation',
+            data: { stage: 'input', reason: failedGuardrail.errorMessage }
+          });
+          return {
+            finalState: state,
+            outcome: {
+              status: 'error',
+              error: {
+                _tag: 'InputGuardrailTripwire',
+                reason: failedGuardrail.errorMessage
+              }
+            }
+          };
+        }
+        
+        console.log(`✅ All input guardrails passed. Using LLM response.`);
       }
-      
-      console.log(`✅ All input guardrails passed. Using LLM response.`);
     } else {
       // No user message found, try streaming then fallback to non-streaming
       if (typeof config.modelProvider.getCompletionStream === 'function') {
