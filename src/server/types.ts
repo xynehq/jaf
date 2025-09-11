@@ -47,7 +47,8 @@ export const chatRequestSchema = z.object({
   memory: z.object({
     autoStore: z.boolean().default(true),
     maxMessages: z.number().optional(),
-    compressionThreshold: z.number().optional()
+    compressionThreshold: z.number().optional(),
+    storeOnCompletion: z.boolean().optional()
   }).optional(),
   approvals: z.array(approvalMessageSchema).optional()
 });
