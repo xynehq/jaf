@@ -9,9 +9,9 @@ import {
   HttpMessage,
   chatRequestSchema,
   ApprovalMessage
-} from './types';
-import { run, runStream } from '../core/engine';
-import { RunState, Message, createRunId, createTraceId } from '../core/types';
+} from './types.js';
+import { run, runStream } from '../core/engine.js';
+import { RunState, Message, createRunId, createTraceId } from '../core/types.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // Helper: stable stringify to create deterministic signatures

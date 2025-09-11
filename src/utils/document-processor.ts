@@ -1,5 +1,4 @@
 import type { Attachment } from '../core/types.js';
-import pdfParse from '../../dependencies/pdf-parse';
 import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
 import Papa from 'papaparse';
@@ -58,7 +57,6 @@ async function fetchUrlContent(url: string): Promise<{ buffer: Buffer; contentTy
     const contentType = response.headers.get('content-type') || undefined;
 
     // Basic size check (25MB limit)
-    const maxSize = 25 * 1024 * 1024;
     if (buffer.length > MAX_DOCUMENT_SIZE) {
       throw new DocumentProcessingError(`File size (${Math.round(buffer.length / 1024 / 1024)}MB) exceeds maximum allowed size (${Math.round(MAX_DOCUMENT_SIZE / 1024 / 1024)}MB)`);
     }
@@ -100,7 +98,7 @@ export async function extractDocumentContent(attachment: Attachment): Promise<Pr
 
   switch (mimeType) {
     case 'application/pdf':
-      return await extractPdfContent(buffer);
+      throw new DocumentProcessingError('PDF processing is not supported');
     
     case 'text/plain':
     case 'text/csv':
@@ -125,20 +123,6 @@ export async function extractDocumentContent(attachment: Attachment): Promise<Pr
   }
 }
 
-async function extractPdfContent(buffer: Buffer): Promise<ProcessedDocument> {
-  try {
-    const data = await pdfParse(buffer);
-    return {
-      content: data.text.trim(),
-      metadata: {
-        pages: data.numpages,
-        info: data.info
-      }
-    };
-  } catch (error) {
-    throw new DocumentProcessingError(`Failed to extract PDF content: ${error instanceof Error ? error.message : 'Unknown error'}`, error);
-  }
-}
 
 function extractTextContent(buffer: Buffer, mimeType: string): ProcessedDocument {
   const content = buffer.toString('utf-8').trim();
@@ -287,7 +271,6 @@ export function isDocumentSupported(mimeType?: string): boolean {
   if (!mimeType) return false;
   
   const supportedTypes = [
-    'application/pdf',
     'text/plain',
     'text/csv',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -306,7 +289,7 @@ export function isDocumentSupported(mimeType?: string): boolean {
 export function getDocumentDescription(mimeType?: string): string {
   switch (mimeType?.toLowerCase()) {
     case 'application/pdf':
-      return 'PDF text content';
+      return 'PDF processing not supported';
     case 'text/plain':
       return 'plain text content';
     case 'text/csv':
