@@ -110,7 +110,8 @@ const chatRequestBodySchema = {
       properties: {
         autoStore: { type: 'boolean', default: true },
         maxMessages: { type: 'number' },
-        compressionThreshold: { type: 'number' }
+        compressionThreshold: { type: 'number' },
+        storeOnCompletion: { type: 'boolean' }
       }
     }
   },
@@ -451,7 +452,8 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
             provider: config.defaultMemoryProvider,
             autoStore: validatedRequest.memory?.autoStore ?? true,
             maxMessages: validatedRequest.memory?.maxMessages,
-            compressionThreshold: validatedRequest.memory?.compressionThreshold
+            compressionThreshold: validatedRequest.memory?.compressionThreshold,
+            storeOnCompletion: validatedRequest.memory?.storeOnCompletion
           } : undefined
         };
 
