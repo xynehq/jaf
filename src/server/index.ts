@@ -64,8 +64,7 @@ export async function runServer<Ctx>(
     host: '127.0.0.1',
     cors: false,
     ...options,
-    runConfig: completeRunConfig,
-    agentRegistry
+    runConfig: completeRunConfig
   };
 
   // Create and start functional server
