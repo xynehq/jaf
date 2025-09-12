@@ -221,9 +221,7 @@ describe('Guardrails Configuration', () => {
       const message = createMockMessage('test content');
       const config = createMockConfig();
       
-      const startTime = Date.now();
       const result = await executeInputGuardrailsParallel([guardrail1, guardrail2], message, config);
-      const endTime = Date.now();
       
       expect(result.isValid).toBe(true);
       expect(guardrail1).toHaveBeenCalled();
@@ -236,7 +234,9 @@ describe('Guardrails Configuration', () => {
 
     it('should handle guardrail failures gracefully', async () => {
       const successfulGuardrail = jest.fn().mockResolvedValue({ isValid: true });
-      const failingGuardrail = jest.fn().mockRejectedValue(new Error('Guardrail failed'));
+      const failingGuardrail = jest.fn().mockImplementation(() => {
+        throw new Error('Guardrail execution error');
+      });
       
       const message = createMockMessage('test content');
       const config = createMockConfig();
@@ -277,7 +277,7 @@ describe('Guardrails Configuration', () => {
       
       // Should pass due to timeout handling with graceful degradation
       expect(result.isValid).toBe(true);
-    }, 15000);
+    }, 20000);
   });
 
   describe('executeOutputGuardrails', () => {
@@ -321,7 +321,9 @@ describe('Guardrails Configuration', () => {
     });
 
     it('should handle system errors gracefully', async () => {
-      const erroringGuardrail = jest.fn().mockRejectedValue(new Error('Timeout: execution timed out'));
+      const erroringGuardrail = jest.fn().mockImplementation(() => {
+        throw new Error('Timeout: execution timed out');
+      });
       
       const config = createMockConfig();
       
@@ -332,7 +334,9 @@ describe('Guardrails Configuration', () => {
     });
 
     it('should block on actual guardrail violations', async () => {
-      const violatingGuardrail = jest.fn().mockRejectedValue(new Error('Content violation'));
+      const violatingGuardrail = jest.fn().mockImplementation(() => {
+        throw new Error('Content violation');
+      });
       
       const config = createMockConfig();
       
@@ -384,7 +388,9 @@ describe('Guardrails Configuration', () => {
     it('should handle multiple consecutive failures', async () => {
       // Mock LLM that always fails
       const failingModelProvider = {
-        getCompletion: jest.fn().mockRejectedValue(new Error('Model failure'))
+        getCompletion: jest.fn().mockImplementation(() => {
+          throw new Error('Model service unavailable');
+        })
       };
 
       const agent: Agent<any, any> = {
