@@ -92,14 +92,11 @@ export type AdvancedGuardrailsConfig = {
   readonly outputPrompt?: string;
   readonly requireCitations?: boolean;
   readonly fastModel?: string;
-  readonly failSafe?: 'allow' | 'block'; // What to do when guardrail evaluation fails
-  readonly executionMode?: 'parallel' | 'sequential'; // How to run multiple guardrails
-  readonly timeoutMs?: number; // Custom timeout for guardrail evaluation
+  readonly failSafe?: 'allow' | 'block';
+  readonly executionMode?: 'parallel' | 'sequential';
+  readonly timeoutMs?: number;
 };
 
-/**
- * Default configuration for guardrails with sensible defaults
- */
 export const defaultGuardrailsConfig: Required<AdvancedGuardrailsConfig> = {
   inputPrompt: '',
   outputPrompt: '',
@@ -110,9 +107,6 @@ export const defaultGuardrailsConfig: Required<AdvancedGuardrailsConfig> = {
   timeoutMs: 30000
 };
 
-/**
- * Validates and normalizes guardrails configuration
- */
 export function validateGuardrailsConfig(
   config: AdvancedGuardrailsConfig
 ): Required<AdvancedGuardrailsConfig> {
@@ -123,7 +117,7 @@ export function validateGuardrailsConfig(
     fastModel: config.fastModel?.trim() || defaultGuardrailsConfig.fastModel,
     failSafe: config.failSafe || defaultGuardrailsConfig.failSafe,
     executionMode: config.executionMode || defaultGuardrailsConfig.executionMode,
-    timeoutMs: Math.max(1000, config.timeoutMs || defaultGuardrailsConfig.timeoutMs) // Minimum 1 second
+    timeoutMs: Math.max(1000, config.timeoutMs || defaultGuardrailsConfig.timeoutMs)
   };
 }
 
@@ -148,16 +142,7 @@ export type Guardrail<I> = (
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 export type ApprovalValue = {
-  /**
-   * Tri-state status of the approval lifecycle.
-   * - 'pending': decision not made yet
-   * - 'approved': explicitly approved
-   * - 'rejected': explicitly rejected
-   */
   readonly status: ApprovalStatus;
-  /**
-   * Backward-compatible boolean. Prefer `status` for logic; this mirrors status.
-   */
   readonly approved: boolean;
   readonly additionalContext?: Record<string, any>;
 };

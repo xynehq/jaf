@@ -32,7 +32,6 @@ export async function run<Ctx, Out>(
       }
     });
 
-    // Load conversation history from memory if configured
     let stateWithMemory = initialState;
     if (config.memory?.autoStore && config.conversationId) {
       console.log(`[JAF:ENGINE] Loading conversation history for ${config.conversationId}`);
@@ -41,7 +40,6 @@ export async function run<Ctx, Out>(
       console.log(`[JAF:ENGINE] Skipping memory load - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}`);
     }
 
-    // Load approvals from storage if configured
     if (config.approvalStorage) {
       console.log(`[JAF:ENGINE] Loading approvals for runId ${stateWithMemory.runId}`);
       const { loadApprovalsIntoState } = await import('./state');
@@ -50,9 +48,6 @@ export async function run<Ctx, Out>(
 
     const result = await runInternal<Ctx, Out>(stateWithMemory, config);
     
-    // Store conversation history only if this is a final completion of the entire conversation
-    // For HITL scenarios, storage happens on interruption (line 261) to allow resumption
-    // We only store on completion if explicitly indicated this is the end of the conversation
     if (config.memory?.autoStore && config.conversationId && result.outcome.status === 'completed' && config.memory.storeOnCompletion) {
       console.log(`[JAF:ENGINE] Storing final completed conversation for ${config.conversationId}`);
       await storeConversationHistory(result.finalState, config);
@@ -89,7 +84,6 @@ export async function run<Ctx, Out>(
   }
 }
 
-// Streaming helper: create a simple async queue to yield events as they occur
 function createAsyncEventStream<T>() {
   const queue: T[] = [];
   let resolveNext: ((value: IteratorResult<T>) => void) | null = null;
@@ -144,13 +138,11 @@ export async function* runStream<Ctx, Out>(
 ): AsyncGenerator<TraceEvent, void, unknown> {
   const stream = createAsyncEventStream<TraceEvent>();
   
-  // Tee events: push to stream and call any existing onEvent
   const onEvent = (event: TraceEvent) => {
     try { stream.push(event); } catch { /* ignore */ }
     try { config.onEvent?.(event); } catch { /* ignore */ }
   };
 
-  // Kick off the run without awaiting so events can flow concurrently
   const runPromise = run<Ctx, Out>(initialState, { ...config, onEvent });
   void runPromise.finally(() => {
     stream.end();
@@ -161,7 +153,6 @@ export async function* runStream<Ctx, Out>(
       yield event;
     }
   } finally {
-    // Ensure completion
     await runPromise.catch(() => undefined);
   }
 }
@@ -170,9 +161,6 @@ async function tryResumePendingToolCalls<Ctx, Out>(
   state: RunState<Ctx>,
   config: RunConfig<Ctx>
 ): Promise<RunResult<Out> | null> {
-  // If the last assistant message contained tool_calls and some of those
-  // calls have not yet produced tool results (e.g., approval pause),
-  // resume by executing the remaining tool calls directly without a new LLM call.
   try {
     const messages = state.messages;
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -180,7 +168,6 @@ async function tryResumePendingToolCalls<Ctx, Out>(
       if (msg.role === 'assistant' && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
         const ids = new Set(msg.tool_calls.map(tc => tc.id));
 
-        // Scan forward for tool results tied to these ids
         const executed = new Set<string>();
         for (let j = i + 1; j < messages.length; j++) {
           const m = messages[j];
@@ -208,7 +195,6 @@ async function tryResumePendingToolCalls<Ctx, Out>(
           } as RunResult<Out>;
         }
 
-        // Emit tool_requests for the pending calls we're resuming
         try {
           const requests = pendingToolCalls.map(tc => ({
             id: tc.id,
@@ -238,7 +224,6 @@ async function tryResumePendingToolCalls<Ctx, Out>(
           } as RunResult<Out>;
         }
 
-        // Emit tool results event as they will be sent back to the LLM on next turn
         config.onEvent?.({
           type: 'tool_results_to_llm',
           data: { results: toolResults.map(r => r.message) }
@@ -250,12 +235,11 @@ async function tryResumePendingToolCalls<Ctx, Out>(
           turnCount: state.turnCount,
           approvals: state.approvals ?? new Map(),
         };
-        // Continue the normal loop with updated state
         return await runInternal<Ctx, Out>(nextState, config);
       }
     }
   } catch {
-    // best-effort resume; ignore and continue normal flow
+    // Ignore resume errors and continue with normal flow
   }
   return null;
 }
@@ -295,7 +279,6 @@ async function runInternal<Ctx, Out>(
     };
   }
 
-  // Check if agent has advanced guardrails config
   const hasAdvancedGuardrails = !!(currentAgent.advancedConfig?.guardrails && 
     (currentAgent.advancedConfig.guardrails.inputPrompt || 
      currentAgent.advancedConfig.guardrails.outputPrompt || 
@@ -313,17 +296,14 @@ async function runInternal<Ctx, Out>(
   let effectiveOutputGuardrails: Guardrail<any>[] = [];
   
   if (hasAdvancedGuardrails) {
-    // Use new advanced guardrails system
     const result = await buildEffectiveGuardrails(currentAgent, config);
     effectiveInputGuardrails = result.inputGuardrails;
     effectiveOutputGuardrails = result.outputGuardrails;
   } else {
-    // Use original legacy guardrails (backwards compatible)
     effectiveInputGuardrails = [...(config.initialInputGuardrails || [])];
     effectiveOutputGuardrails = [...(config.finalOutputGuardrails || [])];
   }
 
-  // Determine input guardrails to run for this turn
   const inputGuardrailsToRun = (state.turnCount === 0 && effectiveInputGuardrails.length > 0) 
     ? effectiveInputGuardrails 
     : [];
@@ -341,7 +321,6 @@ async function runInternal<Ctx, Out>(
     console.log(`[JAF:ENGINE] Available tools:`, currentAgent.tools.map(t => t.schema.name));
   }
 
-  // Emit agent processing event with complete state information
   config.onEvent?.({
     type: 'agent_processing',
     data: {
@@ -368,11 +347,9 @@ async function runInternal<Ctx, Out>(
     }
   });
 
-  // Pending tool_call resume is handled by tryResumePendingToolCalls above.
 
   const model = config.modelOverride ?? currentAgent.modelConfig?.name;
 
-  // Only check for model if not using the new AI SDK provider
   if (!model && !(config.modelProvider as any).isAiSdkProvider) {
     return {
       finalState: state,
@@ -386,11 +363,9 @@ async function runInternal<Ctx, Out>(
     };
   }
   
-  // Turn lifecycle start (before LLM call)
   const turnNumber = state.turnCount + 1;
   config.onEvent?.({ type: 'turn_start', data: { turn: turnNumber, agentName: currentAgent.name } });
 
-  // Prepare complete LLM call data for tracing
   const llmCallData = {
     agentName: currentAgent.name,
     model: model || 'unknown',
@@ -415,7 +390,6 @@ async function runInternal<Ctx, Out>(
     data: llmCallData
   });
 
-  // Execute input guardrails and LLM call
   let llmResponse: any;
   let streamingUsed = false;
   let assistantEventStreamed = false;
@@ -424,11 +398,9 @@ async function runInternal<Ctx, Out>(
     const firstUserMessage = state.messages.find(m => m.role === 'user');
     if (firstUserMessage) {
       if (hasAdvancedGuardrails) {
-        // NEW ADVANCED GUARDRAILS SYSTEM
         const executionMode = currentAgent.advancedConfig?.guardrails?.executionMode || 'parallel';
       
       if (executionMode === 'sequential') {
-        // Sequential: Run guardrails first, then LLM if they pass (backwards compatible)
         const guardrailResult = await executeInputGuardrailsSequential(inputGuardrailsToRun, firstUserMessage, config);
         if (!guardrailResult.isValid) {
           return {
@@ -446,11 +418,9 @@ async function runInternal<Ctx, Out>(
         console.log(`✅ All input guardrails passed. Starting LLM call.`);
         llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
       } else {
-        // Parallel: Run guardrails and LLM concurrently for better performance
         const guardrailPromise = executeInputGuardrailsParallel(inputGuardrailsToRun, firstUserMessage, config);
         const llmPromise = config.modelProvider.getCompletion(state, currentAgent, config);
         
-        // Wait for both to complete
         const [guardrailResult, llmResult] = await Promise.all([
           guardrailPromise,
           llmPromise
@@ -458,9 +428,7 @@ async function runInternal<Ctx, Out>(
         
         llmResponse = llmResult;
         
-        // Check if input guardrail failed
         if (!guardrailResult.isValid) {
-          // Input guardrail failed - discard LLM response and return error
           console.log(`🚨 Input guardrail violation: ${guardrailResult.errorMessage}`);
           console.log(`[JAF:GUARDRAILS] Discarding LLM response due to input guardrail violation`);
           return {
@@ -478,12 +446,10 @@ async function runInternal<Ctx, Out>(
         console.log(`✅ All input guardrails passed. Using LLM response.`);
         }
       } else {
-        // LEGACY GUARDRAILS - ORIGINAL BEHAVIOR (Backwards Compatible)
         console.log('[JAF:ENGINE] Using LEGACY guardrails path with', inputGuardrailsToRun.length, 'guardrails');
         for (const guardrail of inputGuardrailsToRun) {
           const result = await guardrail(getTextContent(firstUserMessage.content));
           if (!result.isValid) {
-            // Emit guardrail violation for input stage
             const errorMessage = !result.isValid ? result.errorMessage : '';
             config.onEvent?.({
               type: 'guardrail_violation',
@@ -501,11 +467,9 @@ async function runInternal<Ctx, Out>(
             };
           }
         }
-        // All legacy input guardrails passed, proceed with LLM call
         llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
       }
     } else {
-      // No user message found, try streaming then fallback to non-streaming
       if (typeof config.modelProvider.getCompletionStream === 'function') {
         try {
           streamingUsed = true;
@@ -570,7 +534,6 @@ async function runInternal<Ctx, Out>(
             }
           };
         } catch (e) {
-          // Fallback to non-streaming on error
           streamingUsed = false;
           assistantEventStreamed = false;
           llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
@@ -580,7 +543,6 @@ async function runInternal<Ctx, Out>(
       }
     }
   } else {
-    // No input guardrails to run, just execute LLM call
     if (typeof config.modelProvider.getCompletionStream === 'function') {
       try {
         streamingUsed = true;
@@ -645,7 +607,6 @@ async function runInternal<Ctx, Out>(
           }
         };
       } catch (e) {
-        // Fallback to non-streaming on error
         streamingUsed = false;
         assistantEventStreamed = false;
         llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
@@ -655,7 +616,6 @@ async function runInternal<Ctx, Out>(
     }
   }
   
-  // Extract usage data for enhanced events
   const usage = (llmResponse as any)?.usage;
   const prompt = (llmResponse as any)?.prompt;
   
@@ -677,7 +637,6 @@ async function runInternal<Ctx, Out>(
     }
   });
 
-  // Emit token usage if provider supplied it
   try {
     const usage = (llmResponse as any)?.usage;
     if (usage && (usage.prompt_tokens || usage.completion_tokens || usage.total_tokens)) {
@@ -694,7 +653,6 @@ async function runInternal<Ctx, Out>(
   } catch { /* ignore */ }
 
   if (!llmResponse.message) {
-    // End of turn due to error condition
     config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
     return {
       finalState: state,
@@ -714,7 +672,6 @@ async function runInternal<Ctx, Out>(
     tool_calls: llmResponse.message.tool_calls
   };
 
-  // Emit assistant message received (could include tool calls and/or content)
   if (!assistantEventStreamed) {
     config.onEvent?.({
       type: 'assistant_message',
@@ -723,14 +680,12 @@ async function runInternal<Ctx, Out>(
   }
 
   const newMessages = [...state.messages, assistantMessage];
-  // Increment turnCount after each AI invocation
   const updatedTurnCount = state.turnCount + 1;
 
   if (llmResponse.message.tool_calls && llmResponse.message.tool_calls.length > 0) {
     console.log(`[JAF:ENGINE] Processing ${llmResponse.message.tool_calls.length} tool calls`);
     console.log(`[JAF:ENGINE] Tool calls:`, llmResponse.message.tool_calls);
     
-    // Emit tool request(s) event with parsed args
     try {
       const requests = llmResponse.message.tool_calls.map((tc: any) => ({
         id: tc.id,
@@ -751,11 +706,9 @@ async function runInternal<Ctx, Out>(
       .map(r => r.interruption)
       .filter((interruption): interruption is Interruption<Ctx> => interruption !== undefined);
     if (interruptions.length > 0) {
-      // Separate completed tool results from approval-required messages
       const completedToolResults = toolResults.filter(r => !r.interruption);
       const approvalRequiredResults = toolResults.filter(r => r.interruption);
       
-      // Add pending approvals to state.approvals
       const updatedApprovals = new Map(state.approvals ?? []);
       for (const interruption of interruptions) {
         if (interruption.type === 'tool_approval') {
@@ -767,7 +720,6 @@ async function runInternal<Ctx, Out>(
         }
       }
       
-      // Create state with only completed tool results (for LLM context)
       const interruptedState = {
         ...state,
         messages: [...newMessages, ...completedToolResults.map(r => r.message)],
@@ -775,7 +727,6 @@ async function runInternal<Ctx, Out>(
         approvals: updatedApprovals,
       };
 
-      // Store conversation state with ALL messages including approval-required (for database records)
       if (config.memory?.autoStore && config.conversationId) {
         console.log(`[JAF:ENGINE] Storing conversation state due to interruption for ${config.conversationId}`);
         const stateForStorage = {
@@ -796,7 +747,6 @@ async function runInternal<Ctx, Out>(
     
     console.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
 
-    // Emit tool results being added (and thus sent back to the LLM on next turn)
     config.onEvent?.({
       type: 'tool_results_to_llm',
       data: { results: toolResults.map(r => r.message) }
@@ -808,7 +758,6 @@ async function runInternal<Ctx, Out>(
         const targetAgent = handoffResult.targetAgent!;
         
         if (!currentAgent.handoffs?.includes(targetAgent)) {
-          // Emit handoff denied event for observability
           config.onEvent?.({
             type: 'handoff_denied',
             data: { from: currentAgent.name, to: targetAgent, reason: `Agent ${currentAgent.name} cannot handoff to ${targetAgent}` }
@@ -852,7 +801,6 @@ async function runInternal<Ctx, Out>(
           turnCount: updatedTurnCount,
           approvals: state.approvals ?? new Map(),
         };
-        // End of turn before handing off to next agent
         config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
         return runInternal(nextState, config);
       }
@@ -879,7 +827,6 @@ async function runInternal<Ctx, Out>(
       turnCount: updatedTurnCount,
       approvals: state.approvals ?? new Map(),
     };
-    // End of this turn before next model call
     config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
     return runInternal(nextState, config);
   }
@@ -891,9 +838,7 @@ async function runInternal<Ctx, Out>(
       );
       
       if (!parseResult.success) {
-        // Emit decode error
         config.onEvent?.({ type: 'decode_error', data: { errors: parseResult.error.issues } });
-        // End of turn
         config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
         return {
           finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
@@ -907,13 +852,11 @@ async function runInternal<Ctx, Out>(
         };
       }
 
-      // Output guardrails execution
       let outputGuardrailResult;
       if (hasAdvancedGuardrails) {
         // Use new advanced system
         outputGuardrailResult = await executeOutputGuardrails(effectiveOutputGuardrails, parseResult.data, config);
       } else {
-        // LEGACY OUTPUT GUARDRAILS - Original behavior
         outputGuardrailResult = { isValid: true };
         if (effectiveOutputGuardrails && effectiveOutputGuardrails.length > 0) {
           for (const guardrail of effectiveOutputGuardrails) {
@@ -928,7 +871,6 @@ async function runInternal<Ctx, Out>(
         }
       }
       if (!outputGuardrailResult.isValid) {
-        // End of turn
         config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
         return {
           finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
@@ -942,7 +884,6 @@ async function runInternal<Ctx, Out>(
         };
       }
 
-      // Emit final output prior to completion
       config.onEvent?.({ type: 'final_output', data: { output: parseResult.data } });
       // End of turn
       config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -955,13 +896,11 @@ async function runInternal<Ctx, Out>(
         }
       };
     } else {
-      // Output guardrails execution
       let outputGuardrailResult;
       if (hasAdvancedGuardrails) {
         // Use new advanced system
         outputGuardrailResult = await executeOutputGuardrails(effectiveOutputGuardrails, llmResponse.message.content, config);
       } else {
-        // LEGACY OUTPUT GUARDRAILS - Original behavior
         outputGuardrailResult = { isValid: true };
         if (effectiveOutputGuardrails && effectiveOutputGuardrails.length > 0) {
           for (const guardrail of effectiveOutputGuardrails) {
@@ -976,7 +915,6 @@ async function runInternal<Ctx, Out>(
         }
       }
       if (!outputGuardrailResult.isValid) {
-        // End of turn
         config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
         return {
           finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
@@ -990,7 +928,6 @@ async function runInternal<Ctx, Out>(
         };
       }
 
-      // Emit final output prior to completion
       config.onEvent?.({ type: 'final_output', data: { output: llmResponse.message.content } });
       // End of turn
       config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -1005,7 +942,6 @@ async function runInternal<Ctx, Out>(
     }
   }
 
-  // End of turn due to error
   config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
   
   console.error(`[JAF:ENGINE] No tool calls or content returned by model. LLMResponse: `, llmResponse);
@@ -1034,7 +970,6 @@ async function executeToolCalls<Ctx>(
   state: RunState<Ctx>,
   config: RunConfig<Ctx>
 ): Promise<ToolCallResult[]> {
-  // Install runtime for tools that need access to current state/config (e.g., agent-as-tool)
   try { setToolRuntime(state.context, { state, config }); } catch { /* ignore */ }
   const results = await Promise.all(
     toolCalls.map(async (toolCall): Promise<ToolCallResult> => {
@@ -1131,7 +1066,6 @@ async function executeToolCalls<Ctx>(
         }
 
         const approvalStatus = state.approvals?.get(toolCall.id);
-        // Derive a normalized status for backward compatibility
         const derivedStatus: 'approved' | 'rejected' | 'pending' | undefined =
           approvalStatus?.status ?? (
             approvalStatus?.approved === true
@@ -1162,10 +1096,8 @@ async function executeToolCalls<Ctx>(
           };
         }
 
-        // Extract approval information from consistent object type
         const additionalContext = approvalStatus?.additionalContext;
 
-        // Only treat as rejected if explicitly rejected, not pending
         if (derivedStatus === 'rejected') {
           const rejectionReason = additionalContext?.rejectionReason || 'User declined the action';
           return {
@@ -1187,14 +1119,12 @@ async function executeToolCalls<Ctx>(
         console.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
         console.log(`[JAF:ENGINE] Tool context:`, state.context);
         
-        // Merge additional context if provided through approval
         const contextWithAdditional = additionalContext 
           ? { ...state.context, ...additionalContext }
           : state.context;
         
         const toolResult = await tool.execute(parseResult.data, contextWithAdditional);
         
-        // Handle both string and ToolResult formats
         let resultString: string;
         let toolResultObj: any = null;
         
@@ -1202,7 +1132,6 @@ async function executeToolCalls<Ctx>(
           resultString = toolResult;
           console.log(`[JAF:ENGINE] Tool ${toolCall.function.name} returned string:`, resultString);
         } else {
-          // It's a ToolResult object
           toolResultObj = toolResult;
           const { toolResultToString } = await import('./tool-results');
           resultString = toolResultToString(toolResult);
@@ -1242,7 +1171,6 @@ async function executeToolCalls<Ctx>(
           };
         }
 
-        // Wrap tool result with consistent status field
         let finalContent;
         if (additionalContext && Object.keys(additionalContext).length > 0) {
           finalContent = JSON.stringify({
@@ -1345,11 +1273,9 @@ async function loadConversationHistory<Ctx>(
     return initialState;
   }
 
-  // Apply memory limits if configured
   const maxMessages = config.memory.maxMessages || result.data.messages.length;
   const allMemoryMessages = result.data.messages.slice(-maxMessages);
   
-  // Filter out halted messages - they're for audit/database only, not for LLM context
   const memoryMessages = allMemoryMessages.filter(msg => {
     if (msg.role !== 'tool') return true;
     try {
@@ -1360,8 +1286,6 @@ async function loadConversationHistory<Ctx>(
     }
   });
   
-  // For HITL scenarios, append new messages to memory messages
-  // This prevents duplication when resuming from interruptions
   const combinedMessages = memoryMessages.length > 0 
     ? [...memoryMessages, ...initialState.messages.filter(msg => 
         !memoryMessages.some(memMsg => 
@@ -1372,7 +1296,6 @@ async function loadConversationHistory<Ctx>(
       )]
     : initialState.messages;
   
-  // Load approvals from conversation metadata if available
   const storedApprovals = result.data.metadata?.approvals;
   const approvalsMap = storedApprovals 
     ? new Map(Object.entries(storedApprovals) as [string, any][])
@@ -1404,10 +1327,8 @@ async function storeConversationHistory<Ctx>(
     return;
   }
 
-  // Apply compression threshold if configured
   let messagesToStore = finalState.messages;
   if (config.memory.compressionThreshold && messagesToStore.length > config.memory.compressionThreshold) {
-    // Keep first few messages and recent messages
     const keepFirst = Math.floor(config.memory.compressionThreshold * 0.2);
     const keepRecent = config.memory.compressionThreshold - keepFirst;
     

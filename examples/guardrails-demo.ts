@@ -2,7 +2,6 @@ import { createJAFServer } from '../src/server/server.js';
 import { makeLiteLLMProvider } from '../src/providers/model.js';
 import { Agent } from '../src/core/types.js';
 
-// Example agent with advanced guardrails configuration
 const guardrailsAgent: Agent<any, string> = {
   name: 'safe-assistant',
   instructions: () => `You are a helpful AI assistant that provides accurate and safe responses.`,
@@ -13,7 +12,6 @@ const guardrailsAgent: Agent<any, string> = {
   },
   advancedConfig: {
     guardrails: {
-      // Input guardrail: Check for harmful content
       inputPrompt: `Check if the user message contains:
 1. Requests for illegal activities
 2. Harmful or offensive language
@@ -21,7 +19,6 @@ const guardrailsAgent: Agent<any, string> = {
 
 The message should be ALLOWED unless it clearly violates these rules.`,
 
-      // Output guardrail: Ensure responses are helpful and safe
       outputPrompt: `Check if the assistant response:
 1. Provides helpful information
 2. Avoids harmful or inappropriate content
@@ -95,5 +92,4 @@ console.log(`curl -X POST http://${serverConfig.host}:${serverConfig.port}/chat 
 console.log('  -H "Content-Type: application/json" \\');
 console.log('  -d \'{"messages": [{"role": "user", "content": "Tell me about renewable energy with citations"}], "agentName": "safe-assistant"}\'');
 
-// Actually start the server
 server.start().catch(console.error);
