@@ -44,15 +44,23 @@ export type Message = {
   readonly tool_calls?: readonly ToolCall[];
 };
 
-export function getTextContent(content: string | readonly MessageContentPart[]): string {
+export function getTextContent(content: string | readonly MessageContentPart[] | any): string {
   if (typeof content === 'string') {
     return content;
   }
   
-  return content
-    .filter(part => part.type === 'text')
-    .map(part => (part as { text: string }).text)
-    .join(' ');
+  if (Array.isArray(content)) {
+    return content
+      .filter(item => item && typeof item === 'object' && item.type === 'text')
+      .map(item => item.text || '')
+      .join(' ');
+  }
+  
+  if (content && typeof content === 'object') {
+    return content.text || content.content || '';
+  }
+  
+  return String(content || '');
 }
 
 export type ModelConfig = {
@@ -88,6 +96,36 @@ export type AdvancedGuardrailsConfig = {
   readonly executionMode?: 'parallel' | 'sequential'; // How to run multiple guardrails
   readonly timeoutMs?: number; // Custom timeout for guardrail evaluation
 };
+
+/**
+ * Default configuration for guardrails with sensible defaults
+ */
+export const defaultGuardrailsConfig: Required<AdvancedGuardrailsConfig> = {
+  inputPrompt: '',
+  outputPrompt: '',
+  requireCitations: false,
+  fastModel: '',
+  failSafe: 'allow',
+  executionMode: 'parallel',
+  timeoutMs: 30000
+};
+
+/**
+ * Validates and normalizes guardrails configuration
+ */
+export function validateGuardrailsConfig(
+  config: AdvancedGuardrailsConfig
+): Required<AdvancedGuardrailsConfig> {
+  return {
+    inputPrompt: config.inputPrompt?.trim() || defaultGuardrailsConfig.inputPrompt,
+    outputPrompt: config.outputPrompt?.trim() || defaultGuardrailsConfig.outputPrompt,
+    requireCitations: config.requireCitations ?? defaultGuardrailsConfig.requireCitations,
+    fastModel: config.fastModel?.trim() || defaultGuardrailsConfig.fastModel,
+    failSafe: config.failSafe || defaultGuardrailsConfig.failSafe,
+    executionMode: config.executionMode || defaultGuardrailsConfig.executionMode,
+    timeoutMs: Math.max(1000, config.timeoutMs || defaultGuardrailsConfig.timeoutMs) // Minimum 1 second
+  };
+}
 
 export type AdvancedConfig = {
   readonly guardrails?: AdvancedGuardrailsConfig;
@@ -243,3 +281,4 @@ export const jsonParseLLMOutput = (text: string): any => {
     return null;
   }
 };
+

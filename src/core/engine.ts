@@ -9,9 +9,10 @@ import {
   ToolCall,
   Interruption,
   getTextContent,
+  Guardrail,
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
-import { buildEffectiveGuardrails, executeInputGuardrailsParallel, executeOutputGuardrails } from './guardrails.js';
+import { buildEffectiveGuardrails, executeInputGuardrailsParallel, executeInputGuardrailsSequential, executeOutputGuardrails } from './guardrails.js';
 
 
 export async function run<Ctx, Out>(
@@ -294,14 +295,45 @@ async function runInternal<Ctx, Out>(
     };
   }
 
-  // Build effective guardrails lists from agent configuration and global config
-  const { inputGuardrails: effectiveInputGuardrails, outputGuardrails: effectiveOutputGuardrails } = 
-    await buildEffectiveGuardrails(currentAgent, config);
+  // Check if agent has advanced guardrails config
+  const hasAdvancedGuardrails = !!(currentAgent.advancedConfig?.guardrails && 
+    (currentAgent.advancedConfig.guardrails.inputPrompt || 
+     currentAgent.advancedConfig.guardrails.outputPrompt || 
+     currentAgent.advancedConfig.guardrails.requireCitations));
+     
+  console.log('[JAF:ENGINE] Debug guardrails setup:', {
+    agentName: currentAgent.name,
+    hasAdvancedConfig: !!currentAgent.advancedConfig,
+    hasAdvancedGuardrails,
+    initialInputGuardrails: config.initialInputGuardrails?.length || 0,
+    finalOutputGuardrails: config.finalOutputGuardrails?.length || 0
+  });
+
+  let effectiveInputGuardrails: Guardrail<string>[] = [];
+  let effectiveOutputGuardrails: Guardrail<any>[] = [];
+  
+  if (hasAdvancedGuardrails) {
+    // Use new advanced guardrails system
+    const result = await buildEffectiveGuardrails(currentAgent, config);
+    effectiveInputGuardrails = result.inputGuardrails;
+    effectiveOutputGuardrails = result.outputGuardrails;
+  } else {
+    // Use original legacy guardrails (backwards compatible)
+    effectiveInputGuardrails = [...(config.initialInputGuardrails || [])];
+    effectiveOutputGuardrails = [...(config.finalOutputGuardrails || [])];
+  }
 
   // Determine input guardrails to run for this turn
   const inputGuardrailsToRun = (state.turnCount === 0 && effectiveInputGuardrails.length > 0) 
     ? effectiveInputGuardrails 
     : [];
+    
+  console.log('[JAF:ENGINE] Input guardrails to run:', {
+    turnCount: state.turnCount,
+    effectiveInputLength: effectiveInputGuardrails.length,
+    inputGuardrailsToRunLength: inputGuardrailsToRun.length,
+    hasAdvancedGuardrails
+  });
 
   console.log(`[JAF:ENGINE] Using agent: ${currentAgent.name}`);
   console.log(`[JAF:ENGINE] Agent has ${currentAgent.tools?.length || 0} tools available`);
@@ -391,11 +423,13 @@ async function runInternal<Ctx, Out>(
   if (inputGuardrailsToRun.length > 0 && state.turnCount === 0) {
     const firstUserMessage = state.messages.find(m => m.role === 'user');
     if (firstUserMessage) {
-      const executionMode = currentAgent.advancedConfig?.guardrails?.executionMode || 'parallel';
+      if (hasAdvancedGuardrails) {
+        // NEW ADVANCED GUARDRAILS SYSTEM
+        const executionMode = currentAgent.advancedConfig?.guardrails?.executionMode || 'parallel';
       
       if (executionMode === 'sequential') {
-        // Sequential: Run guardrails first, then LLM if they pass
-        const guardrailResult = await executeInputGuardrailsParallel(inputGuardrailsToRun, firstUserMessage, config);
+        // Sequential: Run guardrails first, then LLM if they pass (backwards compatible)
+        const guardrailResult = await executeInputGuardrailsSequential(inputGuardrailsToRun, firstUserMessage, config);
         if (!guardrailResult.isValid) {
           return {
             finalState: state,
@@ -442,6 +476,33 @@ async function runInternal<Ctx, Out>(
         }
         
         console.log(`✅ All input guardrails passed. Using LLM response.`);
+        }
+      } else {
+        // LEGACY GUARDRAILS - ORIGINAL BEHAVIOR (Backwards Compatible)
+        console.log('[JAF:ENGINE] Using LEGACY guardrails path with', inputGuardrailsToRun.length, 'guardrails');
+        for (const guardrail of inputGuardrailsToRun) {
+          const result = await guardrail(getTextContent(firstUserMessage.content));
+          if (!result.isValid) {
+            // Emit guardrail violation for input stage
+            const errorMessage = !result.isValid ? result.errorMessage : '';
+            config.onEvent?.({
+              type: 'guardrail_violation',
+              data: { stage: 'input', reason: errorMessage }
+            });
+            return {
+              finalState: state,
+              outcome: {
+                status: 'error',
+                error: {
+                  _tag: 'InputGuardrailTripwire',
+                  reason: errorMessage
+                }
+              }
+            };
+          }
+        }
+        // All legacy input guardrails passed, proceed with LLM call
+        llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
       }
     } else {
       // No user message found, try streaming then fallback to non-streaming
@@ -846,7 +907,26 @@ async function runInternal<Ctx, Out>(
         };
       }
 
-      const outputGuardrailResult = await executeOutputGuardrails(effectiveOutputGuardrails, parseResult.data, config);
+      // Output guardrails execution
+      let outputGuardrailResult;
+      if (hasAdvancedGuardrails) {
+        // Use new advanced system
+        outputGuardrailResult = await executeOutputGuardrails(effectiveOutputGuardrails, parseResult.data, config);
+      } else {
+        // LEGACY OUTPUT GUARDRAILS - Original behavior
+        outputGuardrailResult = { isValid: true };
+        if (effectiveOutputGuardrails && effectiveOutputGuardrails.length > 0) {
+          for (const guardrail of effectiveOutputGuardrails) {
+            const result = await guardrail(parseResult.data);
+            if (!result.isValid) {
+              const errorMessage = 'errorMessage' in result ? result.errorMessage : 'Guardrail violation';
+              config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: errorMessage } });
+              outputGuardrailResult = { isValid: false, errorMessage };
+              break;
+            }
+          }
+        }
+      }
       if (!outputGuardrailResult.isValid) {
         // End of turn
         config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -856,7 +936,7 @@ async function runInternal<Ctx, Out>(
             status: 'error',
             error: {
               _tag: 'OutputGuardrailTripwire',
-              reason: outputGuardrailResult.errorMessage
+              reason: outputGuardrailResult.errorMessage || 'Output guardrail violation'
             }
           }
         };
@@ -875,7 +955,26 @@ async function runInternal<Ctx, Out>(
         }
       };
     } else {
-      const outputGuardrailResult = await executeOutputGuardrails(effectiveOutputGuardrails, llmResponse.message.content, config);
+      // Output guardrails execution
+      let outputGuardrailResult;
+      if (hasAdvancedGuardrails) {
+        // Use new advanced system
+        outputGuardrailResult = await executeOutputGuardrails(effectiveOutputGuardrails, llmResponse.message.content, config);
+      } else {
+        // LEGACY OUTPUT GUARDRAILS - Original behavior
+        outputGuardrailResult = { isValid: true };
+        if (effectiveOutputGuardrails && effectiveOutputGuardrails.length > 0) {
+          for (const guardrail of effectiveOutputGuardrails) {
+            const result = await guardrail(llmResponse.message.content);
+            if (!result.isValid) {
+              const errorMessage = 'errorMessage' in result ? result.errorMessage : 'Guardrail violation';
+              config.onEvent?.({ type: 'guardrail_violation', data: { stage: 'output', reason: errorMessage } });
+              outputGuardrailResult = { isValid: false, errorMessage };
+              break;
+            }
+          }
+        }
+      }
       if (!outputGuardrailResult.isValid) {
         // End of turn
         config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -885,7 +984,7 @@ async function runInternal<Ctx, Out>(
             status: 'error',
             error: {
               _tag: 'OutputGuardrailTripwire',
-              reason: outputGuardrailResult.errorMessage
+              reason: outputGuardrailResult.errorMessage || 'Output guardrail violation'
             }
           }
         };
