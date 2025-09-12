@@ -126,6 +126,17 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
   start: () => Promise<void>;
   stop: () => Promise<void>;
 } {
+  // BACKWARDS COMPATIBILITY: Handle legacy agentRegistry at top level
+  if (config.agentRegistry && !config.runConfig.agentRegistry) {
+    console.warn('[JAF:SERVER] DEPRECATED: agentRegistry should be provided in runConfig.agentRegistry. Using legacy configuration for backwards compatibility.');
+    (config.runConfig as any).agentRegistry = config.agentRegistry;
+  }
+  
+  // Ensure agentRegistry exists
+  if (!config.runConfig.agentRegistry) {
+    throw new Error('agentRegistry must be provided either in config.agentRegistry (deprecated) or config.runConfig.agentRegistry');
+  }
+
   const startTime = Date.now();
   // SSE subscribers for approval-related events
   const approvalSubscribers = new Set<{ res: any; filterConversationId?: string }>();

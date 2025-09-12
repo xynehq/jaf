@@ -8,7 +8,8 @@ export interface ServerConfig<Ctx> {
   cors?: boolean;
   maxBodySize?: number;
   runConfig: RunConfig<Ctx>;
-  // agentRegistry is now only in runConfig to avoid duplication
+  // BACKWARDS COMPATIBILITY: Support legacy agentRegistry at top level
+  agentRegistry?: Map<string, Agent<Ctx, any>>;
   defaultMemoryProvider?: MemoryProvider;
 }
 
