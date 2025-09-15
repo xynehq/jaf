@@ -12,6 +12,11 @@ import {
   validateGuardrailsConfig
 } from './types.js';
 
+// Constants for content length limits
+const SHORT_TIMEOUT_MAX_CONTENT = 10000;
+const LONG_TIMEOUT_MAX_CONTENT = 50000;
+const CIRCUIT_BREAKER_CLEANUP_MAX_AGE = 10 * 60 * 1000; // 10 minutes
+
 class GuardrailCircuitBreaker {
   private failures = 0;
   private lastFailureTime = 0;
@@ -37,6 +42,14 @@ class GuardrailCircuitBreaker {
 
   recordSuccess(): void {
     this.failures = 0;
+  }
+
+  // Public method for cleanup eligibility check
+  shouldBeCleanedUp(maxAge: number): boolean {
+    const now = Date.now();
+    return this.lastFailureTime > 0 && 
+           (now - this.lastFailureTime) > maxAge && 
+           !this.isOpen();
   }
 }
 
@@ -205,7 +218,7 @@ async function createLLMGuardrail<Ctx>(
         : { isValid: false as const, errorMessage: 'Invalid content provided to guardrail' };
     }
 
-    const maxContentLength = timeoutMs < 10000 ? 10000 : 50000;
+    const maxContentLength = timeoutMs < 10000 ? SHORT_TIMEOUT_MAX_CONTENT : LONG_TIMEOUT_MAX_CONTENT;
     if (content.length > maxContentLength) {
       console.warn(`[JAF:GUARDRAILS] Content too large for ${stage} guardrail (${content.length} chars, max: ${maxContentLength})`);
       return failSafe === 'allow'
@@ -670,11 +683,8 @@ export async function executeOutputGuardrails<Ctx>(
 }
 
 export function cleanupCircuitBreakers(): void {
-  const now = Date.now();
-  const maxAge = 10 * 60 * 1000; // 10 minutes
-  
   for (const [key, breaker] of circuitBreakers.entries()) {
-    if (breaker['lastFailureTime'] && (now - breaker['lastFailureTime']) > maxAge && !breaker.isOpen()) {
+    if (breaker.shouldBeCleanedUp(CIRCUIT_BREAKER_CLEANUP_MAX_AGE)) {
       circuitBreakers.delete(key);
     }
   }
