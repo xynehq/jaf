@@ -44,15 +44,23 @@ export type Message = {
   readonly tool_calls?: readonly ToolCall[];
 };
 
-export function getTextContent(content: string | readonly MessageContentPart[]): string {
+export function getTextContent(content: string | readonly MessageContentPart[] | any): string {
   if (typeof content === 'string') {
     return content;
   }
   
-  return content
-    .filter(part => part.type === 'text')
-    .map(part => (part as { text: string }).text)
-    .join(' ');
+  if (Array.isArray(content)) {
+    return content
+      .filter(item => item && typeof item === 'object' && item.type === 'text')
+      .map(item => item.text || '')
+      .join(' ');
+  }
+  
+  if (content && typeof content === 'object') {
+    return content.text || content.content || '';
+  }
+  
+  return String(content || '');
 }
 
 export type ModelConfig = {
@@ -79,6 +87,44 @@ export type Tool<A, Ctx> = {
       ) => Promise<boolean> | boolean);
 };
 
+export type AdvancedGuardrailsConfig = {
+  readonly inputPrompt?: string;
+  readonly outputPrompt?: string;
+  readonly requireCitations?: boolean;
+  readonly fastModel?: string;
+  readonly failSafe?: 'allow' | 'block';
+  readonly executionMode?: 'parallel' | 'sequential';
+  readonly timeoutMs?: number;
+};
+
+export const defaultGuardrailsConfig: Required<AdvancedGuardrailsConfig> = {
+  inputPrompt: '',
+  outputPrompt: '',
+  requireCitations: false,
+  fastModel: '',
+  failSafe: 'allow',
+  executionMode: 'parallel',
+  timeoutMs: 30000
+};
+
+export function validateGuardrailsConfig(
+  config: AdvancedGuardrailsConfig
+): Required<AdvancedGuardrailsConfig> {
+  return {
+    inputPrompt: config.inputPrompt?.trim() || defaultGuardrailsConfig.inputPrompt,
+    outputPrompt: config.outputPrompt?.trim() || defaultGuardrailsConfig.outputPrompt,
+    requireCitations: config.requireCitations ?? defaultGuardrailsConfig.requireCitations,
+    fastModel: config.fastModel?.trim() || defaultGuardrailsConfig.fastModel,
+    failSafe: config.failSafe || defaultGuardrailsConfig.failSafe,
+    executionMode: config.executionMode || defaultGuardrailsConfig.executionMode,
+    timeoutMs: Math.max(1000, config.timeoutMs || defaultGuardrailsConfig.timeoutMs)
+  };
+}
+
+export type AdvancedConfig = {
+  readonly guardrails?: AdvancedGuardrailsConfig;
+};
+
 export type Agent<Ctx, Out> = {
   readonly name: string;
   readonly instructions: (state: Readonly<RunState<Ctx>>) => string;
@@ -86,6 +132,7 @@ export type Agent<Ctx, Out> = {
   readonly outputCodec?: z.ZodType<Out>;
   readonly handoffs?: readonly string[];
   readonly modelConfig?: ModelConfig;
+  readonly advancedConfig?: AdvancedConfig;
 };
 
 export type Guardrail<I> = (
@@ -95,16 +142,7 @@ export type Guardrail<I> = (
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
 export type ApprovalValue = {
-  /**
-   * Tri-state status of the approval lifecycle.
-   * - 'pending': decision not made yet
-   * - 'approved': explicitly approved
-   * - 'rejected': explicitly rejected
-   */
   readonly status: ApprovalStatus;
-  /**
-   * Backward-compatible boolean. Prefer `status` for logic; this mirrors status.
-   */
   readonly approved: boolean;
   readonly additionalContext?: Record<string, any>;
 };
@@ -218,4 +256,14 @@ export type RunConfig<Ctx> = {
   readonly memory?: MemoryConfig;
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;
+  readonly defaultFastModel?: string;
 };
+
+export const jsonParseLLMOutput = (text: string): any => {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+};
+
