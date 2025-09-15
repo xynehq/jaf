@@ -11,8 +11,9 @@
 7. [Security Considerations](#security-considerations)
 8. [Best Practices for Tool Design](#best-practices-for-tool-design)
 9. [Advanced Patterns](#advanced-patterns)
-10. [Tool Debugging and Observability](#tool-debugging-and-observability)
-11. [Complete Examples](#complete-examples)
+10. [HTTP Tool Builder (makeHttpTool)](#http-tool-builder-makehttptool)
+11. [Tool Debugging and Observability](#tool-debugging-and-observability)
+12. [Complete Examples](#complete-examples)
 
 ## Overview
 
@@ -296,6 +297,67 @@ interface ToolResult<T = any> {
   };
 }
 ```
+
+## HTTP Tool Builder (makeHttpTool)
+
+JAF includes a generic HTTP tool factory that removes boilerplate and (optionally) handles authentication for you.
+
+Key features:
+- Define request shape with a small builder function.
+- Optional `auth` to enable API Key/Bearer/OAuth2/OIDC injection and interactive flows.
+- Works for both simple REST tools and authenticated API calls.
+
+Basic (no auth):
+```typescript
+import { z } from 'zod';
+import { makeHttpTool } from '@xynehq/jaf';
+
+export const getStatus = makeHttpTool<{ url: string }, Ctx>({
+  name: 'http_get_status',
+  description: 'Fetch a URL and return its status/info',
+  parameters: z.object({ url: z.string().url() }),
+  request: (args) => ({ url: args.url, method: 'GET' }),
+  onResponse: async (res) => JSON.stringify({
+    ok: res.ok,
+    status: res.status,
+    headers: Object.fromEntries(res.headers.entries()),
+    body: await res.text()
+  })
+});
+```
+
+Authenticated (OAuth2/OIDC/API key):
+```typescript
+import { z } from 'zod';
+import { makeHttpTool } from '@xynehq/jaf';
+
+export const getUserInfo = makeHttpTool<{ endpoint?: string }, Ctx>({
+  name: 'get_user_info',
+  description: 'Fetch the authenticated user info',
+  parameters: z.object({ endpoint: z.string().url().optional() }),
+  auth: {
+    authScheme: {
+      type: 'openidconnect',
+      openIdConnectUrl: process.env.OIDC_DISCOVERY_URL!,
+      scopes: ['openid', 'profile', 'email']
+    },
+    rawAuthCredential: {
+      type: 'OPEN_ID_CONNECT',
+      clientId: process.env.OIDC_CLIENT_ID!,
+      clientSecret: process.env.OIDC_CLIENT_SECRET
+    }
+  },
+  request: (args) => ({
+    url: args.endpoint || process.env.PROTECTED_API_URL!,
+    method: 'GET'
+  }),
+  onResponse: async (res) => JSON.stringify(await res.json())
+});
+```
+
+Notes:
+- When `auth` is provided, makeHttpTool will pause with a `tool_auth` interruption when credentials are needed, resume after `/auth/submit`, and inject the right headers/query for the scheme.
+- See Authentication docs for server endpoints and flows: `auth/tool-auth.md`.
 
 ### Result Conversion
 

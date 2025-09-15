@@ -27,6 +27,17 @@ export * from './a2a';
 // Re-export specific ADK modules to avoid conflicts
 export * as ADK from './adk';
 
+// Tool Auth
+export * from './auth/types';
+export * from './auth/store';
+export * from './auth/runtime';
+export * from './auth/store-redis';
+export * from './auth/store-postgres';
+export * from './auth/factory';
+export * from './auth/kms';
+export * from './auth/store-kms-wrapper';
+export * from './tools/http';
+
 import { v4 as uuidv4 } from 'uuid';
 import { TraceId, RunId, createTraceId, createRunId } from './core/types';
 

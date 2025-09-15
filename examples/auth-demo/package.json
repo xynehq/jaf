@@ -1,0 +1,26 @@
+{
+  "name": "jaf-auth-demo",
+  "version": "1.0.0",
+  "description": "OAuth2/OIDC tool authentication demo for JAF",
+  "main": "index.ts",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx --watch index.ts",
+    "dev:oidc": "tsx index.ts",
+    "dev:oauth2": "tsx oauth2.ts",
+    "dev:apikey": "tsx api-key.ts",
+    "dev:bearer": "tsx bearer.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@xynehq/jaf": "workspace:*",
+    "dotenv": "^17.2.1",
+    "open": "^10.1.0",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

@@ -88,19 +88,39 @@ export const chatResponseSchema = z.object({
       outcome: z.object({
         status: z.enum(['completed', 'error', 'max_turns', 'interrupted']),
         output: z.string().optional(),
-      error: z.any().optional(),
-        interruptions: z.array(z.object({
-          type: z.literal('tool_approval'),
-          toolCall: z.object({
-            id: z.string(),
-            type: z.literal('function'),
-            function: z.object({
-              name: z.string(),
-              arguments: z.string()
-            })
+        error: z.any().optional(),
+        interruptions: z.array(z.union([
+          z.object({
+            type: z.literal('tool_approval'),
+            toolCall: z.object({
+              id: z.string(),
+              type: z.literal('function'),
+              function: z.object({
+                name: z.string(),
+                arguments: z.string()
+              })
+            }),
+            sessionId: z.string()
           }),
-          sessionId: z.string()
-        })).optional()
+          z.object({
+            type: z.literal('tool_auth'),
+            toolCall: z.object({
+              id: z.string(),
+              type: z.literal('function'),
+              function: z.object({
+                name: z.string(),
+                arguments: z.string()
+              })
+            }),
+            sessionId: z.string(),
+            auth: z.object({
+              authKey: z.string(),
+              schemeType: z.enum(['apiKey', 'http', 'oauth2', 'openidconnect']),
+              authorizationUrl: z.string().optional(),
+              scopes: z.array(z.string()).optional(),
+            })
+          })
+        ])).optional()
       }),
       turnCount: z.number(),
     executionTimeMs: z.number()
@@ -132,3 +152,13 @@ export const healthResponseSchema = z.object({
 });
 
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
+
+// Auth submit payload schema
+export const authSubmitSchema = z.object({
+  conversationId: z.string(),
+  sessionId: z.string(),
+  toolCallId: z.string(),
+  authResponseUri: z.string(),
+  redirectUri: z.string().optional(),
+});
+export type AuthSubmitRequest = z.infer<typeof authSubmitSchema>;

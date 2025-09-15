@@ -984,15 +984,76 @@ async function executeToolCalls<Ctx>(
         }
 
         console.log(`[JAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
-        console.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
-        console.log(`[JAF:ENGINE] Tool context:`, state.context);
+        const redactKeys = new Set(['password','secret','token','access_token','refresh_token','authorization','apiKey','client_secret','clientSecret','bearer']);
+        const sanitize = (obj: any): any => {
+          try {
+            if (obj === null || typeof obj !== 'object') return obj;
+            if (Array.isArray(obj)) return obj.map(sanitize);
+            const out: any = {};
+            for (const [k, v] of Object.entries(obj)) {
+              if (redactKeys.has(k) || k.toLowerCase().includes('secret') || k.toLowerCase().includes('token')) {
+                out[k] = '[REDACTED]';
+              } else {
+                out[k] = sanitize(v);
+              }
+            }
+            return out;
+          } catch { return obj; }
+        };
+        console.log(`[JAF:ENGINE] Tool args:`, sanitize(parseResult.data));
+        console.log(`[JAF:ENGINE] Tool context:`, sanitize(state.context));
         
         // Merge additional context if provided through approval
         const contextWithAdditional = additionalContext 
           ? { ...state.context, ...additionalContext }
           : state.context;
         
-        const toolResult = await tool.execute(parseResult.data, contextWithAdditional);
+        let toolResult: any;
+        try {
+          toolResult = await tool.execute(parseResult.data, contextWithAdditional);
+        } catch (err) {
+          // Handle authentication-required interruption from tool auth runtime
+          const maybeAuthErr = err as any;
+          try {
+            const { AuthRequiredError } = await import('../auth/errors');
+            const isAuthRequired = (
+              maybeAuthErr instanceof AuthRequiredError ||
+              (maybeAuthErr && (maybeAuthErr.name === 'AuthRequiredError' || maybeAuthErr.constructor?.name === 'AuthRequiredError'))
+            );
+            if (isAuthRequired) {
+              const authStore = (config as any).authStore as import('../auth/store').AuthStore | undefined;
+              // Register pending mapping for resume
+              try { await authStore?.setPending(state.runId, toolCall.id, maybeAuthErr.authKey); } catch { /* ignore */ }
+              return {
+                interruption: {
+                  type: 'tool_auth',
+                  toolCall,
+                  agent,
+                  sessionId: state.runId,
+                  auth: {
+                    authKey: maybeAuthErr.authKey,
+                    schemeType: maybeAuthErr.presentation?.schemeType,
+                    authorizationUrl: maybeAuthErr.presentation?.authorizationUrl,
+                    scopes: maybeAuthErr.presentation?.scopes,
+                  },
+                },
+                message: {
+                  role: 'tool',
+                  content: JSON.stringify({
+                    status: 'halted',
+                    reason: 'auth_required',
+                    message: `Tool ${toolCall.function.name} requires authentication.`,
+                    tool_name: toolCall.function.name,
+                    scheme: maybeAuthErr.presentation?.schemeType,
+                    authorization_url: maybeAuthErr.presentation?.authorizationUrl,
+                  }),
+                  tool_call_id: toolCall.id,
+                },
+              };
+            }
+          } catch { /* fall through */ }
+          throw err; // not an auth interruption
+        }
         
         // Handle both string and ToolResult formats
         let resultString: string;

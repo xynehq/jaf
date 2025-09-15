@@ -147,6 +147,13 @@ nav:
   - API Reference:
     - API Overview: api-reference.md
     - Server API: server-api.md
+  - Authentication:
+    - Overview: auth/index.md
+    - Tool API: auth/tool-auth.md
+    - Server & Events: auth/server.md
+    - Storage: auth/stores.md
+    - AWS KMS: auth/kms.md
+    - Demo: auth/example.md
   - Advanced Topics:
     - Visualization: visualization.md
     - Deployment: deployment.md

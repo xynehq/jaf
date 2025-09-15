@@ -11,6 +11,8 @@ import {
   ApprovalMessage
 } from './types';
 import { run, runStream } from '../core/engine';
+import type { AuthStore } from '../auth/store';
+import { createAuthStoreFromEnv } from '../auth/factory';
 import { RunState, Message, createRunId, createTraceId } from '../core/types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -127,8 +129,11 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
   stop: () => Promise<void>;
 } {
   const startTime = Date.now();
+  let defaultAuthStore: AuthStore;
   // SSE subscribers for approval-related events
   const approvalSubscribers = new Set<{ res: any; filterConversationId?: string }>();
+  // SSE subscribers for auth-related events
+  const authSubscribers = new Set<{ res: any; filterConversationId?: string }>();
 
   const sseSend = (res: any, event: string, data: any) => {
     try {
@@ -163,6 +168,22 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
     for (const client of approvalSubscribers) {
       if (client.filterConversationId && client.filterConversationId !== payload.conversationId) continue;
       sseSend(client.res, 'approval_decision', { ...payload, timestamp: payload.timestamp || new Date().toISOString() });
+    }
+  };
+
+  const broadcastAuthRequired = (payload: {
+    conversationId: string;
+    sessionId: string;
+    toolCallId: string;
+    toolName: string;
+    schemeType: 'apiKey' | 'http' | 'oauth2' | 'openidconnect';
+    authorizationUrl?: string;
+    scopes?: string[];
+    timestamp?: string;
+  }) => {
+    for (const client of authSubscribers) {
+      if (client.filterConversationId && client.filterConversationId !== payload.conversationId) continue;
+      sseSend(client.res, 'auth_required', { ...payload, timestamp: payload.timestamp || new Date().toISOString() });
     }
   };
   
@@ -210,6 +231,43 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       };
       
       return reply.code(200).send(response);
+    });
+
+    // Auth submit endpoint to provide callback URI after user authorization
+    app.post('/auth/submit', async (request: FastifyRequest<{ Body: import('./types').AuthSubmitRequest }>, reply: FastifyReply) => {
+      try {
+        const { authSubmitSchema } = await import('./types');
+        const payload = authSubmitSchema.parse(request.body);
+        const authStore = defaultAuthStore;
+        const authKey = await authStore.getPending(payload.sessionId, payload.toolCallId);
+        if (!authKey) {
+          return reply.code(404).send({ success: false, error: 'Pending auth request not found' });
+        }
+        // Validate provider state param matches what we generated
+        try {
+          const cfg = await authStore.getConfig(authKey);
+          const expectedState = (cfg && (cfg as any).state && (cfg as any).state.state) as string | undefined;
+          if (expectedState) {
+            const u = new URL(payload.authResponseUri);
+            const gotState = u.searchParams.get('state') || undefined;
+            if (gotState !== expectedState) {
+              return reply.code(400).send({ success: false, error: 'State mismatch' });
+            }
+          }
+        } catch { /* best effort; reject only on explicit mismatch */ }
+        await authStore.setAuthResponse(authKey, { authResponseUri: payload.authResponseUri, redirectUri: payload.redirectUri });
+        await authStore.clearPending(payload.sessionId, payload.toolCallId);
+        try {
+          for (const client of authSubscribers) {
+            if (client.filterConversationId && client.filterConversationId !== payload.conversationId) continue;
+            sseSend(client.res, 'auth_response_received', { conversationId: payload.conversationId, sessionId: payload.sessionId, toolCallId: payload.toolCallId, timestamp: new Date().toISOString() });
+          }
+        } catch { /* ignore */ }
+        return reply.code(200).send({ success: true });
+      } catch (e) {
+        app.log.error({ err: e }, 'Auth submit failed');
+        return reply.code(400).send({ success: false, error: e instanceof Error ? e.message : 'Invalid request' });
+      }
     });
 
     // List available agents
@@ -445,6 +503,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         // Create run config with memory configuration
         const runConfig = {
           ...config.runConfig,
+          authStore: defaultAuthStore,
           maxTurns: validatedRequest.maxTurns || config.runConfig.maxTurns || 10,
           conversationId,
           memory: config.defaultMemoryProvider ? {
@@ -496,7 +555,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
 
               // If run ends, we close the stream
               if (event.type === 'run_end') {
-                // Broadcast approval_required to approvals SSE if interrupted
+                // Broadcast approval_required/auth_required to SSE if interrupted
                 try {
                   const outcome = (event as any).data?.outcome;
                   if (outcome && outcome.status === 'interrupted') {
@@ -512,6 +571,18 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
                           toolName: toolCall.function.name,
                           args,
                           signature: computeToolCallSignature(toolCall)
+                        });
+                      } else if ((intr as any).type === 'tool_auth') {
+                        const toolCall = (intr as any).toolCall;
+                        const auth = (intr as any).auth;
+                        broadcastAuthRequired({
+                          conversationId,
+                          sessionId: (intr as any).sessionId || runId,
+                          toolCallId: toolCall.id,
+                          toolName: toolCall.function.name,
+                          schemeType: auth.schemeType,
+                          authorizationUrl: auth.authorizationUrl,
+                          scopes: auth.scopes,
                         });
                       }
                     }
@@ -584,11 +655,20 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
               output: result.outcome.status === 'completed' ? String(result.outcome.output) : undefined,
               error: result.outcome.status === 'error' ? result.outcome.error : undefined,
               interruptions: result.outcome.status === 'interrupted' 
-                ? result.outcome.interruptions.map(interruption => ({
-                    type: interruption.type,
-                    toolCall: interruption.toolCall,
-                    sessionId: interruption.sessionId || result.finalState.runId
-                  }))
+                ? result.outcome.interruptions.map((interruption: any) => (
+                    interruption.type === 'tool_auth'
+                      ? {
+                          type: 'tool_auth',
+                          toolCall: interruption.toolCall,
+                          sessionId: interruption.sessionId || result.finalState.runId,
+                          auth: interruption.auth
+                        }
+                      : {
+                          type: 'tool_approval',
+                          toolCall: interruption.toolCall,
+                          sessionId: interruption.sessionId || result.finalState.runId
+                        }
+                  ))
                 : undefined
             },
             turnCount: result.finalState.turnCount,
@@ -596,7 +676,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
           }
         };
 
-        // Broadcast approval_required to approvals SSE if interrupted (non-streaming)
+        // Broadcast approval_required/auth_required to SSE if interrupted (non-streaming)
         if (result.outcome.status === 'interrupted') {
           try {
             for (const intr of result.outcome.interruptions) {
@@ -610,6 +690,18 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
                   toolName: toolCall.function.name,
                   args,
                   signature: computeToolCallSignature(toolCall)
+                });
+              } else if ((intr as any).type === 'tool_auth') {
+                const toolCall = (intr as any).toolCall;
+                const auth = (intr as any).auth;
+                broadcastAuthRequired({
+                  conversationId,
+                  sessionId: (intr as any).sessionId || runId,
+                  toolCallId: toolCall.id,
+                  toolName: toolCall.function.name,
+                  schemeType: auth.schemeType,
+                  authorizationUrl: auth.authorizationUrl,
+                  scopes: auth.scopes,
                 });
               }
             }
@@ -828,6 +920,8 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
 
   const start = async (): Promise<void> => {
     try {
+      // Initialize auth store (from runConfig or env or in-memory)
+      defaultAuthStore = (config.runConfig as any).authStore || await createAuthStoreFromEnv();
       await setupMiddleware();
       setupRoutes();
       
@@ -863,6 +957,42 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       request.raw.on('close', () => {
         clearInterval(interval);
         approvalSubscribers.delete(client);
+        try { reply.raw.end(); } catch { /* ignore */ }
+      });
+
+      // Fastify route handled via raw stream
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return undefined as any;
+    });
+    // Auth SSE stream
+    app.get('/auth/stream', async (
+      request: FastifyRequest<{ Querystring: { conversationId?: string } }>,
+      reply: FastifyReply
+    ) => {
+      // SSE headers
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no'
+      });
+
+      const filterConversationId = (request.query && (request.query as any).conversationId) || undefined;
+      const client = { res: reply.raw, filterConversationId };
+      authSubscribers.add(client);
+
+      // Initial greeting
+      sseSend(reply.raw, 'stream_start', { conversationId: filterConversationId || null });
+
+      // Heartbeat
+      const interval = setInterval(() => {
+        try { sseSend(reply.raw, 'ping', { ts: Date.now() }); } catch { /* ignore */ }
+      }, 15000);
+
+      // Cleanup on close
+      request.raw.on('close', () => {
+        clearInterval(interval);
+        authSubscribers.delete(client);
         try { reply.raw.end(); } catch { /* ignore */ }
       });
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MemoryConfig } from '../memory/types';
 import type { ApprovalStorage } from '../memory/approval-storage';
+import type { AuthStore } from '../auth/store';
 
 export type TraceId = string & { readonly _brand: 'TraceId' };
 export type RunId = string & { readonly _brand: 'RunId' };
@@ -136,7 +137,20 @@ export type ToolApprovalInterruption<Ctx> = {
   readonly sessionId?: string;
 };
 
-export type Interruption<Ctx> = ToolApprovalInterruption<Ctx>;
+export type ToolAuthInterruption<Ctx> = {
+  readonly type: 'tool_auth';
+  readonly toolCall: ToolCall;
+  readonly agent: Agent<Ctx, any>;
+  readonly sessionId?: string;
+  readonly auth: {
+    readonly authKey: string;
+    readonly schemeType: 'apiKey' | 'http' | 'oauth2' | 'openidconnect';
+    readonly authorizationUrl?: string;
+    readonly scopes?: readonly string[];
+  };
+};
+
+export type Interruption<Ctx> = ToolApprovalInterruption<Ctx> | ToolAuthInterruption<Ctx>;
 
 export type RunResult<Out> = {
   readonly finalState: RunState<any>;
@@ -218,4 +232,5 @@ export type RunConfig<Ctx> = {
   readonly memory?: MemoryConfig;
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;
+  readonly authStore?: AuthStore;
 };
