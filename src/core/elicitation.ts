@@ -123,7 +123,7 @@ function validateProperty(
       break;
 
     case 'number':
-    case 'integer':
+    case 'integer': {
       if (typeof value !== 'number') {
         errors.push(`Field '${fieldName}' must be a number`);
         break;
@@ -143,6 +143,7 @@ function validateProperty(
         errors.push(`Field '${fieldName}' must be at most ${numberSchema.maximum}`);
       }
       break;
+    }
 
     case 'boolean':
       if (typeof value !== 'boolean') {
