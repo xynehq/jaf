@@ -840,8 +840,8 @@ async function executeToolCalls<Ctx>(
   // Install runtime for tools that need access to current state/config (e.g., agent-as-tool)
   try { setToolRuntime(state.context, { state, config }); } catch { /* ignore */ }
 
-  // Import elicitation context functions
-  const { setElicitationContext, clearElicitationContext } = await import('./elicit.js');
+  // Import elicitation context function
+  const { runWithElicitationContext } = await import('./elicit.js');
   const results = await Promise.all(
     toolCalls.map(async (toolCall): Promise<ToolCallResult> => {
       const tool = agent.tools?.find(t => t.schema.name === toolCall.function.name);
@@ -998,16 +998,13 @@ async function executeToolCalls<Ctx>(
           ? { ...state.context, ...additionalContext }
           : state.context;
 
-        // Set elicitation context for this specific tool execution
-        setElicitationContext({ state, config });
-
+        // Execute tool within elicitation context using AsyncLocalStorage
         let toolResult;
         try {
-          toolResult = await tool.execute(parseResult.data, contextWithAdditional);
+          toolResult = await runWithElicitationContext({ state, config }, () =>
+            tool.execute(parseResult.data, contextWithAdditional)
+          );
         } catch (error) {
-          // Clear elicitation context first
-          clearElicitationContext();
-
           // Check if this is an elicitation interruption
           const { ElicitationInterruptionError } = await import('./elicit.js');
           if (error instanceof ElicitationInterruptionError) {
@@ -1035,9 +1032,6 @@ async function executeToolCalls<Ctx>(
 
           // Re-throw other errors
           throw error;
-        } finally {
-          // Clear elicitation context after tool execution
-          clearElicitationContext();
         }
         
         // Handle both string and ToolResult formats
@@ -1291,7 +1285,7 @@ async function checkAndResumeElicitation<Ctx>(
   config: RunConfig<Ctx>
 ): Promise<RunState<Ctx>> {
   // Only process if we have new messages and elicitation provider
-  if (!config.elicitationProvider || state.messages.length === 0) {
+  if (!config.elicitationProvider) {
     return state;
   }
 
@@ -1336,10 +1330,7 @@ async function checkAndResumeElicitation<Ctx>(
       console.log(`[JAF:ENGINE] Resuming tool execution with elicitation response`);
 
       // Create a successful tool result
-      const successResult = `Successfully collected user information:
-            - Name: ${elicitationResponse.content.name}
-            - Email: ${elicitationResponse.content.email}
-            - Phone: ${elicitationResponse.content.phone || 'Not provided'}`;
+      const successResult = `Successfully collected user information: ${Object.entries(elicitationResponse.content).map(([key, value]) => `- ${key[0].toUpperCase() + key.slice(1)}: ${value || 'Not provided'}`).join('\n')}`;
 
       // Replace the elicitation_required tool message with the success result
       const updatedMessages = state.messages.map(msg => {

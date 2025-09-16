@@ -11,7 +11,8 @@ import {
   Elicit,
   elicit,
   ElicitationSchemas,
-  ServerElicitationProvider
+  ServerElicitationProvider,
+  ElicitationInterruptionError
 } from '../../dist/index.js';
 
 // Tool that demonstrates basic elicitation
@@ -36,7 +37,6 @@ const getUserInfoTool: Tool<{ reason?: string }, any> = {
             - Phone: ${info.phone || 'Not provided'}`;
     } catch (error) {
       // Let elicitation interruption errors propagate to the engine
-      const { ElicitationInterruptionError } = await import('../../dist/index.js');
       if (error instanceof ElicitationInterruptionError) {
         throw error;
       }
@@ -69,7 +69,6 @@ const preferencesTool: Tool<{ category?: string }, any> = {
       return `User selected ${category} preference: ${result.choice}`;
     } catch (error) {
       // Let elicitation interruption errors propagate to the engine
-      const { ElicitationInterruptionError } = await import('../../dist/index.js');
       if (error instanceof ElicitationInterruptionError) {
         throw error;
       }
@@ -102,7 +101,6 @@ const feedbackTool: Tool<{ topic?: string }, any> = {
       return `Received feedback about ${topic}: "${feedback.substring(0, 100)}${feedback.length > 100 ? '...' : ''}"`;
     } catch (error) {
       // Let elicitation interruption errors propagate to the engine
-      const { ElicitationInterruptionError } = await import('../../dist/index.js');
       if (error instanceof ElicitationInterruptionError) {
         throw error;
       }
@@ -131,7 +129,6 @@ const confirmActionTool: Tool<{ action: string }, any> = {
       }
     } catch (error) {
       // Let elicitation interruption errors propagate to the engine
-      const { ElicitationInterruptionError } = await import('../../dist/index.js');
       if (error instanceof ElicitationInterruptionError) {
         throw error;
       }
@@ -165,7 +162,6 @@ const getQuantityTool: Tool<{ item?: string }, any> = {
       return `User requested ${quantity} ${item}`;
     } catch (error) {
       // Let elicitation interruption errors propagate to the engine
-      const { ElicitationInterruptionError } = await import('../../dist/index.js');
       if (error instanceof ElicitationInterruptionError) {
         throw error;
       }

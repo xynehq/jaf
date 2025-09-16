@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'async_hooks';
 import {
   ElicitationRequest,
   ElicitationResponse,
@@ -20,22 +21,19 @@ export class ElicitationInterruptionError extends Error {
     this.name = 'ElicitationInterruptionError';
   }
 }
-// We'll store the current tool context globally during tool execution
-let currentToolContext: any = null;
+// AsyncLocalStorage for tool context to avoid race conditions
+const toolContextStorage = new AsyncLocalStorage<any>();
 
-export function setElicitationContext(context: any): void {
-  currentToolContext = context;
-}
-
-export function clearElicitationContext(): void {
-  currentToolContext = null;
+export function runWithElicitationContext<T>(context: any, fn: () => T): T {
+  return toolContextStorage.run(context, fn);
 }
 
 function getCurrentToolContext(): any {
-  if (!currentToolContext) {
+  const context = toolContextStorage.getStore();
+  if (!context) {
     throw new Error('elicit() can only be called from within a tool execution context');
   }
-  return currentToolContext;
+  return context;
 }
 
 /**
