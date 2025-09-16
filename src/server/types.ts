@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Agent, RunConfig } from '../core/types';
 import { MemoryProvider } from '../memory/types';
+import { ServerElicitationProvider } from '../core/elicitation-provider';
 
 export interface ServerConfig<Ctx> {
   port?: number;
@@ -10,6 +11,7 @@ export interface ServerConfig<Ctx> {
   runConfig: RunConfig<Ctx>;
   agentRegistry: Map<string, Agent<Ctx, any>>;
   defaultMemoryProvider?: MemoryProvider;
+  elicitationProvider?: ServerElicitationProvider;
 }
 
 // Request/Response schemas
@@ -37,6 +39,14 @@ export const approvalMessageSchema = z.object({
   additionalContext: z.record(z.any()).optional()
 });
 
+// Elicitation response schema for MCP elicitation
+export const elicitationResponseSchema = z.object({
+  type: z.literal('elicitation_response'),
+  requestId: z.string(),
+  action: z.enum(['accept', 'decline', 'cancel']),
+  content: z.record(z.any()).optional()
+});
+
 export const chatRequestSchema = z.object({
   messages: z.array(httpMessageSchema),
   agentName: z.string(),
@@ -50,12 +60,14 @@ export const chatRequestSchema = z.object({
     compressionThreshold: z.number().optional(),
     storeOnCompletion: z.boolean().optional()
   }).optional(),
-  approvals: z.array(approvalMessageSchema).optional()
+  approvals: z.array(approvalMessageSchema).optional(),
+  elicitationResponses: z.array(elicitationResponseSchema).optional()
 });
 
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 export type HttpMessage = z.infer<typeof httpMessageSchema>;
 export type ApprovalMessage = z.infer<typeof approvalMessageSchema>;
+export type ElicitationResponseMessage = z.infer<typeof elicitationResponseSchema>;
 
 // Extended message schema that includes tool calls and responses
 export const fullMessageSchema = z.union([
@@ -90,18 +102,34 @@ export const chatResponseSchema = z.object({
         status: z.enum(['completed', 'error', 'max_turns', 'interrupted']),
         output: z.string().optional(),
       error: z.any().optional(),
-        interruptions: z.array(z.object({
-          type: z.literal('tool_approval'),
-          toolCall: z.object({
-            id: z.string(),
-            type: z.literal('function'),
-            function: z.object({
-              name: z.string(),
-              arguments: z.string()
-            })
+        interruptions: z.array(z.union([
+          z.object({
+            type: z.literal('tool_approval'),
+            toolCall: z.object({
+              id: z.string(),
+              type: z.literal('function'),
+              function: z.object({
+                name: z.string(),
+                arguments: z.string()
+              })
+            }),
+            sessionId: z.string()
           }),
-          sessionId: z.string()
-        })).optional()
+          z.object({
+            type: z.literal('elicitation'),
+            request: z.object({
+              id: z.string(),
+              message: z.string(),
+              requestedSchema: z.object({
+                type: z.literal('object'),
+                properties: z.record(z.any()),
+                required: z.array(z.string()).readonly().optional()
+              }),
+              metadata: z.record(z.any()).optional()
+            }),
+            sessionId: z.string().optional()
+          })
+        ])).optional()
       }),
       turnCount: z.number(),
     executionTimeMs: z.number()

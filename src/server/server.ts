@@ -1,17 +1,18 @@
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
-import { 
-  ServerConfig, 
-  ChatRequest, 
-  ChatResponse, 
+import {
+  ServerConfig,
+  ChatRequest,
+  ChatResponse,
   AgentListResponse,
   HealthResponse,
   HttpMessage,
   chatRequestSchema,
-  ApprovalMessage
+  ApprovalMessage,
+  ElicitationResponseMessage
 } from './types.js';
 import { run, runStream } from '../core/engine.js';
-import { RunState, Message, createRunId, createTraceId } from '../core/types.js';
+import { RunState, Message, createRunId, createTraceId, createElicitationRequestId } from '../core/types.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // Helper: stable stringify to create deterministic signatures
@@ -280,6 +281,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         const initialStateMessages = jafMessages;
 
         const approvalsList: ApprovalMessage[] = validatedRequest.approvals ?? [];
+        const elicitationResponsesList: ElicitationResponseMessage[] = validatedRequest.elicitationResponses ?? [];
 
         const persistApproval = async (convId: string, appr: ApprovalMessage): Promise<void> => {
           if (!config.defaultMemoryProvider) return;
@@ -443,6 +445,17 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
           approvals: initialApprovals,
         };
 
+        // Handle elicitation responses
+        if (config.elicitationProvider && elicitationResponsesList.length > 0) {
+          for (const elicitationResponse of elicitationResponsesList) {
+            config.elicitationProvider.respondToElicitation({
+              requestId: createElicitationRequestId(elicitationResponse.requestId),
+              action: elicitationResponse.action,
+              content: elicitationResponse.content,
+            });
+          }
+        }
+
         // Create run config with memory configuration
         const runConfig = {
           ...config.runConfig,
@@ -454,7 +467,8 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
             maxMessages: validatedRequest.memory?.maxMessages ?? config.runConfig.memory?.maxMessages,
             compressionThreshold: validatedRequest.memory?.compressionThreshold ?? config.runConfig.memory?.compressionThreshold,
             storeOnCompletion: validatedRequest.memory?.storeOnCompletion ?? config.runConfig.memory?.storeOnCompletion
-          } : undefined
+          } : undefined,
+          elicitationProvider: config.elicitationProvider
         };
 
         // Handle streaming vs non-streaming
@@ -585,12 +599,23 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
               status: result.outcome.status,
               output: result.outcome.status === 'completed' ? String(result.outcome.output) : undefined,
               error: result.outcome.status === 'error' ? result.outcome.error : undefined,
-              interruptions: result.outcome.status === 'interrupted' 
-                ? result.outcome.interruptions.map(interruption => ({
-                    type: interruption.type,
-                    toolCall: interruption.toolCall,
-                    sessionId: interruption.sessionId || result.finalState.runId
-                  }))
+              interruptions: result.outcome.status === 'interrupted'
+                ? result.outcome.interruptions.map(interruption => {
+                    if (interruption.type === 'tool_approval') {
+                      return {
+                        type: interruption.type,
+                        toolCall: interruption.toolCall,
+                        sessionId: interruption.sessionId || result.finalState.runId
+                      };
+                    } else if (interruption.type === 'elicitation') {
+                      return {
+                        type: interruption.type,
+                        request: interruption.request,
+                        sessionId: interruption.sessionId || result.finalState.runId
+                      };
+                    }
+                    return interruption;
+                  })
                 : undefined
             },
             turnCount: result.finalState.turnCount,
@@ -825,6 +850,75 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       }
 
       return reply.code(200).send({ success: true, data: { pending } });
+    });
+
+    // Elicitation endpoints
+    app.get('/elicitation/pending', async (
+      request: FastifyRequest,
+      reply: FastifyReply
+    ) => {
+      if (!config.elicitationProvider) {
+        return reply.code(503).send({
+          success: false,
+          error: 'Elicitation provider not configured'
+        });
+      }
+
+      const pendingRequests = config.elicitationProvider.getPendingRequests();
+      return reply.code(200).send({
+        success: true,
+        data: { pending: pendingRequests }
+      });
+    });
+
+    app.post('/elicitation/respond', {
+      schema: {
+        body: {
+          type: 'object',
+          properties: {
+            requestId: { type: 'string' },
+            action: { type: 'string', enum: ['accept', 'decline', 'cancel'] },
+            content: { type: 'object' }
+          },
+          required: ['requestId', 'action']
+        }
+      }
+    }, async (
+      request: FastifyRequest<{
+        Body: {
+          requestId: string;
+          action: 'accept' | 'decline' | 'cancel';
+          content?: Record<string, any>;
+        }
+      }>,
+      reply: FastifyReply
+    ) => {
+      if (!config.elicitationProvider) {
+        return reply.code(503).send({
+          success: false,
+          error: 'Elicitation provider not configured'
+        });
+      }
+
+      const { requestId, action, content } = request.body;
+
+      const success = config.elicitationProvider.respondToElicitation({
+        requestId: createElicitationRequestId(requestId),
+        action,
+        content
+      });
+
+      if (!success) {
+        return reply.code(404).send({
+          success: false,
+          error: 'Elicitation request not found or already resolved'
+        });
+      }
+
+      return reply.code(200).send({
+        success: true,
+        data: { requestId, action }
+      });
     });
   };
 

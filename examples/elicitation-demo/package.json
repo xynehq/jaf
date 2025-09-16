@@ -1,0 +1,20 @@
+{
+  "name": "elicitation-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "JAF MCP Elicitation Demo",
+  "scripts": {
+    "dev": "tsx elicitation-server.ts",
+    "server": "tsx elicitation-server.ts",
+    "client": "tsx interactive-client.ts",
+    "demo": "tsx interactive-client.ts",
+    "test": "tsx unit-tests.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  }
+}

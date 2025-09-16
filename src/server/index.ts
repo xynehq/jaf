@@ -1,6 +1,7 @@
 import { createJAFServer } from './server';
 import { ServerConfig } from './types';
 import { Agent, RunConfig } from '../core/types';
+import { createServerElicitationProvider } from '../core/elicitation-provider';
 
 /**
  * Start a development server for testing agents locally (functional approach)
@@ -58,6 +59,9 @@ export async function runServer<Ctx>(
     ...runConfig
   };
 
+  // Create elicitation provider if not provided
+  const elicitationProvider = options.elicitationProvider || createServerElicitationProvider();
+
   // Create server config
   const serverConfig: ServerConfig<Ctx> = {
     port: 3000,
@@ -65,7 +69,8 @@ export async function runServer<Ctx>(
     cors: false,
     ...options,
     runConfig: completeRunConfig,
-    agentRegistry
+    agentRegistry,
+    elicitationProvider
   };
 
   // Create and start functional server

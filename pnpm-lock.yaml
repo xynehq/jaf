@@ -184,6 +184,19 @@ importers:
         specifier: ^5.3.3
         version: 5.9.2
 
+  examples/elicitation-demo:
+    dependencies:
+      dotenv:
+        specifier: ^16.0.0
+        version: 16.6.1
+      zod:
+        specifier: ^3.22.0
+        version: 3.25.76
+    devDependencies:
+      tsx:
+        specifier: ^4.0.0
+        version: 4.20.4
+
   examples/flight-booking:
     dependencies:
       '@xynehq/jaf':
