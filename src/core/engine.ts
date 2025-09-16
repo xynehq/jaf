@@ -47,8 +47,11 @@ export async function run<Ctx, Out>(
       stateWithMemory = await loadApprovalsIntoState(stateWithMemory, config);
     }
 
-    const result = await runInternal<Ctx, Out>(stateWithMemory, config);
-    
+    // Check if we need to resume interrupted elicitation
+    const resumedState = await checkAndResumeElicitation(stateWithMemory, config);
+
+    const result = await runInternal<Ctx, Out>(resumedState, config);
+
     // Store conversation history only if this is a final completion of the entire conversation
     // For HITL scenarios, storage happens on interruption (line 261) to allow resumption
     // We only store on completion if explicitly indicated this is the end of the conversation
@@ -836,6 +839,9 @@ async function executeToolCalls<Ctx>(
 ): Promise<ToolCallResult[]> {
   // Install runtime for tools that need access to current state/config (e.g., agent-as-tool)
   try { setToolRuntime(state.context, { state, config }); } catch { /* ignore */ }
+
+  // Import elicitation context function
+  const { runWithElicitationContext } = await import('./elicit.js');
   const results = await Promise.all(
     toolCalls.map(async (toolCall): Promise<ToolCallResult> => {
       const tool = agent.tools?.find(t => t.schema.name === toolCall.function.name);
@@ -986,13 +992,47 @@ async function executeToolCalls<Ctx>(
         console.log(`[JAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
         console.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
         console.log(`[JAF:ENGINE] Tool context:`, state.context);
-        
+
         // Merge additional context if provided through approval
-        const contextWithAdditional = additionalContext 
+        const contextWithAdditional = additionalContext
           ? { ...state.context, ...additionalContext }
           : state.context;
-        
-        const toolResult = await tool.execute(parseResult.data, contextWithAdditional);
+
+        // Execute tool within elicitation context using AsyncLocalStorage
+        let toolResult;
+        try {
+          toolResult = await runWithElicitationContext({ state, config }, () =>
+            tool.execute(parseResult.data, contextWithAdditional)
+          );
+        } catch (error) {
+          // Check if this is an elicitation interruption
+          const { ElicitationInterruptionError } = await import('./elicit.js');
+          if (error instanceof ElicitationInterruptionError) {
+            // Convert to interruption
+            return {
+              interruption: {
+                type: 'elicitation',
+                toolCall,
+                agent,
+                sessionId: state.runId,
+                request: error.request,
+              },
+              message: {
+                role: 'tool',
+                content: JSON.stringify({
+                  status: 'elicitation_required',
+                  message: 'User input required to continue',
+                  tool_name: toolCall.function.name,
+                  request: error.request,
+                }),
+                tool_call_id: toolCall.id,
+              },
+            };
+          }
+
+          // Re-throw other errors
+          throw error;
+        }
         
         // Handle both string and ToolResult formats
         let resultString: string;
@@ -1235,4 +1275,129 @@ async function storeConversationHistory<Ctx>(
   }
   
   console.log(`[JAF:MEMORY] Stored ${messagesToStore.length} messages for conversation ${config.conversationId}`);
+}
+
+/**
+ * Check if we need to resume an interrupted elicitation and handle it
+ */
+async function checkAndResumeElicitation<Ctx>(
+  state: RunState<Ctx>,
+  config: RunConfig<Ctx>
+): Promise<RunState<Ctx>> {
+  // Only process if we have new messages and elicitation provider
+  if (!config.elicitationProvider) {
+    return state;
+  }
+
+  // Look for the last tool message with elicitation_required status
+  const lastToolMessage = [...state.messages].reverse().find(msg => {
+    if (msg.role !== 'tool') return false;
+    const content = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content);
+    return content.includes('"status":"elicitation_required"');
+  });
+
+  if (!lastToolMessage) {
+    return state;
+  }
+
+  // Check if this is a continuation with empty user message (elicitation response scenario)
+  const lastUserMessage = state.messages[state.messages.length - 1];
+  if (lastUserMessage?.role !== 'user') {
+    return state;
+  }
+
+  const userContent = typeof lastUserMessage.content === 'string' ? lastUserMessage.content : '';
+  if (userContent.trim() !== '') {
+    return state;
+  }
+
+  try {
+    // Parse the tool message to get the elicitation request
+    const toolContent = typeof lastToolMessage.content === 'string' ? lastToolMessage.content : JSON.stringify(lastToolMessage.content);
+    const toolResult = JSON.parse(toolContent);
+    const elicitationRequest = toolResult.request;
+
+    if (!elicitationRequest) {
+      return state;
+    }
+
+    console.log(`[JAF:ENGINE] Attempting to resume elicitation for request ${elicitationRequest.id}`);
+
+    // Try to get the response from the elicitation provider
+    const elicitationResponse = await config.elicitationProvider.createElicitation(elicitationRequest);
+
+    if (elicitationResponse.action === 'accept' && elicitationResponse.content) {
+      console.log(`[JAF:ENGINE] Resuming tool execution with elicitation response`);
+
+      // Create a successful tool result
+      const successResult = `Successfully collected user information: ${Object.entries(elicitationResponse.content).map(([key, value]) => `- ${key[0].toUpperCase() + key.slice(1)}: ${value || 'Not provided'}`).join('\n')}`;
+
+      // Replace the elicitation_required tool message with the success result
+      const updatedMessages = state.messages.map(msg => {
+        if (msg === lastToolMessage) {
+          return {
+            ...msg,
+            content: successResult
+          };
+        }
+        return msg;
+      });
+
+      // Remove the empty user message that triggered this check
+      const finalMessages = updatedMessages.slice(0, -1);
+
+      return {
+        ...state,
+        messages: finalMessages
+      };
+    } else if (elicitationResponse.action === 'decline') {
+      console.log(`[JAF:ENGINE] Elicitation was declined`);
+
+      // Replace with declined message
+      const declineResult = `User declined to provide information. Operation was cancelled.`;
+
+      const updatedMessages = state.messages.map(msg => {
+        if (msg === lastToolMessage) {
+          return {
+            ...msg,
+            content: declineResult
+          };
+        }
+        return msg;
+      });
+
+      const finalMessages = updatedMessages.slice(0, -1);
+
+      return {
+        ...state,
+        messages: finalMessages
+      };
+    } else if (elicitationResponse.action === 'cancel') {
+      console.log(`[JAF:ENGINE] Elicitation was cancelled`);
+
+      // Replace with cancelled message
+      const cancelResult = `Operation was cancelled by user.`;
+
+      const updatedMessages = state.messages.map(msg => {
+        if (msg === lastToolMessage) {
+          return {
+            ...msg,
+            content: cancelResult
+          };
+        }
+        return msg;
+      });
+
+      const finalMessages = updatedMessages.slice(0, -1);
+
+      return {
+        ...state,
+        messages: finalMessages
+      };
+    }
+  } catch (error) {
+    console.log(`[JAF:ENGINE] Failed to resume elicitation: ${error instanceof Error ? error.message : error}`);
+  }
+
+  return state;
 }

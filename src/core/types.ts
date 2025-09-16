@@ -136,7 +136,7 @@ export type ToolApprovalInterruption<Ctx> = {
   readonly sessionId?: string;
 };
 
-export type Interruption<Ctx> = ToolApprovalInterruption<Ctx>;
+export type Interruption<Ctx> = ToolApprovalInterruption<Ctx> | ElicitationInterruption<Ctx>;
 
 export type RunResult<Out> = {
   readonly finalState: RunState<any>;
@@ -147,6 +147,79 @@ export type RunResult<Out> = {
         readonly status: 'interrupted';
         readonly interruptions: readonly Interruption<any>[];
       };
+};
+
+export type ElicitationRequestId = string & { readonly _brand: 'ElicitationRequestId' };
+
+export const createElicitationRequestId = (id: string): ElicitationRequestId => id as ElicitationRequestId;
+
+export type ElicitationStringSchema = {
+  readonly type: 'string';
+  readonly title?: string;
+  readonly description?: string;
+  readonly minLength?: number;
+  readonly maxLength?: number;
+  readonly pattern?: string;
+  readonly format?: 'email' | 'uri' | 'date' | 'date-time';
+  readonly default?: string;
+};
+
+export type ElicitationChoiceSchema = {
+  readonly type: 'string';
+  readonly title?: string;
+  readonly description?: string;
+  readonly enum: readonly string[];
+  readonly enumNames?: readonly string[];
+  readonly default?: string;
+};
+
+export type ElicitationNumberSchema = {
+  readonly type: 'number' | 'integer';
+  readonly title?: string;
+  readonly description?: string;
+  readonly minimum?: number;
+  readonly maximum?: number;
+  readonly default?: number;
+};
+
+export type ElicitationBooleanSchema = {
+  readonly type: 'boolean';
+  readonly title?: string;
+  readonly description?: string;
+  readonly default?: boolean;
+};
+
+export type ElicitationPropertySchema =
+  | ElicitationStringSchema
+  | ElicitationChoiceSchema
+  | ElicitationNumberSchema
+  | ElicitationBooleanSchema;
+
+export type ElicitationSchema = {
+  readonly type: 'object';
+  readonly properties: Record<string, ElicitationPropertySchema>;
+  readonly required?: readonly string[];
+};
+
+export type ElicitationRequest = {
+  readonly id: ElicitationRequestId;
+  readonly message: string;
+  readonly requestedSchema: ElicitationSchema;
+  readonly metadata?: Record<string, any>;
+};
+
+export type ElicitationResponse = {
+  readonly requestId: ElicitationRequestId;
+  readonly action: 'accept' | 'decline' | 'cancel';
+  readonly content?: Record<string, any>;
+};
+
+export type ElicitationInterruption<Ctx> = {
+  readonly type: 'elicitation';
+  readonly toolCall: ToolCall;
+  readonly request: ElicitationRequest;
+  readonly agent: Agent<Ctx, any>;
+  readonly sessionId?: string;
 };
 
 export type TraceEvent =
@@ -169,6 +242,8 @@ export type TraceEvent =
   | { type: 'memory_operation'; data: { operation: 'load' | 'store'; conversationId: string; status: 'start' | 'end' | 'fail'; error?: string; messageCount?: number; } }
   | { type: 'output_parse'; data: { content: string; status: 'start' | 'end' | 'fail'; parsedOutput?: any; error?: string; } }
   | { type: 'decode_error'; data: { errors: z.ZodIssue[] } }
+  | { type: 'elicitation_request'; data: { request: ElicitationRequest; agentName: string; traceId: TraceId; runId: RunId; } }
+  | { type: 'elicitation_response'; data: { response: ElicitationResponse; agentName: string; traceId: TraceId; runId: RunId; } }
   | { type: 'turn_end'; data: { turn: number; agentName: string } }
   | { type: 'run_end'; data: { outcome: RunResult<any>['outcome']; traceId: TraceId; runId: RunId; } };
 
@@ -207,6 +282,10 @@ export interface ModelProvider<Ctx> {
   ) => AsyncGenerator<CompletionStreamChunk, void, unknown>;
 }
 
+export interface ElicitationProvider {
+  createElicitation(request: ElicitationRequest): Promise<ElicitationResponse>;
+}
+
 export type RunConfig<Ctx> = {
   readonly agentRegistry: ReadonlyMap<string, Agent<Ctx, any>>;
   readonly modelProvider: ModelProvider<Ctx>;
@@ -218,4 +297,5 @@ export type RunConfig<Ctx> = {
   readonly memory?: MemoryConfig;
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;
+  readonly elicitationProvider?: ElicitationProvider;
 };
