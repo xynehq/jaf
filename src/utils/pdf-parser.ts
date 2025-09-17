@@ -10,7 +10,10 @@ const MIN_IMAGE_DIM_PX = parseInt(process.env.MIN_IMAGE_DIM_PX || '150', 10);
 const MAX_IMAGE_FILE_SIZE_MB = 25;
 const SUPPORTED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp']);
 
-// PDF.js setup - use empty paths since we're using legacy build
+// PDF.js setup:
+// The legacy build of pdfjs-dist (imported from 'pdfjs-dist/legacy/build/pdf.mjs') does not use WASM modules for openjpeg or qcms,
+// so it is safe to set these WASM paths to empty strings. If you switch to a non-legacy build, you must provide valid WASM paths,
+// or PDF.js may fail to load certain image types (e.g., JPEG2000 or color-managed images).
 const openjpegWasmPath = '';
 const qcmsWasmPath = '';
 
@@ -315,10 +318,9 @@ function processTextParagraphs(
  * In a real implementation, this would call an AI service
  */
 async function describeImageWithLLM(buffer: Buffer): Promise<string> {
-  // This is a placeholder. In your actual implementation, you would:
-  // 1. Send the image to a vision-capable AI model
-  // 2. Get a description back
-  // For now, return a basic description
+  // TODO: Implement image description using a vision-capable AI model.
+  // This is a placeholder function that should be implemented with actual AI vision capabilities.
+  // For now, return a basic description to avoid breaking existing functionality.
   return 'This is an image extracted from the PDF document.';
 }
 
@@ -518,6 +520,17 @@ export async function extractTextAndImagesWithChunksFromPDF(
 export async function extractPdfContent(buffer: Buffer): Promise<ProcessedPdfDocument> {
   try {
     const uint8Data = new Uint8Array(buffer);
+    
+    // Get page count first
+    const loadingTask = pdfjsLib.getDocument({
+      data: uint8Data,
+      verbosity: pdfjsLib.VerbosityLevel.ERRORS,
+    });
+    const pdfDocument = await loadingTask.promise;
+    const pageCount = pdfDocument.numPages;
+    await pdfDocument.destroy();
+    
+    // Now extract content
     const result = await extractTextAndImagesWithChunksFromPDF(
       uint8Data,
       crypto.randomUUID(),
@@ -532,7 +545,7 @@ export async function extractPdfContent(buffer: Buffer): Promise<ProcessedPdfDoc
     return {
       content: content.trim(),
       metadata: {
-        pages: undefined, // Would need to track from PDF document
+        pages: pageCount,
         textChunks: result.text_chunks.length,
         imageChunks: result.image_chunks.length,
       }
