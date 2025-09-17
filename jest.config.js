@@ -18,6 +18,8 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    '^pdfjs-dist/legacy/build/pdf\\.mjs$': '<rootDir>/src/__mocks__/pdfjs-dist.ts',
+    '^canvas$': '<rootDir>/src/__mocks__/canvas.ts',
   },
   collectCoverageFrom: [
     'src/**/*.ts',
