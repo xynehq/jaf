@@ -9,7 +9,7 @@ When users send you attachments, analyze them carefully and provide helpful, det
 
 For images: Describe what you see in detail.
 For documents: Analyze and summarize the content, structure, or data as appropriate.
-Supported document types: DOCX, XLSX, CSV, TXT, JSON, ZIP files.`,
+Supported document types: PDF, DOCX, XLSX, CSV, TXT, JSON, ZIP files.`,
   modelConfig: {
     name: 'claude-sonnet-4', 
     temperature: 0.7,
@@ -138,6 +138,48 @@ server.start().then(() => {
             "mimeType": "text/plain",
             "name": "sample.txt",
             "data": "VGhpcyBpcyBhIHNhbXBsZSB0ZXh0IGZpbGUgZm9yIHRlc3RpbmcgYXR0YWNobWVudCBmdW5jdGlvbmFsaXR5LgoKSXQgY29udGFpbnMgbXVsdGlwbGUgbGluZXMgb2YgdGV4dCB0byBkZW1vbnN0cmF0ZSBob3cgdGV4dCBmaWxlcyBhcmUgcHJvY2Vzc2VkLgoKS2V5IHBvaW50czoKLSBUZXh0IGZpbGUgcHJvY2Vzc2luZyB3b3JrcwotIE11bHRpcGxlIGxpbmVzIGFyZSBzdXBwb3J0ZWQKLSBTcGVjaWFsIGNoYXJhY3RlcnMgYW5kIGZvcm1hdHRpbmcgYXJlIHByZXNlcnZlZA=="
+          }
+        ]
+      }
+    ]
+  }'\n`);
+
+  console.log('5.5. PDF document:');
+  console.log(`curl -X POST http://localhost:3002/chat \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "agentName": "attachment-analyst",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Please analyze this PDF document",
+        "attachments": [
+          {
+            "kind": "document",
+            "mimeType": "application/pdf",
+            "name": "sample-document.pdf",
+            "url": "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+          }
+        ]
+      }
+    ]
+  }'\n`);
+
+  console.log('5.6. PDF with base64 data:');
+  console.log(`curl -X POST http://localhost:3002/chat \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "agentName": "attachment-analyst",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Extract text from this PDF document",
+        "attachments": [
+          {
+            "kind": "document",
+            "mimeType": "application/pdf",
+            "name": "test-document.pdf",
+            "data": "JVBERi0xLjQKMSAwIG9iago8PAovVHlwZSAvQ2F0YWxvZwovUGFnZXMgMiAwIFIKPj4KZW5kb2JqCjIgMCBvYmoKPDwKL1R5cGUgL1BhZ2VzCi9LaWRzIFsgMyAwIFIgXQovQ291bnQgMQo+PgplbmRvYmoKMyAwIG9iago8PAovVHlwZSAvUGFnZQovUGFyZW50IDIgMCBSCi9NZWRpYUJveCBbIDAgMCA2MTIgNzkyIF0KL1Jlc291cmNlcyA8PAovRm9udCA8PAovRjEgNCAwIFIKPj4KPj4KL0NvbnRlbnRzIDUgMCBSCj4+CmVuZG9iago0IDAgb2JqCjw8Ci9UeXBlIC9Gb250Ci9TdWJ0eXBlIC9UeXBlMQovQmFzZUZvbnQgL0hlbHZldGljYQo+PgplbmRvYmoKNSAwIG9iago8PAovTGVuZ3RoIDQ0Cj4+CnN0cmVhbQpCVApxCjcyIDcwMCBUZAovRjEgMTIgVGYKKEhlbGxvLCBQREYgV29ybGQhKSBUagpFVApRCmVuZHN0cmVhbQplbmRvYmoKeHJlZgowIDYKMDAwMDAwMDAwMCA2NTUzNSBmIAowMDAwMDAwMDEwIDAwMDAwIG4gCjAwMDAwMDAwNzkgMDAwMDAgbiAKMDAwMDAwMDE3MyAwMDAwMCBuIAowMDAwMDAwMzAxIDAwMDAwIG4gCjAwMDAwMDAzODAgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSA2Ci9Sb290IDEgMCBSCj4+CnN0YXJ0eHJlZgo0NzQKJSVFT0Y="
           }
         ]
       }
@@ -286,7 +328,7 @@ server.start().then(() => {
   console.log('Configuration:');
   console.log('- Use Ctrl+C to stop the server');
   console.log('- Image attachments: Full visual analysis');
-  console.log('- Document attachments: Text extraction and analysis for DOCX, XLSX, CSV, TXT, JSON, ZIP');
+  console.log('- Document attachments: Text extraction and analysis for PDF, DOCX, XLSX, CSV, TXT, JSON, ZIP');
   console.log('- LiteLLM format: Use "useLiteLLMFormat": true for efficient large file processing');
   console.log('  * Large documents: No context window waste, native model processing');
   console.log('  * Better layout understanding, tables, images preserved');

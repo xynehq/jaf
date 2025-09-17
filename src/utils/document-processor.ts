@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
 import Papa from 'papaparse';
 import yauzl from 'yauzl';
+import { extractPdfContent } from './pdf-parser.js';
 
 const FETCH_TIMEOUT = 30000;
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
@@ -98,7 +99,7 @@ export async function extractDocumentContent(attachment: Attachment): Promise<Pr
 
   switch (mimeType) {
     case 'application/pdf':
-      throw new DocumentProcessingError('PDF processing is not supported');
+      return await extractPdfContent(buffer);
     
     case 'text/plain':
     case 'text/csv':
@@ -277,7 +278,8 @@ export function isDocumentSupported(mimeType?: string): boolean {
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/json',
-    'application/zip'
+    'application/zip',
+    'application/pdf'
   ];
   
   return supportedTypes.includes(mimeType.toLowerCase());
@@ -289,7 +291,7 @@ export function isDocumentSupported(mimeType?: string): boolean {
 export function getDocumentDescription(mimeType?: string): string {
   switch (mimeType?.toLowerCase()) {
     case 'application/pdf':
-      return 'PDF processing not supported';
+      return 'PDF document text and image content';
     case 'text/plain':
       return 'plain text content';
     case 'text/csv':
