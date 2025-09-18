@@ -12,13 +12,13 @@ async function demonstrateMem0Memory() {
 
   // Create real Mem0 client with hardcoded API key
   const mem0Client = new MemoryClient({ 
-    apiKey: 'm0-41OlZmrBayD4gvHRxtJzTS80TqvGAQGf8BPI1DVx' 
+    apiKey: 'your-mem0-api-key-here' 
   });
   
   // Create Mem0 provider
   const memoryProvider = await createMem0Provider({
     type: 'mem0',
-    apiKey: 'm0-41OlZmrBayD4gvHRxtJzTS80TqvGAQGf8BPI1DVx',
+    apiKey: 'your-mem0-api-key-here',
     baseUrl: 'https://api.mem0.ai',
     timeout: 30000,
     maxRetries: 3
