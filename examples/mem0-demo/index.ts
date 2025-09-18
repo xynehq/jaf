@@ -5,66 +5,6 @@ import {
 } from '@xynehq/jaf';
 import { MemoryClient } from 'mem0ai';
 
-// Mock Mem0 client for demonstration
-class MockMem0Client {
-  private memories: Array<{ id: string; content: string; metadata?: any; score?: number }> = [];
-  private idCounter = 1;
-
-  async search(query: string, options?: {
-    user_id?: string;
-    limit?: number;
-  }) {
-    console.log(`[MockMem0] Searching for "${query}" for user ${options?.user_id}`);
-    
-    // Simple mock search - find memories containing query keywords
-    const queryWords = query.toLowerCase().split(' ');
-    const results = this.memories
-      .filter(memory => 
-        queryWords.some(word => memory.content.toLowerCase().includes(word))
-      )
-      .map(memory => ({
-        id: memory.id,
-        memory: memory.content,
-        metadata: memory.metadata,
-        score: Math.random() * 0.5 + 0.5 // Random score between 0.5-1.0
-      }))
-      .slice(0, options?.limit || 10);
-
-    return results;
-  }
-
-  async add(messages: Array<{ role: string; content: string }>, options?: {
-    user_id?: string;
-    metadata?: any;
-  }) {
-    const content = messages.map(m => `${m.role}: ${m.content}`).join('\n');
-    const id = `mem_${this.idCounter++}`;
-    
-    console.log(`[MockMem0] Adding memory with ID ${id} for user ${options?.user_id}`);
-    
-    this.memories.push({
-      id,
-      content,
-      metadata: options?.metadata
-    });
-
-    return [{
-      id,
-      memory: content,
-      metadata: options?.metadata
-    }];
-  }
-
-  async updateProject(options: { custom_instructions: string }) {
-    console.log(`[MockMem0] Updated project instructions: ${options.custom_instructions}`);
-    return { success: true };
-  }
-
-  async ping() {
-    return { status: 'healthy' };
-  }
-}
-
 async function demonstrateMem0Memory() {
   console.log('\n🧠 JAF Mem0 Memory Provider Demo');
   console.log('=================================');
