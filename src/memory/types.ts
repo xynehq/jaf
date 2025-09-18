@@ -146,16 +146,61 @@ export const PostgresConfigSchema = z.object({
   maxConnections: z.number().default(10)
 });
 
+export const Mem0ConfigSchema = z.object({
+  type: z.literal('mem0'),
+  apiKey: z.string(),
+  projectId: z.string().optional(),
+  baseUrl: z.string().default('https://api.mem0.ai'),
+  timeout: z.number().default(30000), // 30 seconds
+  maxRetries: z.number().default(3)
+});
+
 export const MemoryProviderConfigSchema = z.union([
   InMemoryConfigSchema,
   RedisConfigSchema,
-  PostgresConfigSchema
+  PostgresConfigSchema,
+  Mem0ConfigSchema
 ]);
 
 export type InMemoryConfig = z.infer<typeof InMemoryConfigSchema>;
 export type RedisConfig = z.infer<typeof RedisConfigSchema>;
 export type PostgresConfig = z.infer<typeof PostgresConfigSchema>;
+export type Mem0Config = z.infer<typeof Mem0ConfigSchema>;
 export type MemoryProviderConfig = z.infer<typeof MemoryProviderConfigSchema>;
+
+// Mem0-specific response types
+export interface MemoryItem {
+  readonly id: string;
+  readonly content: string;
+  readonly metadata?: any;
+  readonly score?: number;
+}
+
+export interface MemoryResponse {
+  readonly user_email: string;
+  readonly query: string;
+  readonly total_results: number;
+  readonly memories: readonly MemoryItem[];
+  readonly search_time_ms: number;
+  readonly search_time_seconds: number;
+}
+
+export interface MemoryErrorResponse {
+  readonly error: string;
+  readonly user_email: string;
+  readonly query: string;
+  readonly memories: readonly MemoryItem[];
+  readonly search_time_ms: number;
+  readonly search_time_seconds: number;
+}
+
+export interface MemoryAddResponse {
+  readonly success: boolean;
+  readonly user_email: string;
+  readonly summary: string;
+  readonly memory_id?: string;
+  readonly error?: string;
+}
 
 // Functional error types
 export type MemoryError = {
