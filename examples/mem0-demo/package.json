@@ -1,0 +1,29 @@
+{
+  "name": "jaf-mem0-demo",
+  "version": "1.0.0",
+  "description": "JAF Mem0 memory provider demonstration",
+  "main": "index.ts",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "mem0ai": "^2.1.38",
+    "@xynehq/jaf": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "jaf",
+    "mem0",
+    "memory",
+    "ai",
+    "semantic-search"
+  ],
+  "author": "JAF Team",
+  "license": "MIT"
+}

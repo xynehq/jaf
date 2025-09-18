@@ -22,6 +22,7 @@ export * from './memory/factory';
 export * from './memory/providers/in-memory';
 export * from './memory/providers/redis';
 export * from './memory/providers/postgres';
+export * from './memory/providers/mem0';
 
 // A2A Protocol Support
 export * from './a2a';
