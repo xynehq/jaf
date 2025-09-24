@@ -1,0 +1,47 @@
+{
+  "name": "jaf-pipeline-demo",
+  "version": "1.0.0",
+  "description": "JAF implementation of CI/CD pipeline with Codegen, Build/ART, and Evaluation agents",
+  "main": "index.ts",
+  "scripts": {
+    "start": "node -r ts-node/register index.ts",
+    "dev": "tsx watch index.ts",
+    "build": "tsc",
+    "server": "node -r ts-node/register index.ts --server",
+    "interactive": "node -r ts-node/register index.ts --interactive",
+    "migrate": "node -r ts-node/register index.ts",
+    "test-payu": "node -r ts-node/register index.ts payu",
+    "test-easebuzz": "node -r ts-node/register index.ts easebuzz",
+    "lint": "eslint . --ext .ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "jaf",
+    "ci-cd",
+    "pipeline",
+    "agents",
+    "jenkins",
+    "art",
+    "xyne",
+    "codegen"
+  ],
+  "author": "JAF Pipeline Team",
+  "license": "MIT",
+  "dependencies": {
+    "@xynehq/jaf": "file:../../",
+    "axios": "^1.6.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "bin": {
+    "jaf-pipeline": "./index.ts"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
