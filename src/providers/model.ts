@@ -1,63 +1,22 @@
 import OpenAI from "openai";
-import tunnel from 'tunnel';
 import { ModelProvider, Message, MessageContentPart, getTextContent, type RunState, type Agent, type RunConfig } from '../core/types.js';
 import { extractDocumentContent, isDocumentSupported, getDocumentDescription } from '../utils/document-processor.js';
-
-interface ProxyConfig {
-  httpProxy?: string;
-  httpsProxy?: string;
-  noProxy?: string;
-}
-
-function createProxyAgent(url?: any,proxyConfig?: ProxyConfig) {
-  const httpProxy = proxyConfig?.httpProxy || process.env.HTTP_PROXY;
-  const noProxy = proxyConfig?.noProxy || process.env.NO_PROXY;
-  
-  if (noProxy?.includes(url)  || !httpProxy ) {
-    return undefined;
-  }
-
-  try {
-    console.log(`[JAF:PROXY] Configuring proxy agents:`);
-    if (httpProxy) console.log(`HTTP_PROXY: ${httpProxy}`);
-    if (noProxy) console.log(`NO_PROXY: ${noProxy}`);
-
-    return {
-      httpAgent: httpProxy ? createTunnelAgent(httpProxy) : undefined,
-    };
-  } catch (error) {
-    console.warn(`[JAF:PROXY] Failed to create proxy agents. Install 'https-proxy-agent' and 'http-proxy-agent' packages for proxy support:`, error instanceof Error ? error.message : String(error));
-    return undefined;
-  }
-}
-
-
-const createTunnelAgent = (proxyUrl: string) => {
-  const url = new URL(proxyUrl);
-  
-  // Create tunnel agent for HTTPS through HTTP proxy
-  return tunnel.httpsOverHttp({
-    proxy: {
-      host: url.hostname,
-      port: parseInt(url.port)
-    },
-    rejectUnauthorized: false
-  });
-};
+import { ProxyConfig, ClientConfig } from './types.js';
+import { createProxyAgent, isVisionModel, zodSchemaToJsonSchema } from './utils.js';
 
 export const makeLiteLLMProvider = <Ctx>(
   baseURL: string,
   apiKey = "anything",
   proxyConfig?: ProxyConfig
 ): ModelProvider<Ctx> => {
-  const clientConfig: any = { 
-    baseURL, 
-    apiKey, 
+  const clientConfig: ClientConfig = {
+    baseURL,
+    apiKey,
     dangerouslyAllowBrowser: true
   };
 
   const hostname = new URL(baseURL).hostname;
-  const proxyAgents = createProxyAgent(hostname,proxyConfig);
+  const proxyAgents = createProxyAgent(hostname, proxyConfig);
   if (proxyAgents) {
     if (proxyAgents.httpAgent) {
       clientConfig.httpAgent = proxyAgents.httpAgent;
@@ -74,9 +33,11 @@ export const makeLiteLLMProvider = <Ctx>(
       const { model, params } = await buildChatCompletionParams(state, agent, config, baseURL);
 
       console.log(`📞 Calling model: ${model} with params: ${JSON.stringify(params, null, 2)}`);
-      const resp = await client.chat.completions.create(
-        params as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
-      );
+      const nonStreamingParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
+        ...params,
+        stream: false
+      };
+      const resp = await client.chat.completions.create(nonStreamingParams);
 
       // Return the choice with usage data attached for tracing
       return {
@@ -148,74 +109,6 @@ export const makeLiteLLMProvider = <Ctx>(
   };
 };
 
-const VISION_MODEL_CACHE_TTL = 5 * 60 * 1000;
-const VISION_API_TIMEOUT = 3000;
-const visionModelCache = new Map<string, { supports: boolean; timestamp: number }>();
-
-async function isVisionModel(model: string, baseURL: string): Promise<boolean> {
-  const cacheKey = `${baseURL}:${model}`;
-  const cached = visionModelCache.get(cacheKey);
-  
-  if (cached && Date.now() - cached.timestamp < VISION_MODEL_CACHE_TTL) {
-    return cached.supports;
-  }
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), VISION_API_TIMEOUT);
-    
-    const response = await fetch(`${baseURL}/model_group/info`, {
-      headers: {
-        'accept': 'application/json'
-      },
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (response.ok) {
-      const data: any = await response.json();
-      const modelInfo = data.data?.find((m: any) => 
-        m.model_group === model || model.includes(m.model_group)
-      );
-      
-      if (modelInfo?.supports_vision !== undefined) {
-        const result = modelInfo.supports_vision;
-        visionModelCache.set(cacheKey, { supports: result, timestamp: Date.now() });
-        return result;
-      }
-    } else {
-      console.warn(`Vision API returned status ${response.status} for model ${model}`);
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        console.warn(`Vision API timeout for model ${model}`);
-      } else {
-        console.warn(`Vision API error for model ${model}: ${error.message}`);
-      }
-    } else {
-      console.warn(`Unknown error checking vision support for model ${model}`);
-    }
-  }
-
-  const knownVisionModels = [
-    'gpt-4-vision-preview',
-    'gpt-4o',
-    'gpt-4o-mini', 
-    'claude-sonnet-4',
-    'claude-sonnet-4-20250514', 
-    'gemini-2.5-flash',
-    'gemini-2.5-pro'
-  ];
-  
-  const isKnownVisionModel = knownVisionModels.some(visionModel => 
-    model.toLowerCase().includes(visionModel.toLowerCase())
-  );
-  
-  visionModelCache.set(cacheKey, { supports: isKnownVisionModel, timestamp: Date.now() });
-  
-  return isKnownVisionModel;
-}
 
 /**
  * Build common Chat Completions request parameters shared by both
@@ -234,10 +127,14 @@ async function buildChatCompletionParams<Ctx>(
   }
 
   // Vision capability check if any image payload present
-  const hasImageContent = state.messages.some(msg =>
-    (Array.isArray(msg.content) && msg.content.some(part => (part as any).type === 'image_url')) ||
-    (!!msg.attachments && msg.attachments.some(att => att.kind === 'image'))
-  );
+  const hasImageContent = state.messages.some(msg => {
+    if (Array.isArray(msg.content)) {
+      return msg.content.some(part =>
+        part && typeof part === 'object' && 'type' in part && part.type === 'image_url'
+      );
+    }
+    return !!msg.attachments && msg.attachments.some(att => att.kind === 'image');
+  });
   if (hasImageContent) {
     const supportsVision = await isVisionModel(model, baseURL);
     if (!supportsVision) {
@@ -298,7 +195,7 @@ async function convertMessage(msg: Message): Promise<OpenAI.Chat.Completions.Cha
       return {
         role: 'assistant',
         content: getTextContent(msg.content),
-        tool_calls: msg.tool_calls as any
+        tool_calls: msg.tool_calls ? [...msg.tool_calls] : undefined
       };
     case 'tool':
       return {
@@ -307,7 +204,7 @@ async function convertMessage(msg: Message): Promise<OpenAI.Chat.Completions.Cha
         tool_call_id: msg.tool_call_id!
       };
     default:
-      throw new Error(`Unknown message role: ${(msg as any).role}`);
+      throw new Error(`Unknown message role: ${msg.role}`);
   }
 }
 
@@ -330,12 +227,11 @@ function convertContentPart(part: MessageContentPart): OpenAI.Chat.Completions.C
       return {
         type: 'file',
         file: {
-          file_id: part.file.file_id,
-          format: part.file.format
+          file_id: part.file.file_id
         }
-      } as any;
+      } as OpenAI.Chat.Completions.ChatCompletionContentPart;
     default:
-      throw new Error(`Unknown content part type: ${(part as any).type}`);
+      throw new Error(`Unknown content part type: ${(part as MessageContentPart).type}`);
   }
 }
 
@@ -350,12 +246,12 @@ async function buildChatMessageWithAttachments(
   const hasAttachments = Array.isArray(msg.attachments) && msg.attachments.length > 0;
   if (!hasAttachments) {
     if (role === 'assistant') {
-      return { role: 'assistant', content: getTextContent(msg.content), tool_calls: msg.tool_calls as any };
+      return { role: 'assistant', content: getTextContent(msg.content), tool_calls: msg.tool_calls ? [...msg.tool_calls] : undefined };
     }
     return { role: 'user', content: getTextContent(msg.content) };
   }
 
-  const parts: any[] = [];
+  const parts: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [];
   const textContent = getTextContent(msg.content);
   if (textContent && textContent.trim().length > 0) {
     parts.push({ type: 'text', text: textContent });
@@ -383,8 +279,7 @@ async function buildChatMessageWithAttachments(
           parts.push({
             type: 'file',
             file: {
-              file_id,
-              format: att.mimeType || att.format
+              file_id
             }
           });
         }
@@ -420,66 +315,17 @@ async function buildChatMessageWithAttachments(
     }
   }
 
-  const base: any = { role, content: parts };
   if (role === 'assistant' && msg.tool_calls) {
-    base.tool_calls = msg.tool_calls as any;
+    return {
+      role: 'assistant',
+      content: parts.length === 1 && parts[0].type === 'text' ? parts[0].text : null,
+      tool_calls: msg.tool_calls ? [...msg.tool_calls] : undefined
+    };
   }
-  return base as OpenAI.Chat.Completions.ChatCompletionMessageParam;
+
+  return {
+    role: 'user',
+    content: parts
+  };
 }
 
-function zodSchemaToJsonSchema(zodSchema: any): any {
-  if (zodSchema._def?.typeName === 'ZodObject') {
-    const properties: Record<string, any> = {};
-    const required: string[] = [];
-    
-    for (const [key, value] of Object.entries(zodSchema._def.shape())) {
-      properties[key] = zodSchemaToJsonSchema(value);
-      if (!(value as any).isOptional()) {
-        required.push(key);
-      }
-    }
-    
-    return {
-      type: 'object',
-      properties,
-      required: required.length > 0 ? required : undefined,
-      additionalProperties: false
-    };
-  }
-  
-  if (zodSchema._def?.typeName === 'ZodString') {
-    const schema: any = { type: 'string' };
-    if (zodSchema._def.description) {
-      schema.description = zodSchema._def.description;
-    }
-    return schema;
-  }
-  
-  if (zodSchema._def?.typeName === 'ZodNumber') {
-    return { type: 'number' };
-  }
-  
-  if (zodSchema._def?.typeName === 'ZodBoolean') {
-    return { type: 'boolean' };
-  }
-  
-  if (zodSchema._def?.typeName === 'ZodArray') {
-    return {
-      type: 'array',
-      items: zodSchemaToJsonSchema(zodSchema._def.type)
-    };
-  }
-  
-  if (zodSchema._def?.typeName === 'ZodOptional') {
-    return zodSchemaToJsonSchema(zodSchema._def.innerType);
-  }
-  
-  if (zodSchema._def?.typeName === 'ZodEnum') {
-    return {
-      type: 'string',
-      enum: zodSchema._def.values
-    };
-  }
-  
-  return { type: 'string', description: 'Unsupported schema type' };
-}

@@ -4,16 +4,23 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { z } from 'zod';
 import { Tool } from '../core/types.js';
+import {
+  MCPClient,
+  MCPToolDefinition,
+  MCPContentItem,
+  MCPToolResponse,
+  MCPClientOptions,
+  EventSourceModule,
+  ZodSchemaType,
+  JsonSchema,
+  MCPToolConversionResult
+} from './mcp-types.js';
 
-export interface MCPClient {
-  listTools(): Promise<Array<{ 
-    name: string; 
-    description?: string; 
-    inputSchema?: any 
-  }>>;
-  callTool(name: string, args: unknown): Promise<string>;
-  close(): Promise<void>;
-}
+export {
+  MCPClient,
+  MCPToolDefinition,
+  MCPClientOptions
+};
 
 /**
  * Create an MCP client using the STDIO transport.
@@ -39,7 +46,7 @@ export async function makeMCPClient(command: string, args: string[] = []): Promi
         return response.tools.map(tool => ({
           name: tool.name,
           description: tool.description,
-          inputSchema: tool.inputSchema
+          inputSchema: tool.inputSchema as JsonSchema
         }));
       } catch (error) {
         console.error('Failed to list MCP tools:', error);
@@ -55,9 +62,9 @@ export async function makeMCPClient(command: string, args: string[] = []): Promi
         });
 
         if (response.content && Array.isArray(response.content) && response.content.length > 0) {
-          return response.content.map((c: any) => {
+          return response.content.map((c: MCPContentItem) => {
             if (c.type === 'text') {
-              return c.text;
+              return c.text || '';
             }
             return JSON.stringify(c);
           }).join('\n');
@@ -96,11 +103,11 @@ export async function makeMCPClientSSE(url: string, opts?: { headers?: Record<st
   // Ensure EventSource is available in Node environments.
   // The MCP SDK's SSE transport expects a global EventSource (available in browsers).
   // In Node.js, install the 'eventsource' package and set it on globalThis.
-  if (typeof (globalThis as any).EventSource === 'undefined') {
+  if (typeof (globalThis as Record<string, unknown>).EventSource === 'undefined') {
     try {
-      const mod = await import('eventsource');
-      const ES = (mod as any).default ?? (mod as any);
-      (globalThis as any).EventSource = ES;
+      const mod = await import('eventsource') as EventSourceModule;
+      const ES = mod.default ?? mod;
+      (globalThis as Record<string, unknown>).EventSource = ES;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       throw new Error(`EventSource is not defined. Install the 'eventsource' package or run in a browser. Cause: ${msg}`);
@@ -127,7 +134,7 @@ export async function makeMCPClientSSE(url: string, opts?: { headers?: Record<st
         return response.tools.map(tool => ({
           name: tool.name,
           description: tool.description,
-          inputSchema: tool.inputSchema
+          inputSchema: tool.inputSchema as JsonSchema
         }));
       } catch (error) {
         console.error('Failed to list MCP tools (SSE):', error);
@@ -143,9 +150,9 @@ export async function makeMCPClientSSE(url: string, opts?: { headers?: Record<st
         });
 
         if (response.content && Array.isArray(response.content) && response.content.length > 0) {
-          return response.content.map((c: any) => {
+          return response.content.map((c: MCPContentItem) => {
             if (c.type === 'text') {
-              return c.text;
+              return c.text || '';
             }
             return JSON.stringify(c);
           }).join('\n');
@@ -230,7 +237,7 @@ export async function makeMCPClientHTTP(url: string, opts?: {
         return response.tools.map(tool => ({
           name: tool.name,
           description: tool.description,
-          inputSchema: tool.inputSchema
+          inputSchema: tool.inputSchema as JsonSchema
         }));
       } catch (error) {
         console.error('Failed to list MCP tools (HTTP):', error);
@@ -246,9 +253,9 @@ export async function makeMCPClientHTTP(url: string, opts?: {
         });
 
         if (response.content && Array.isArray(response.content) && response.content.length > 0) {
-          return response.content.map((c: any) => {
+          return response.content.map((c: MCPContentItem) => {
             if (c.type === 'text') {
-              return c.text;
+              return c.text || '';
             }
             return JSON.stringify(c);
           }).join('\n');
@@ -272,19 +279,19 @@ export async function makeMCPClientHTTP(url: string, opts?: {
 
 export function mcpToolToJAFTool<Ctx>(
   mcpClient: MCPClient,
-  mcpToolDef: { name: string; description?: string; inputSchema?: any }
-): Tool<any, Ctx> {
+  mcpToolDef: MCPToolDefinition
+): Tool<Record<string, unknown>, Ctx> {
   let zodSchema = jsonSchemaToZod(mcpToolDef.inputSchema || {});
   // Ensure top-level OBJECT parameters for function-calling providers
   if (!(zodSchema instanceof z.ZodObject)) {
     zodSchema = z.object({ value: zodSchema }).describe('Wrapped non-object parameters');
   }
 
-  const baseTool: Tool<any, Ctx> = {
+  const baseTool: Tool<Record<string, unknown>, Ctx> = {
     schema: {
       name: mcpToolDef.name,
       description: mcpToolDef.description ?? mcpToolDef.name,
-      parameters: zodSchema,
+      parameters: zodSchema as z.ZodObject<Record<string, ZodSchemaType>>,
     },
     execute: (args, _) => mcpClient.callTool(mcpToolDef.name, args),
   };
@@ -292,30 +299,30 @@ export function mcpToolToJAFTool<Ctx>(
   return baseTool;
 }
 
-function jsonSchemaToZod(schema: any): z.ZodType<any> {
+function jsonSchemaToZod(schema: JsonSchema): ZodSchemaType {
   if (!schema || typeof schema !== 'object') {
-    return z.any();
+    return z.unknown();
   }
 
   if (schema.type === 'object') {
-    const shape: Record<string, z.ZodType<any>> = {};
-    
+    const shape: Record<string, ZodSchemaType> = {};
+
     if (schema.properties) {
       for (const [key, prop] of Object.entries(schema.properties)) {
         let fieldSchema = jsonSchemaToZod(prop);
-        
+
         if (!schema.required || !schema.required.includes(key)) {
           fieldSchema = fieldSchema.optional();
         }
-        
-        if ((prop as any).description) {
-          fieldSchema = fieldSchema.describe((prop as any).description);
+
+        if (prop.description) {
+          fieldSchema = fieldSchema.describe(prop.description);
         }
-        
+
         shape[key] = fieldSchema;
       }
     }
-    
+
     return z.object(shape);
   }
 
@@ -325,7 +332,7 @@ function jsonSchemaToZod(schema: any): z.ZodType<any> {
       stringSchema = stringSchema.describe(schema.description);
     }
     if (schema.enum) {
-      return z.enum(schema.enum);
+      return z.enum(schema.enum as [string, ...string[]]);
     }
     return stringSchema;
   }
@@ -339,8 +346,8 @@ function jsonSchemaToZod(schema: any): z.ZodType<any> {
   }
 
   if (schema.type === 'array') {
-    return z.array(jsonSchemaToZod(schema.items));
+    return z.array(jsonSchemaToZod(schema.items || {}));
   }
 
-  return z.any();
+  return z.unknown();
 }
