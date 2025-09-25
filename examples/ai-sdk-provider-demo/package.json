@@ -8,6 +8,8 @@
     "pretest": "pnpm -w run build",
     "test": "tsx test.ts",
     "test:vertex": "tsx test-vertex.ts",
+    "test:reasoning": "tsx test-reasoning-openai.ts",
+    "test:reasoning:vertex": "tsx test-reasoning-vertex.ts",
     "dev": "tsx test.ts",
     "server": "tsx server.ts",
     "start": "tsx server.ts"

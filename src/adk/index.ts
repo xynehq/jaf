@@ -234,6 +234,15 @@ export {
   createDefaultAdkLLMService
 } from './providers/llm-service.js';
 
+// ========== Reasoning Wrapper (AI SDK) ==========
+export {
+  callWithReasoning,
+  withProviderReasoning,
+  type ReasoningOptions,
+  type CallParams,
+  type NormalizedResult,
+} from './providers/reasoning.js';
+
 export {
   // Configuration Functions
   createAdkLLMConfig,
