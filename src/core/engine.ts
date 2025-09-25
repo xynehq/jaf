@@ -10,6 +10,7 @@ import {
   Interruption,
   getTextContent,
   Guardrail,
+  generateMessageId,
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
 import { buildEffectiveGuardrails, executeInputGuardrailsParallel, executeInputGuardrailsSequential, executeOutputGuardrails } from './guardrails.js';
@@ -20,19 +21,24 @@ export async function run<Ctx, Out>(
   config: RunConfig<Ctx>
 ): Promise<RunResult<Out>> {
   try {
+    // Ensure all existing messages have IDs
+    const initialStateWithIds: RunState<Ctx> = {
+      ...initialState,
+      messages: initialState.messages.map(m => m.id ? m : { ...m, id: generateMessageId() })
+    };
     config.onEvent?.({
       type: 'run_start',
       data: { 
-        runId: initialState.runId, 
-        traceId: initialState.traceId,
-        context: initialState.context,
-        userId: (initialState.context as any)?.userId,
-        sessionId: (initialState.context as any)?.sessionId || (initialState.context as any)?.conversationId,
-        messages: initialState.messages
+        runId: initialStateWithIds.runId, 
+        traceId: initialStateWithIds.traceId,
+        context: initialStateWithIds.context,
+        userId: (initialStateWithIds.context as any)?.userId,
+        sessionId: (initialStateWithIds.context as any)?.sessionId || (initialStateWithIds.context as any)?.conversationId,
+        messages: initialStateWithIds.messages
       }
     });
 
-    let stateWithMemory = initialState;
+    let stateWithMemory = initialStateWithIds;
     if (config.memory?.autoStore && config.conversationId) {
       console.log(`[JAF:ENGINE] Loading conversation history for ${config.conversationId}`);
       stateWithMemory = await loadConversationHistory(initialState, config);
@@ -59,7 +65,7 @@ export async function run<Ctx, Out>(
 
     config.onEvent?.({
       type: 'run_end',
-      data: { outcome: result.outcome, traceId: initialState.traceId, runId: initialState.runId }
+      data: { outcome: result.outcome, traceId: initialStateWithIds.traceId, runId: initialStateWithIds.runId }
     });
 
     return result;
@@ -474,6 +480,7 @@ async function runInternal<Ctx, Out>(
         try {
           streamingUsed = true;
           const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
+          const assistantMessageId = generateMessageId();
           let aggregatedText = '';
           const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
 
@@ -497,6 +504,7 @@ async function runInternal<Ctx, Out>(
             if (chunk?.delta || chunk?.toolCallDelta) {
               assistantEventStreamed = true;
               const partialMessage: Message = {
+                id: assistantMessageId,
                 role: 'assistant',
                 content: aggregatedText,
                 ...(toolCalls.length > 0
@@ -518,6 +526,7 @@ async function runInternal<Ctx, Out>(
 
           llmResponse = {
             message: {
+              id: assistantMessageId,
               content: aggregatedText || undefined,
               ...(toolCalls.length > 0
                 ? {
@@ -547,6 +556,7 @@ async function runInternal<Ctx, Out>(
       try {
         streamingUsed = true;
         const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
+        const assistantMessageId = generateMessageId();
         let aggregatedText = '';
         const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
 
@@ -570,6 +580,7 @@ async function runInternal<Ctx, Out>(
           if (chunk?.delta || chunk?.toolCallDelta) {
             assistantEventStreamed = true;
             const partialMessage: Message = {
+              id: assistantMessageId,
               role: 'assistant',
               content: aggregatedText,
               ...(toolCalls.length > 0
@@ -591,6 +602,7 @@ async function runInternal<Ctx, Out>(
 
         llmResponse = {
           message: {
+            id: assistantMessageId,
             content: aggregatedText || undefined,
             ...(toolCalls.length > 0
               ? {
@@ -667,6 +679,7 @@ async function runInternal<Ctx, Out>(
   }
 
   const assistantMessage: Message = {
+    id: llmResponse.message.id ?? generateMessageId(),
     role: 'assistant',
     content: llmResponse.message.content || '',
     tool_calls: llmResponse.message.tool_calls
@@ -695,12 +708,12 @@ async function runInternal<Ctx, Out>(
       config.onEvent?.({ type: 'tool_requests', data: { toolCalls: requests } });
     } catch { /* ignore */ }
     
-    const toolResults = await executeToolCalls(
-      llmResponse.message.tool_calls,
-      currentAgent,
-      state,
-      config,
-    );
+        const toolResults = await executeToolCalls(
+          llmResponse.message.tool_calls,
+          currentAgent,
+          state,
+          config,
+        );
 
     const interruptions = toolResults
       .map(r => r.interruption)
@@ -1017,6 +1030,7 @@ async function executeToolCalls<Ctx>(
 
           return {
             message: {
+              id: generateMessageId(),
               role: 'tool',
               content: errorResult,
               tool_call_id: toolCall.id
@@ -1086,6 +1100,7 @@ async function executeToolCalls<Ctx>(
               sessionId: state.runId,
             },
             message: {
+              id: generateMessageId(),
               role: 'tool',
               content: JSON.stringify({
                 status: 'halted',
@@ -1102,6 +1117,7 @@ async function executeToolCalls<Ctx>(
           const rejectionReason = additionalContext?.rejectionReason || 'User declined the action';
           return {
             message: {
+              id: generateMessageId(),
               role: 'tool',
               content: JSON.stringify({
                 status: 'approval_denied',
@@ -1162,6 +1178,7 @@ async function executeToolCalls<Ctx>(
         if (handoffCheck && typeof handoffCheck === 'object' && 'handoff_to' in handoffCheck) {
           return {
             message: {
+              id: generateMessageId(),
               role: 'tool',
               content: resultString,
               tool_call_id: toolCall.id
@@ -1198,6 +1215,7 @@ async function executeToolCalls<Ctx>(
 
         return {
           message: {
+            id: generateMessageId(),
             role: 'tool',
             content: finalContent,
             tool_call_id: toolCall.id
@@ -1231,6 +1249,7 @@ async function executeToolCalls<Ctx>(
 
         return {
           message: {
+            id: generateMessageId(),
             role: 'tool',
             content: errorResult,
             tool_call_id: toolCall.id
