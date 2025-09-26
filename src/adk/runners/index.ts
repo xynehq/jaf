@@ -37,7 +37,7 @@ import {
   GraphOptions,
   GraphResult 
 } from '../../visualization/graphviz';
-
+import { randomUUID } from 'crypto';
 import { getOrCreateSession, addMessageToSession, addArtifactToSession } from '../sessions';
 import { executeTool } from '../tools';
 import { createModelMessage, getFunctionCalls, createUserMessage } from '../content';
@@ -1010,8 +1010,11 @@ const getMessageText = (content: Content): string => {
 };
 
 const generateRequestId = (): string => {
-  // Use crypto-based ID generation for pure functional approach
-  return `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  try {
+    return `req_${randomUUID()}`;
+  } catch {
+    return `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  }
 };
 
 const createAgentEvent = (

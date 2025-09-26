@@ -748,14 +748,31 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
     app.post('/conversations/:conversationId/checkpoint', {
       schema: {
         body: {
-          type: 'object',
-          properties: {
-            byMessageId: { type: 'string' },
-            byIndex: { type: 'number' },
-            byUserMessageNumber: { type: 'number' },
-            byText: { type: 'string' },
-            match: { type: 'string', enum: ['exact', 'startsWith', 'contains'] }
-          }
+          oneOf: [
+            {
+              type: 'object',
+              properties: { byMessageId: { type: 'string' } },
+              required: ['byMessageId']
+            },
+            {
+              type: 'object',
+              properties: { byIndex: { type: 'number' } },
+              required: ['byIndex']
+            },
+            {
+              type: 'object',
+              properties: { byUserMessageNumber: { type: 'number' } },
+              required: ['byUserMessageNumber']
+            },
+            {
+              type: 'object',
+              properties: {
+                byText: { type: 'string' },
+                match: { type: 'string', enum: ['exact', 'startsWith', 'contains'] }
+              },
+              required: ['byText']
+            }
+          ]
         }
       }
     }, async (
@@ -767,6 +784,18 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       }
 
       const criteria = request.body || {};
+      const selectors = [
+        criteria.byMessageId ? 'byMessageId' : null,
+        typeof criteria.byIndex === 'number' ? 'byIndex' : null,
+        typeof criteria.byUserMessageNumber === 'number' ? 'byUserMessageNumber' : null,
+        typeof criteria.byText === 'string' ? 'byText' : null
+      ].filter(Boolean) as string[];
+
+      if (selectors.length !== 1) {
+        return reply.code(400).send({ success: false, error: `Provide exactly one selector. Received: ${selectors.join(', ') || 'none'}` });
+      }
+
+      request.log.info({ selectorApplied: selectors[0], conversationId: request.params.conversationId }, 'Applying checkpoint selector');
       const result = await config.defaultMemoryProvider.restoreToCheckpoint(request.params.conversationId, criteria);
       if (!result.success) {
         return reply.code(400).send({ success: false, error: result.error.message });

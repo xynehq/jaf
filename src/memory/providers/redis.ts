@@ -501,13 +501,11 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
           ...conversation,
           messages: newMessages,
           metadata: {
-            // Ensure required fields exist per ConversationMemory.metadata type
+            ...(conversation.metadata ? { ...conversation.metadata } : {}),
             createdAt: conversation.metadata?.createdAt ?? now,
             updatedAt: now,
             lastActivity: now,
-            totalMessages: newMessages.length,
-            // Preserve any additional metadata keys
-            ...((conversation.metadata ? { ...conversation.metadata } : {}))
+            totalMessages: newMessages.length
           }
         };
 

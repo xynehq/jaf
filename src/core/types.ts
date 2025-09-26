@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 import { MemoryConfig } from '../memory/types';
 import type { ApprovalStorage } from '../memory/approval-storage';
 
@@ -11,9 +12,7 @@ export const createRunId = (id: string): RunId => id as RunId;
 export const createMessageId = (id: string): MessageId => id as MessageId;
 
 export const generateMessageId = (): MessageId => {
-  // Simple, deterministic-safe generator without external deps
-  const rand = Math.random().toString(36).slice(2, 10);
-  return (`msg_${Date.now()}_${rand}`) as MessageId;
+  return (`msg_${randomUUID()}`) as MessageId;
 };
 
 export type ValidationResult =
