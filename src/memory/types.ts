@@ -124,7 +124,7 @@ export type MemoryProvider = {
 /**
  * Criteria to identify the user message to checkpoint against.
  * Provide exactly one of the selectors. If multiple are provided,
- * precedence is: byIndex > byUserMessageNumber > byText.
+ * precedence is: byMessageId > byIndex > byUserMessageNumber > byText.
  *
  * - byIndex: 0-based index into the messages array
  * - byUserMessageNumber: 0-based index among only 'user' role messages
