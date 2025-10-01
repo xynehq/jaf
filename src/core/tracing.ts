@@ -113,7 +113,14 @@ let globalSanitizationConfig: SanitizationConfig = {};
  * ```
  */
 export function configureSanitization(config: SanitizationConfig): void {
-  globalSanitizationConfig = { ...globalSanitizationConfig, ...config };
+  globalSanitizationConfig = {
+    ...globalSanitizationConfig,
+    ...config,
+    // Deep copy sensitiveFields array to prevent external mutation
+    sensitiveFields: config.sensitiveFields
+      ? [...config.sensitiveFields]
+      : globalSanitizationConfig.sensitiveFields
+  };
 }
 
 /**
@@ -153,18 +160,32 @@ function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
   for (const [key, value] of Object.entries(obj)) {
     // Try custom sanitizer first
     if (customSanitizer) {
-      const customResult = customSanitizer(key, value, depth);
-      if (customResult !== undefined) {
-        sanitized[key] = customResult;
-        continue;
+      try {
+        const customResult = customSanitizer(key, value, depth);
+        if (customResult !== undefined) {
+          sanitized[key] = customResult;
+          continue;
+        }
+      } catch (error) {
+        console.warn(`[JAF:SANITIZATION] Custom sanitizer error for key "${key}":`, error);
+        // Fall through to default sanitization
       }
     }
 
     const lowerKey = key.toLowerCase();
 
     // Check if this is a sensitive field
-    if (allSensitiveFields.some(field => lowerKey.includes(field.toLowerCase()))) {
-      sanitized[key] = redactionPlaceholder;
+    const isSensitiveField = allSensitiveFields.some(field => lowerKey.includes(field.toLowerCase()));
+
+    if (isSensitiveField) {
+      // If the value is an object or array, still sanitize it recursively
+      // This preserves non-sensitive data within sensitive-named objects
+      if (typeof value === 'object' && value !== null) {
+        sanitized[key] = sanitizeObject(value, depth + 1, config);
+      } else {
+        // For primitive values in sensitive fields, redact completely
+        sanitized[key] = redactionPlaceholder;
+      }
     } else if (typeof value === 'object' && value !== null) {
       sanitized[key] = sanitizeObject(value, depth + 1, config);
     } else {
@@ -663,7 +684,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             const usage = (data as any).usage || {};
 
             // Extract model information from event data (not from choice)
-            let model = (data as any).model || 'unknown';
+            const model = (data as any).model || 'unknown';
             
             // Set comprehensive attributes for cost calculation and tracking
             const promptTokens = usage.prompt_tokens || 0;

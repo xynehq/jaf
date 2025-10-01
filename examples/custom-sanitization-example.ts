@@ -7,6 +7,30 @@
 
 import { configureSanitization, resetSanitizationConfig } from '../src/core/tracing.js';
 
+/**
+ * Helper function to safely mask email addresses
+ */
+function maskEmail(email: string): string {
+  const atIndex = email.lastIndexOf('@');
+
+  // Validate email format
+  if (atIndex <= 0 || atIndex === email.length - 1) {
+    return '[INVALID_EMAIL]';
+  }
+
+  const local = email.substring(0, atIndex);
+  const domain = email.substring(atIndex);
+
+  // Handle different local part lengths
+  if (local.length === 0) {
+    return `***${domain}`;
+  } else if (local.length === 1) {
+    return `${local[0]}***${domain}`;
+  } else {
+    return `${local.substring(0, 2)}***${domain}`;
+  }
+}
+
 // ============================================================================
 // Example 1: Adding Custom Sensitive Fields
 // ============================================================================
@@ -38,10 +62,7 @@ configureSanitization({
   customSanitizer: (key, value, depth) => {
     // Mask email addresses instead of fully redacting them
     if (key === 'email' && typeof value === 'string') {
-      const [local, domain] = value.split('@');
-      if (local && domain) {
-        return `${local.substring(0, 2)}***@${domain}`;
-      }
+      return maskEmail(value);
     }
 
     // Return undefined to use default sanitization behavior
@@ -63,10 +84,7 @@ configureSanitization({
   customSanitizer: (key, value, depth) => {
     // 1. Mask emails
     if (key === 'email' && typeof value === 'string') {
-      const [local, domain] = value.split('@');
-      if (local && domain) {
-        return `${local.substring(0, 2)}***@${domain}`;
-      }
+      return maskEmail(value);
     }
 
     // 2. Partially mask phone numbers
@@ -265,9 +283,16 @@ import { OpenTelemetryTraceCollector } from 'jaf/core/tracing';
 configureSanitization({
   sensitiveFields: ['customerId', 'merchantId'],
   customSanitizer: (key, value) => {
-    if (key === 'email') {
-      const [local, domain] = value.split('@');
-      return \`\${local.substring(0, 2)}***@\${domain}\`;
+    if (key === 'email' && typeof value === 'string') {
+      const atIndex = value.lastIndexOf('@');
+      if (atIndex > 0 && atIndex < value.length - 1) {
+        const local = value.substring(0, atIndex);
+        const domain = value.substring(atIndex);
+        return local.length >= 2
+          ? \`\${local.substring(0, 2)}***\${domain}\`
+          : \`\${local[0] || ''}***\${domain}\`;
+      }
+      return '[INVALID_EMAIL]';
     }
     return undefined;
   }

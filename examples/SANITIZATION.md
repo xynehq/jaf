@@ -45,8 +45,16 @@ configureSanitization({
   customSanitizer: (key, value, depth) => {
     // Email masking
     if (key === 'email' && typeof value === 'string') {
-      const [local, domain] = value.split('@');
-      return `${local.substring(0, 2)}***@${domain}`;
+      const atIndex = value.lastIndexOf('@');
+      if (atIndex > 0 && atIndex < value.length - 1) {
+        const local = value.substring(0, atIndex);
+        const domain = value.substring(atIndex);
+        const masked = local.length >= 2
+          ? `${local.substring(0, 2)}***${domain}`
+          : `${local[0] || ''}***${domain}`;
+        return masked;
+      }
+      return '[INVALID_EMAIL]';
     }
 
     // Phone masking
@@ -90,10 +98,15 @@ configureSanitization({
   customSanitizer: (key, value, depth) => {
     // Mask emails
     if (key.toLowerCase().includes('email') && typeof value === 'string') {
-      const [local, domain] = value.split('@');
-      if (local && domain) {
-        return `${local.substring(0, 2)}***@${domain}`;
+      const atIndex = value.lastIndexOf('@');
+      if (atIndex > 0 && atIndex < value.length - 1) {
+        const local = value.substring(0, atIndex);
+        const domain = value.substring(atIndex);
+        return local.length >= 2
+          ? `${local.substring(0, 2)}***${domain}`
+          : `${local[0] || ''}***${domain}`;
       }
+      return '[INVALID_EMAIL]';
     }
 
     // Mask phone numbers
