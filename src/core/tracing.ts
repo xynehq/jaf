@@ -186,9 +186,9 @@ function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
 
     // WHITELIST MODE: Redact everything EXCEPT allowed fields
     if (mode === 'whitelist') {
+      // Use exact match only for security (no substring matching)
       const isAllowed = allowedFields.some(field =>
-        lowerKey === field.toLowerCase() ||
-        lowerKey.includes(field.toLowerCase())
+        lowerKey === field.toLowerCase()
       );
 
       if (!isAllowed) {
@@ -208,14 +208,9 @@ function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
     const isSensitiveField = allSensitiveFields.some(field => lowerKey.includes(field.toLowerCase()));
 
     if (isSensitiveField) {
-      // If the value is an object or array, still sanitize it recursively
-      // This preserves non-sensitive data within sensitive-named objects
-      if (typeof value === 'object' && value !== null) {
-        sanitized[key] = sanitizeObject(value, depth + 1, config);
-      } else {
-        // For primitive values in sensitive fields, redact completely
-        sanitized[key] = redactionPlaceholder;
-      }
+      // Redact sensitive fields completely (including nested data)
+      // This prevents leaking sensitive information in nested objects
+      sanitized[key] = redactionPlaceholder;
     } else if (typeof value === 'object' && value !== null) {
       sanitized[key] = sanitizeObject(value, depth + 1, config);
     } else {

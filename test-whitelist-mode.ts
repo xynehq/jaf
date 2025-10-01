@@ -188,15 +188,17 @@ configureSanitization({
 console.log('Whitelist Config: allowedFields = [] (empty)');
 console.log('Expected: ALL fields should be redacted\n');
 
-// Test 8: Case Insensitive Matching
-console.log('\nTest 8: Case Insensitive Field Matching');
-console.log('----------------------------------------');
+// Test 8: Exact Case Insensitive Matching (Security)
+console.log('\nTest 8: Exact Case Insensitive Field Matching');
+console.log('----------------------------------------------');
 
 const testData8 = {
-  UserID: 'user123',
-  userid: 'user456',
-  USERID: 'user789',
-  user_id: 'user000'
+  userid: 'user456',       // Exact match (lowercase)
+  UserID: 'user123',       // Exact match (different case)
+  USERID: 'user789',       // Exact match (uppercase)
+  user_id: 'user000',      // NOT a match (has underscore)
+  customerId: 'cust-999',  // NOT a match (different field)
+  cardId: 'card-888'       // NOT a match (different field)
 };
 
 console.log('Test Data:', JSON.stringify(testData8, null, 2));
@@ -207,8 +209,9 @@ configureSanitization({
 });
 
 console.log('\nWhitelist Config: allowedFields = [userid] (lowercase)');
-console.log('Expected: All variations (UserID, userid, USERID, user_id) should match and be visible');
-console.log('(Case-insensitive + substring matching)\n');
+console.log('Expected: Only userid, UserID, USERID should be visible (exact case-insensitive match)');
+console.log('Expected: user_id, customerId, cardId should be [REDACTED] (not exact matches)');
+console.log('Note: Exact matching prevents accidental data leaks from similar field names\n');
 
 console.log('=== All Tests Defined ===');
 console.log('\nTo verify these tests work correctly:');

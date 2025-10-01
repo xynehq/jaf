@@ -71,6 +71,12 @@ configureSanitization({
 });
 ```
 
+**Important: Field Matching Behavior**
+- Whitelist mode uses **exact, case-insensitive matching** for security
+- Example: If you whitelist `'id'`, only fields named exactly `'id'` (any case) will be allowed
+- Fields like `'customerId'`, `'userId'`, or `'cardId'` will be **redacted** (not matched)
+- This prevents accidental data leaks through similar field names
+
 **When to use whitelist mode:**
 - You want maximum security and control over what data is sent to Langfuse
 - You only need specific metadata fields for debugging

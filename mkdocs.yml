@@ -148,6 +148,8 @@ nav:
     - API Overview: api-reference.md
     - Server API: server-api.md
   - Advanced Topics:
+    - Tracing: tracing.md
+    - Sanitization: sanitization.md
     - Visualization: visualization.md
     - Deployment: deployment.md
     - Troubleshooting: troubleshooting.md
