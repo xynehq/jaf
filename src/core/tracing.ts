@@ -72,7 +72,11 @@ export type CustomSanitizerFn = (key: string, value: any, depth: number) => any 
  * Configuration for data sanitization
  */
 export interface SanitizationConfig {
-  /** Additional sensitive field patterns to redact (supports partial matching) */
+  /** Sanitization mode: 'blacklist' (default) or 'whitelist' */
+  mode?: 'blacklist' | 'whitelist';
+  /** Fields to allow when mode='whitelist' (only these fields will be visible) */
+  allowedFields?: string[];
+  /** Additional sensitive field patterns to redact (for blacklist mode) */
   sensitiveFields?: string[];
   /** Custom sanitizer function for fine-grained control */
   customSanitizer?: CustomSanitizerFn;
@@ -119,7 +123,11 @@ export function configureSanitization(config: SanitizationConfig): void {
     // Deep copy sensitiveFields array to prevent external mutation
     sensitiveFields: config.sensitiveFields
       ? [...config.sensitiveFields]
-      : globalSanitizationConfig.sensitiveFields
+      : globalSanitizationConfig.sensitiveFields,
+    // Deep copy allowedFields array to prevent external mutation
+    allowedFields: config.allowedFields
+      ? [...config.allowedFields]
+      : globalSanitizationConfig.allowedFields
   };
 }
 
@@ -138,12 +146,14 @@ export function resetSanitizationConfig(): void {
  */
 function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
   const effectiveConfig = config || globalSanitizationConfig;
+  const mode = effectiveConfig.mode || 'blacklist';
+  const allowedFields = effectiveConfig.allowedFields || [];
   const maxDepth = effectiveConfig.maxDepth ?? 5;
   const redactionPlaceholder = effectiveConfig.redactionPlaceholder ?? '[REDACTED]';
   const customSanitizer = effectiveConfig.customSanitizer;
   const additionalSensitiveFields = effectiveConfig.sensitiveFields || [];
 
-  // Combine default and custom sensitive fields
+  // Combine default and custom sensitive fields (for blacklist mode)
   const allSensitiveFields = [...DEFAULT_SENSITIVE_FIELDS, ...additionalSensitiveFields];
 
   if (depth > maxDepth) return '[Max Depth Reached]';
@@ -174,7 +184,27 @@ function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
 
     const lowerKey = key.toLowerCase();
 
-    // Check if this is a sensitive field
+    // WHITELIST MODE: Redact everything EXCEPT allowed fields
+    if (mode === 'whitelist') {
+      const isAllowed = allowedFields.some(field =>
+        lowerKey === field.toLowerCase() ||
+        lowerKey.includes(field.toLowerCase())
+      );
+
+      if (!isAllowed) {
+        // Field not in whitelist - redact it
+        sanitized[key] = redactionPlaceholder;
+      } else if (typeof value === 'object' && value !== null) {
+        // Field is allowed and is an object - sanitize recursively
+        sanitized[key] = sanitizeObject(value, depth + 1, config);
+      } else {
+        // Field is allowed and is a primitive - keep it
+        sanitized[key] = value;
+      }
+      continue;
+    }
+
+    // BLACKLIST MODE (default): Allow everything EXCEPT sensitive fields
     const isSensitiveField = allSensitiveFields.some(field => lowerKey.includes(field.toLowerCase()));
 
     if (isSensitiveField) {

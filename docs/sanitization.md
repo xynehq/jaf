@@ -7,22 +7,82 @@ JAF provides powerful data sanitization capabilities to protect sensitive inform
 ```typescript
 import { configureSanitization } from 'jaf';
 
-// Add custom sensitive fields
+// Blacklist mode (default): Add custom sensitive fields
 configureSanitization({
   sensitiveFields: ['customerId', 'merchantId', 'accountNumber']
+});
+
+// Whitelist mode: Only allow specific fields
+configureSanitization({
+  mode: 'whitelist',
+  allowedFields: ['userId', 'timestamp', 'status', 'operation']
 });
 ```
 
 ## Features
 
 - **Default Protection**: Automatically redacts common sensitive fields (passwords, tokens, API keys, etc.)
+- **Blacklist Mode**: Allow all fields except sensitive ones (default)
+- **Whitelist Mode**: Redact all fields except explicitly allowed ones
 - **Custom Fields**: Add your own sensitive field patterns
 - **Custom Sanitizers**: Write custom logic for field-level sanitization
 - **Flexible Configuration**: Configure redaction placeholders, max depth, and more
 
 ## Configuration Options
 
-### 1. Adding Custom Sensitive Fields
+### 1. Choosing a Sanitization Mode
+
+JAF supports two modes for sanitization:
+
+#### Blacklist Mode (Default)
+
+In blacklist mode, all fields are allowed **except** those marked as sensitive:
+
+```typescript
+configureSanitization({
+  mode: 'blacklist',  // Optional, this is the default
+  sensitiveFields: [
+    'customerId',
+    'bankAccount',
+    'ssn',
+    'creditCard',
+    'merchantId'
+  ]
+});
+```
+
+Any field name containing these patterns (case-insensitive) will be redacted.
+
+#### Whitelist Mode
+
+In whitelist mode, **all fields are redacted by default** except those explicitly allowed. This is the most secure approach:
+
+```typescript
+configureSanitization({
+  mode: 'whitelist',
+  allowedFields: [
+    'userId',        // User identifiers
+    'timestamp',     // Timing information
+    'status',        // Status codes
+    'operation',     // Operation names
+    'duration',      // Performance metrics
+    'error_code'     // Error codes (but not messages)
+  ]
+});
+```
+
+**When to use whitelist mode:**
+- You want maximum security and control over what data is sent to Langfuse
+- You only need specific metadata fields for debugging
+- You're dealing with highly sensitive data (PII, PHI, financial data)
+- You want to comply with strict data privacy regulations (GDPR, HIPAA, PCI-DSS)
+
+**When to use blacklist mode:**
+- You need comprehensive debugging information
+- You have a well-defined set of sensitive fields
+- Your data is less sensitive overall
+
+### 2. Adding Custom Sensitive Fields (Blacklist Mode)
 
 ```typescript
 configureSanitization({
@@ -38,7 +98,7 @@ configureSanitization({
 
 Any field name containing these patterns (case-insensitive) will be redacted.
 
-### 2. Custom Sanitizer Function
+### 3. Custom Sanitizer Function
 
 ```typescript
 configureSanitization({
@@ -68,7 +128,7 @@ configureSanitization({
 });
 ```
 
-### 3. Custom Redaction Placeholder
+### 4. Custom Redaction Placeholder
 
 ```typescript
 configureSanitization({
@@ -76,7 +136,7 @@ configureSanitization({
 });
 ```
 
-### 4. Maximum Depth
+### 5. Maximum Depth
 
 ```typescript
 configureSanitization({
@@ -84,13 +144,17 @@ configureSanitization({
 });
 ```
 
-## Complete Example
+## Complete Examples
+
+### Blacklist Mode Example
 
 ```typescript
 import { configureSanitization, OpenTelemetryTraceCollector } from 'jaf';
 
 // Configure sanitization BEFORE creating trace collectors
 configureSanitization({
+  mode: 'blacklist', // Optional, this is the default
+
   // Add domain-specific sensitive fields
   sensitiveFields: ['customerId', 'merchantId', 'orderId'],
 
@@ -136,12 +200,71 @@ configureSanitization({
 const traceCollector = new OpenTelemetryTraceCollector();
 ```
 
+### Whitelist Mode Example
+
+```typescript
+import { configureSanitization, OpenTelemetryTraceCollector } from 'jaf';
+
+// Configure WHITELIST mode for maximum security
+configureSanitization({
+  mode: 'whitelist',
+
+  // Only allow these specific fields - everything else is redacted
+  allowedFields: [
+    // Identifiers (non-sensitive)
+    'userId',
+    'sessionId',
+    'requestId',
+    'traceId',
+
+    // Metadata
+    'timestamp',
+    'operation',
+    'method',
+    'path',
+
+    // Status and metrics
+    'status',
+    'statusCode',
+    'duration',
+    'latency',
+    'error_code',
+
+    // Non-sensitive business data
+    'product_category',
+    'transaction_type',
+    'currency_code'
+  ],
+
+  // Still use custom sanitizer for allowed fields if needed
+  customSanitizer: (key, value, depth) => {
+    // Even for allowed fields, you can apply transformations
+    if (key === 'userId' && typeof value === 'string') {
+      // Hash user IDs for privacy while maintaining uniqueness
+      const hash = value.split('').reduce((acc, char) => {
+        return ((acc << 5) - acc) + char.charCodeAt(0);
+      }, 0);
+      return `user_${Math.abs(hash)}`;
+    }
+
+    return undefined;
+  },
+
+  redactionPlaceholder: '[PROTECTED]',
+  maxDepth: 10
+});
+
+// Now create your trace collector
+const traceCollector = new OpenTelemetryTraceCollector();
+```
+
 ## Domain-Specific Examples
 
-### E-commerce
+### E-commerce (Blacklist Mode)
 
 ```typescript
 configureSanitization({
+  mode: 'blacklist',
   sensitiveFields: [
     'customerId', 'customerEmail',
     'cardNumber', 'cvv', 'expiryDate',
@@ -156,10 +279,38 @@ configureSanitization({
 });
 ```
 
-### Financial Services
+### E-commerce (Whitelist Mode - Recommended)
 
 ```typescript
 configureSanitization({
+  mode: 'whitelist',
+  allowedFields: [
+    // Order metadata (non-sensitive)
+    'orderId',           // Order ID is fine to log
+    'orderStatus',       // Status tracking
+    'orderTimestamp',    // Timing info
+
+    // Product info
+    'productId',
+    'productCategory',
+    'quantity',
+
+    // Payment status (not details)
+    'paymentStatus',
+    'paymentMethod',     // e.g., 'credit_card', not the actual number
+
+    // Shipping info (aggregate)
+    'shippingMethod',
+    'estimatedDelivery'
+  ]
+});
+```
+
+### Financial Services (Blacklist Mode)
+
+```typescript
+configureSanitization({
+  mode: 'blacklist',
   sensitiveFields: [
     'accountNumber', 'iban', 'routingNumber',
     'ssn', 'taxId', 'transactionAmount', 'balance'
@@ -174,10 +325,39 @@ configureSanitization({
 });
 ```
 
-### Healthcare (HIPAA)
+### Financial Services (Whitelist Mode - Recommended)
 
 ```typescript
 configureSanitization({
+  mode: 'whitelist',
+  allowedFields: [
+    // Transaction metadata only
+    'transactionId',
+    'transactionType',     // e.g., 'transfer', 'payment'
+    'transactionStatus',
+    'timestamp',
+
+    // Currency and codes (not amounts)
+    'currencyCode',
+    'countryCode',
+
+    // Error tracking
+    'errorCode',
+    'statusCode',
+
+    // Performance metrics
+    'processingTime',
+    'queueTime'
+  ],
+  redactionPlaceholder: '[PII_REDACTED]'
+});
+```
+
+### Healthcare/HIPAA (Blacklist Mode)
+
+```typescript
+configureSanitization({
+  mode: 'blacklist',
   sensitiveFields: [
     'patientId', 'mrn', 'dateOfBirth',
     'diagnosis', 'medication', 'labResults',
@@ -195,9 +375,37 @@ configureSanitization({
 });
 ```
 
-## Default Sensitive Fields
+### Healthcare/HIPAA (Whitelist Mode - Recommended)
 
-JAF automatically redacts these fields by default:
+```typescript
+configureSanitization({
+  mode: 'whitelist',
+  allowedFields: [
+    // Appointment metadata only
+    'appointmentId',
+    'appointmentType',    // e.g., 'checkup', 'followup'
+    'appointmentStatus',
+    'timestamp',
+
+    // Department/facility (non-PHI)
+    'department',
+    'facilityId',
+
+    // System metadata
+    'requestId',
+    'sessionId',
+
+    // Error tracking
+    'errorCode',
+    'statusCode'
+  ],
+  redactionPlaceholder: '[PHI_PROTECTED]'
+});
+```
+
+## Default Sensitive Fields (Blacklist Mode Only)
+
+In blacklist mode, JAF automatically redacts these fields by default:
 
 - `password`
 - `token`, `accessToken`, `refreshToken`
@@ -210,6 +418,8 @@ JAF automatically redacts these fields by default:
 - `expiry`
 - `davv`
 
+**Note:** In whitelist mode, these defaults are ignored. Only fields in `allowedFields` are preserved.
+
 ## API Reference
 
 ### `configureSanitization(config: SanitizationConfig)`
@@ -217,7 +427,9 @@ JAF automatically redacts these fields by default:
 Configure global sanitization settings for all trace collectors.
 
 **Parameters:**
-- `config.sensitiveFields?: string[]` - Additional sensitive field patterns
+- `config.mode?: 'blacklist' | 'whitelist'` - Sanitization mode (default: 'blacklist')
+- `config.allowedFields?: string[]` - Fields to allow in whitelist mode
+- `config.sensitiveFields?: string[]` - Additional sensitive field patterns (blacklist mode)
 - `config.customSanitizer?: CustomSanitizerFn` - Custom sanitizer function
 - `config.maxDepth?: number` - Maximum recursion depth (default: 5)
 - `config.redactionPlaceholder?: string` - Redaction text (default: '[REDACTED]')
@@ -241,10 +453,13 @@ Return the sanitized value, or `undefined` to use default behavior.
 ## Best Practices
 
 1. **Configure Early**: Call `configureSanitization()` before creating trace collectors
-2. **Test Your Rules**: Verify sanitization works as expected with sample data
-3. **Balance Privacy & Utility**: Don't over-sanitize; keep data useful for debugging
-4. **Use Custom Sanitizers Sparingly**: Only for fields needing special handling
-5. **Document Your Rules**: Keep a record of what fields are sensitive and why
+2. **Use Whitelist Mode for Maximum Security**: When dealing with sensitive data (PII, PHI, financial), use whitelist mode to ensure only explicitly allowed fields are logged
+3. **Start Restrictive, Then Relax**: Begin with a minimal `allowedFields` list and add fields as needed during debugging
+4. **Test Your Rules**: Verify sanitization works as expected with sample data
+5. **Balance Privacy & Utility**: Don't over-sanitize; keep data useful for debugging
+6. **Use Custom Sanitizers Sparingly**: Only for fields needing special handling
+7. **Document Your Rules**: Keep a record of what fields are sensitive/allowed and why
+8. **Review Regularly**: Periodically audit your `allowedFields` list to ensure it doesn't include newly sensitive data
 
 ## See Also
 
