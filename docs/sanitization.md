@@ -248,5 +248,4 @@ Return the sanitized value, or `undefined` to use default behavior.
 
 ## See Also
 
-- [custom-sanitization-example.ts](../examples/custom-sanitization-example.ts) - Complete examples
 - [JAF Tracing Documentation](./tracing.md)
