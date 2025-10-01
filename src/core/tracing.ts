@@ -36,6 +36,145 @@ try {
 }
 
 
+// Default sensitive fields that should be redacted from logs
+const DEFAULT_SENSITIVE_FIELDS = [
+  'password',
+  'token',
+  'apiKey',
+  'api_key',
+  'secret',
+  'authorization',
+  'auth',
+  'credential',
+  'credentials',
+  'sessionId',
+  'session_id',
+  'accessToken',
+  'access_token',
+  'refreshToken',
+  'refresh_token',
+  'privateKey',
+  'private_key',
+  'expiry',
+  'davv'
+];
+
+/**
+ * Custom sanitizer function type
+ * @param key - The field key
+ * @param value - The field value
+ * @param depth - Current depth in the object tree
+ * @returns The sanitized value, or undefined to use default behavior
+ */
+export type CustomSanitizerFn = (key: string, value: any, depth: number) => any | undefined;
+
+/**
+ * Configuration for data sanitization
+ */
+export interface SanitizationConfig {
+  /** Additional sensitive field patterns to redact (supports partial matching) */
+  sensitiveFields?: string[];
+  /** Custom sanitizer function for fine-grained control */
+  customSanitizer?: CustomSanitizerFn;
+  /** Maximum depth for recursive sanitization (default: 5) */
+  maxDepth?: number;
+  /** Redaction placeholder (default: '[REDACTED]') */
+  redactionPlaceholder?: string;
+}
+
+/**
+ * Global sanitization configuration
+ */
+let globalSanitizationConfig: SanitizationConfig = {};
+
+/**
+ * Configure global sanitization settings for all trace collectors
+ * @param config - Sanitization configuration
+ *
+ * @example
+ * ```typescript
+ * // Add custom sensitive fields
+ * configureSanitization({
+ *   sensitiveFields: ['customerId', 'bankAccount', 'ssn']
+ * });
+ *
+ * // Use custom sanitizer function
+ * configureSanitization({
+ *   customSanitizer: (key, value, depth) => {
+ *     // Custom logic for email masking
+ *     if (key === 'email' && typeof value === 'string') {
+ *       const [local, domain] = value.split('@');
+ *       return `${local.substring(0, 2)}***@${domain}`;
+ *     }
+ *     // Return undefined to use default sanitization logic
+ *     return undefined;
+ *   }
+ * });
+ * ```
+ */
+export function configureSanitization(config: SanitizationConfig): void {
+  globalSanitizationConfig = { ...globalSanitizationConfig, ...config };
+}
+
+/**
+ * Reset sanitization configuration to defaults
+ */
+export function resetSanitizationConfig(): void {
+  globalSanitizationConfig = {};
+}
+
+/**
+ * Sanitize an object by redacting sensitive fields
+ * @param obj - Object to sanitize
+ * @param depth - Current recursion depth
+ * @param config - Optional sanitization config (uses global config if not provided)
+ */
+function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
+  const effectiveConfig = config || globalSanitizationConfig;
+  const maxDepth = effectiveConfig.maxDepth ?? 5;
+  const redactionPlaceholder = effectiveConfig.redactionPlaceholder ?? '[REDACTED]';
+  const customSanitizer = effectiveConfig.customSanitizer;
+  const additionalSensitiveFields = effectiveConfig.sensitiveFields || [];
+
+  // Combine default and custom sensitive fields
+  const allSensitiveFields = [...DEFAULT_SENSITIVE_FIELDS, ...additionalSensitiveFields];
+
+  if (depth > maxDepth) return '[Max Depth Reached]';
+
+  if (obj === null || obj === undefined) return obj;
+
+  if (typeof obj !== 'object') return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeObject(item, depth + 1, config));
+  }
+
+  const sanitized: any = {};
+  for (const [key, value] of Object.entries(obj)) {
+    // Try custom sanitizer first
+    if (customSanitizer) {
+      const customResult = customSanitizer(key, value, depth);
+      if (customResult !== undefined) {
+        sanitized[key] = customResult;
+        continue;
+      }
+    }
+
+    const lowerKey = key.toLowerCase();
+
+    // Check if this is a sensitive field
+    if (allSensitiveFields.some(field => lowerKey.includes(field.toLowerCase()))) {
+      sanitized[key] = redactionPlaceholder;
+    } else if (typeof value === 'object' && value !== null) {
+      sanitized[key] = sanitizeObject(value, depth + 1, config);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+}
+
 export interface TraceCollector {
   collect(event: TraceEvent): void;
   getTrace(traceId: TraceId): TraceEvent[];
@@ -112,7 +251,7 @@ export class ConsoleTraceCollector implements TraceCollector {
         console.log(`${prefix} Token usage: prompt=${event.data.prompt ?? '-'} completion=${event.data.completion ?? '-'} total=${event.data.total ?? '-'}`);
         break;
       case 'tool_call_start':
-        console.log(`${prefix} Executing tool ${event.data.toolName} with args:`, event.data.args);
+        console.log(`${prefix} Executing tool ${event.data.toolName} with args:`, sanitizeObject(event.data.args));
         break;
       case 'tool_call_end':
         console.log(`${prefix} Tool ${event.data.toolName} completed`);
@@ -213,10 +352,9 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
     // Parse headers from environment variable
     const headersEnv = process.env.OTEL_EXPORTER_OTLP_HEADERS;
     const headers: Record<string, string> = {};
-    
+
     if (headersEnv) {
-      console.log(`[JAF:OTEL] Parsing headers: ${headersEnv}`);
-      // Parse comma-separated key=value pairs
+      // Parse comma-separated key=value pairs (do not log the header values for security)
       headersEnv.split(',').forEach(header => {
         const [key, value] = header.trim().split('=');
         if (key && value) {
@@ -271,11 +409,9 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
   constructor(serviceName: string = 'jaf-agent') {
     // Initialize OpenTelemetry SDK if URL is configured and not already initialized
     const collectorUrl = process.env.TRACE_COLLECTOR_URL;
-    const headersEnv = process.env.OTEL_EXPORTER_OTLP_HEADERS;
-    
+
     console.log(`[OTEL] Constructor called with serviceName: ${serviceName}`);
     console.log(`[OTEL] TRACE_COLLECTOR_URL: ${collectorUrl}`);
-    console.log(`[OTEL] OTEL_EXPORTER_OTLP_HEADERS: ${headersEnv}`);
     console.log(`[OTEL] otelSdk already initialized: ${!!otelSdk}`);
     console.log(`[OTEL] NodeSDK available: ${!!NodeSDK}`);
     console.log(`[OTEL] OTLPTraceExporter available: ${!!OTLPTraceExporter}`);
@@ -333,7 +469,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
           let userQuery: string | null = null;
           let userId: string | null = null;
           
-          // Debug: Print the event data structure to understand what we're working with
+          // Debug: Print the event data structure (sanitized for security)
           console.log(`[OTEL DEBUG] Event data keys: ${Object.keys(data).join(', ')}`);
           if ((data as any).context) {
             const context = (data as any).context;
@@ -401,7 +537,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
           
           console.log(`[OTEL DEBUG] Final extracted - user_query: ${userQuery}, user_id: ${userId}`);
           
-          // Create comprehensive input data for the trace
+          // Create comprehensive input data for the trace (sanitized)
           const traceInput = {
             user_query: userQuery,
             run_id: String(traceId),
@@ -411,7 +547,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               user_id: userId || (data as any).userId
             }
           };
-          
+
           const rootSpan = this.tracer.startSpan(`jaf-run-${traceId}`, {
             attributes: {
               'framework': 'jaf',
@@ -421,7 +557,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               'user.id': userId || (data as any).userId || 'anonymous',
               'agent.name': (data as any).agentName || 'analytics_agent_jaf',
               'session.id': (data as any).sessionId || 'unknown',
-              'input': JSON.stringify(traceInput),
+              'input': JSON.stringify(sanitizeObject(traceInput)),
               'gen_ai.request.model': (data as any).model || 'unknown'
             }
           });
@@ -505,7 +641,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
                 'agent.name': (data as any).agentName || 'unknown',
                 'user.id': userId || 'unknown',
                 'user.query': userQuery || 'unknown',
-                'gen_ai.input.messages': JSON.stringify((data as any).messages || {}),
+                'gen_ai.input.messages': JSON.stringify(sanitizeObject((data as any).messages || {})),
               }
             }, ctx);
             generationSpan.setAttribute('model', model);
@@ -522,18 +658,12 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
           if (this.activeSpans.has(spanId)) {
             console.log(`[OTEL] Ending generation for LLM call`);
             const generationSpan = this.activeSpans.get(spanId);
-            
+
             const choice = (data as any).choice || {};
             const usage = (data as any).usage || {};
-            
-            // Extract model information from choice data or event data
-            let model = choice.model || 'unknown';
-            if (model === 'unknown') {
-              // Try to get model from the choice response structure
-              if (typeof choice === 'object') {
-                model = choice.model || choice.id || 'unknown';
-              }
-            }
+
+            // Extract model information from event data (not from choice)
+            let model = (data as any).model || 'unknown';
             
             // Set comprehensive attributes for cost calculation and tracking
             const promptTokens = usage.prompt_tokens || 0;
@@ -555,7 +685,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               'llm.model_name': model,
               'gen_ai.request.model': model,
               'gen_ai.response.model': model,
-              'gen_ai.output.messages': JSON.stringify(choice.message),
+              'gen_ai.output.messages': JSON.stringify(sanitizeObject(choice.message)),
               'llm.token_count.prompt': promptTokens,
               'llm.token_count.completion': completionTokens,
               'gen_ai.usage.input_tokens': promptTokens,
@@ -591,14 +721,14 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             
             console.log(`[OTEL] Starting span for tool call: ${toolName}`);
             
-            // Create comprehensive input data for the tool call
+            // Create comprehensive input data for the tool call (sanitized)
             const toolInput = {
               tool_name: toolName,
-              arguments: toolArgs,
+              arguments: sanitizeObject(toolArgs),
               call_id: (data as any).callId,
               timestamp: new Date().toISOString()
             };
-            
+
             const rootSpan = this.traceSpans.get(traceId);
             const ctx = trace.setSpan(context.active(), rootSpan);
             const toolSpan = this.tracer.startSpan(`tool-${toolName}`, {
@@ -608,13 +738,13 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
                 'framework': 'jaf',
                 'input': JSON.stringify(toolInput),
                 'event.type': 'tool_call',
-                'args': JSON.stringify(toolArgs)
+                'args': JSON.stringify(sanitizeObject(toolArgs))
               }
             }, ctx);
             
             const toolSpanId = this._getSpanId(event);
             this.activeSpans.set(toolSpanId, toolSpan);
-            console.log(`[OTEL] Created tool span for ${toolName} with args: ${JSON.stringify(toolArgs).substring(0, 100)}...`);
+            console.log(`[OTEL] Created tool span for ${toolName} with sanitized args`);
           }
           break;
         }
@@ -627,15 +757,15 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             
             console.log(`[OTEL] Ending span for tool call: ${toolName}`);
             
-            // Create comprehensive output data for the tool call
+            // Create comprehensive output data for the tool call (sanitized)
             const toolOutput = {
               tool_name: toolName,
-              result: toolResult,
+              result: sanitizeObject(toolResult),
               call_id: (data as any).callId,
               timestamp: new Date().toISOString(),
               status: 'completed'
             };
-            
+
             // End the span with detailed output
             const toolSpan = this.activeSpans.get(toolSpanId);
             toolSpan.setAttributes({
@@ -665,14 +795,14 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             console.log(`[OTEL] Creating event for handoff`);
             const rootSpan = this.traceSpans.get(traceId);
             const ctx = trace.setSpan(context.active(), rootSpan);
-            
+
             const handoffSpan = this.tracer.startSpan('agent-handoff', {
               attributes: {
                 'from_agent': (data as any).from || 'unknown',
                 'to_agent': (data as any).to || 'unknown',
                 'framework': 'jaf',
                 'event_type': 'handoff',
-                'input': JSON.stringify(data)
+                'input': JSON.stringify(sanitizeObject(data))
               }
             }, ctx);
             
@@ -688,7 +818,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             console.log(`[OTEL] Creating span for agent processing: ${(data as any).agentName}`);
             const rootSpan = this.traceSpans.get(traceId);
             const ctx = trace.setSpan(context.active(), rootSpan);
-            
+
             const processingSpan = this.tracer.startSpan(`agent-processing-${(data as any).agentName}`, {
               attributes: {
                 'agent_name': (data as any).agentName || 'unknown',
@@ -698,7 +828,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
                 'handoffs_available': JSON.stringify((data as any).handoffsAvailable || []),
                 'framework': 'jaf',
                 'event_type': 'agent_processing',
-                'input': JSON.stringify(data)
+                'input': JSON.stringify(sanitizeObject(data))
               }
             }, ctx);
             
@@ -715,12 +845,12 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             console.log(`[OTEL] Creating generic span for: ${eventType}`);
             const rootSpan = this.traceSpans.get(traceId);
             const ctx = trace.setSpan(context.active(), rootSpan);
-            
+
             const genericSpan = this.tracer.startSpan(eventType, {
               attributes: {
                 'framework': 'jaf',
                 'event_type': eventType,
-                'input': JSON.stringify(data)
+                'input': JSON.stringify(sanitizeObject(data))
               }
             }, ctx);
             
