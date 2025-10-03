@@ -144,7 +144,7 @@ export function resetSanitizationConfig(): void {
  * @param depth - Current recursion depth
  * @param config - Optional sanitization config (uses global config if not provided)
  */
-function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
+export function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
   const effectiveConfig = config || globalSanitizationConfig;
   const mode = effectiveConfig.mode || 'blacklist';
   const allowedFields = effectiveConfig.allowedFields || [];
@@ -521,6 +521,8 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             const context = (data as any).context;
             console.log(`[OTEL DEBUG] Context type: ${typeof context}`);
             console.log(`[OTEL DEBUG] Context keys: ${Object.keys(context || {}).join(', ')}`);
+            // Log sanitized context for debugging
+            console.log(`[OTEL DEBUG] Sanitized context:`, sanitizeObject(context));
           }
           
           // Try to extract from context first
@@ -538,7 +540,8 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               console.log(`[OTEL DEBUG] Found combined_history with ${history.length} messages`);
               for (let i = history.length - 1; i >= 0; i--) {
                 const msg = history[i];
-                console.log(`[OTEL DEBUG] History message ${history.length - 1 - i}: ${JSON.stringify(msg).substring(0, 100)}...`);
+                // Log sanitized message instead of raw content
+                console.log(`[OTEL DEBUG] History message ${history.length - 1 - i}:`, sanitizeObject(msg));
                 if (typeof msg === 'object' && msg?.role === 'user') {
                   userQuery = msg.content || '';
                   console.log(`[OTEL DEBUG] Found user_query from history: ${userQuery}`);
@@ -572,7 +575,8 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             // Find the last user message which should be the current query
             for (let i = messages.length - 1; i >= 0; i--) {
               const msg = messages[i];
-              console.log(`[OTEL DEBUG] Message ${messages.length - 1 - i}: ${JSON.stringify(msg).substring(0, 100)}...`);
+              // Log sanitized message instead of raw content
+              console.log(`[OTEL DEBUG] Message ${messages.length - 1 - i}:`, sanitizeObject(msg));
               if (typeof msg === 'object' && msg?.role === 'user') {
                 userQuery = msg.content || '';
                 console.log(`[OTEL DEBUG] Found user_query from messages: ${userQuery}`);
