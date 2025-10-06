@@ -3,9 +3,9 @@
  * Handles A2A protocol execution without classes or mutable state
  */
 
-import type { 
-  A2AAgent, 
-  A2ATask, 
+import type {
+  A2AAgent,
+  A2ATask,
   A2AMessage,
   AgentState,
   A2AStreamEvent
@@ -22,6 +22,7 @@ import {
   createA2ADataMessage
 } from './agent.js';
 import { A2ATaskProvider } from './memory/types.js';
+import { safeConsole } from '../utils/logger.js';
 
 // Pure function types for execution
 export type A2AExecutionContext = {
@@ -463,7 +464,7 @@ export const executeA2AAgentWithProvider = async (
     const workingTask = updateA2ATaskStatus(currentTask, 'working');
     const updateResult = await context.taskProvider.updateTask(workingTask);
     if (!updateResult.success) {
-      console.warn(`Failed to update task status: ${updateResult.error.message}`);
+      safeConsole.warn(`Failed to update task status: ${updateResult.error.message}`);
     }
     
     // Process through agent
@@ -473,7 +474,7 @@ export const executeA2AAgentWithProvider = async (
     // Store final task state
     const finalStoreResult = await context.taskProvider.updateTask(processingResult.task);
     if (!finalStoreResult.success) {
-      console.warn(`Failed to store final task: ${finalStoreResult.error.message}`);
+      safeConsole.warn(`Failed to store final task: ${finalStoreResult.error.message}`);
     }
     
     // Check if the task failed during processing

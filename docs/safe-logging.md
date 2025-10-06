@@ -296,9 +296,3 @@ safeConsole.log('Starting server with config:', config);  // Sanitized
 safeConsole.log('User logged in:', userData);              // Sanitized
 safeConsole.log('Context:', context);                       // Sanitized
 ```
-
-## See Also
-
-- [Custom Sanitization Guide](./sanitization.md) - Advanced sanitization patterns
-- [Tracing Documentation](./tracing.md) - OpenTelemetry trace sanitization
-- [Examples](../examples/safe-logging-example.ts) - Complete working examples

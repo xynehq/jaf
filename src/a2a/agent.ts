@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { A2AAgent, A2AAgentTool, ToolContext, A2AToolResult, AgentState, StreamEvent } from './types.js';
 import { run } from '../core/engine.js';
 import { createRunId, createTraceId, type RunState, type Message, type Agent, type Tool, type RunConfig } from '../core/types.js';
+import { safeConsole } from '../utils/logger.js';
 
 // Pure function to create A2A compatible agent
 export const createA2AAgent = (config: {
@@ -120,7 +121,7 @@ export const createRunConfigForA2AAgent = (
     modelProvider,
     maxTurns: 10,
     onEvent: (event) => {
-      console.log(`[A2A:${a2aAgent.name}] ${event.type}:`, event.data);
+      safeConsole.log(`[A2A:${a2aAgent.name}] ${event.type}:`, event.data);
     }
   };
 };

@@ -1,9 +1,9 @@
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
-import { 
-  ServerConfig, 
-  ChatRequest, 
-  ChatResponse, 
+import {
+  ServerConfig,
+  ChatRequest,
+  ChatResponse,
   AgentListResponse,
   HealthResponse,
   HttpMessage,
@@ -13,6 +13,7 @@ import {
 import { run, runStream } from '../core/engine.js';
 import { RunState, Message, createRunId, createTraceId } from '../core/types.js';
 import { v4 as uuidv4 } from 'uuid';
+import { safeConsole } from '../utils/logger.js';
 
 // Helper: stable stringify to create deterministic signatures
 function stableStringify(value: any): string {
@@ -129,7 +130,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
 } {
   // BACKWARDS COMPATIBILITY: Handle legacy agentRegistry at top level
   if (config.agentRegistry && !config.runConfig.agentRegistry) {
-    console.warn('[JAF:SERVER] DEPRECATED: agentRegistry should be provided in runConfig.agentRegistry. Using legacy configuration for backwards compatibility.');
+    safeConsole.warn('[JAF:SERVER] DEPRECATED: agentRegistry should be provided in runConfig.agentRegistry. Using legacy configuration for backwards compatibility.');
     (config.runConfig as any).agentRegistry = config.agentRegistry;
   }
   
@@ -846,7 +847,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       
       const host = config.host || 'localhost';
       const port = config.port || 3000;
-      
+
     // Approvals SSE stream
     app.get('/approvals/stream', async (
       request: FastifyRequest<{ Querystring: { conversationId?: string } }>,
@@ -883,25 +884,25 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       return undefined as any;
     });
-      console.log(`🔧 Starting Fastify server on ${host}:${port}...`);
-      await app.listen({ 
-        port, 
-        host 
+      safeConsole.log(`🔧 Starting Fastify server on ${host}:${port}...`);
+      await app.listen({
+        port,
+        host
       });
-      console.log(`🔧 Fastify server started successfully`);
-      
-      console.log(`🚀 JAF Server running on http://${host}:${port}`);
-      console.log(`📋 Available agents: ${Array.from(config.runConfig.agentRegistry.keys()).join(', ')}`);
-      console.log(`🏥 Health check: http://${host}:${port}/health`);
-      console.log(`🤖 Agents list: http://${host}:${port}/agents`);
-      console.log(`💬 Chat endpoint: http://${host}:${port}/chat`);
-      
+      safeConsole.log(`🔧 Fastify server started successfully`);
+
+      safeConsole.log(`🚀 JAF Server running on http://${host}:${port}`);
+      safeConsole.log(`📋 Available agents: ${Array.from(config.runConfig.agentRegistry.keys()).join(', ')}`);
+      safeConsole.log(`🏥 Health check: http://${host}:${port}/health`);
+      safeConsole.log(`🤖 Agents list: http://${host}:${port}/agents`);
+      safeConsole.log(`💬 Chat endpoint: http://${host}:${port}/chat`);
+
       if (config.defaultMemoryProvider) {
-        console.log(`🧠 Memory provider: Configured`);
-        console.log(`📊 Memory health: http://${host}:${port}/memory/health`);
-        console.log(`💾 Conversation management: http://${host}:${port}/conversations/:id`);
+        safeConsole.log(`🧠 Memory provider: Configured`);
+        safeConsole.log(`📊 Memory health: http://${host}:${port}/memory/health`);
+        safeConsole.log(`💾 Conversation management: http://${host}:${port}/conversations/:id`);
       } else {
-        console.log(`🧠 Memory provider: Not configured (conversations will not persist)`);
+        safeConsole.log(`🧠 Memory provider: Not configured (conversations will not persist)`);
       }
     } catch (error) {
       app.log.error(error);

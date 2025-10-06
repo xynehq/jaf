@@ -1,10 +1,11 @@
 /**
  * JAF ADK Layer - LLM Error Handling
- * 
+ *
  * Comprehensive error handling for LLM API failures following JAF patterns
  */
 
 import { createAdkError, createAgentError, AdkErrorObject } from '../types.js';
+import { safeConsole } from '../../utils/logger.js';
 
 // ========== Error Types ==========
 
@@ -234,8 +235,8 @@ export const withLLMRetry = <T extends unknown[], R>(
         }
         
         const delay = calculateRetryDelay(attempt, retryConfig);
-        console.warn(`[ADK:LLM] Attempt ${attempt + 1} failed, retrying in ${delay}ms:`, lastError.message);
-        
+        safeConsole.warn(`[ADK:LLM] Attempt ${attempt + 1} failed, retrying in ${delay}ms:`, lastError.message);
+
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -298,7 +299,7 @@ export const createCircuitBreaker = <T extends unknown[], R>(
     // Check if we should reset from open to half-open
     if (state.state === 'open' && now - state.lastFailureTime >= config.resetTimeout) {
       state.state = 'half-open';
-      console.log(`[ADK:LLM] Circuit breaker ${provider}/${model} moving to half-open`);
+      safeConsole.log(`[ADK:LLM] Circuit breaker ${provider}/${model} moving to half-open`);
     }
     
     // Reject immediately if circuit is open
@@ -317,9 +318,9 @@ export const createCircuitBreaker = <T extends unknown[], R>(
       if (state.state === 'half-open') {
         state.state = 'closed';
         state.failures = 0;
-        console.log(`[ADK:LLM] Circuit breaker ${provider}/${model} reset to closed`);
+        safeConsole.log(`[ADK:LLM] Circuit breaker ${provider}/${model} reset to closed`);
       }
-      
+
       return result;
     } catch (error) {
       state.failures++;
@@ -328,9 +329,9 @@ export const createCircuitBreaker = <T extends unknown[], R>(
       // Open circuit if threshold exceeded
       if (state.failures >= config.failureThreshold) {
         state.state = 'open';
-        console.warn(`[ADK:LLM] Circuit breaker ${provider}/${model} opened after ${state.failures} failures`);
+        safeConsole.warn(`[ADK:LLM] Circuit breaker ${provider}/${model} opened after ${state.failures} failures`);
       }
-      
+
       throw error;
     }
   };
@@ -350,9 +351,9 @@ export const createFallbackStrategy = <T extends unknown[], R>(
       const llmError = error instanceof Error 
         ? classifyLLMError(error, 'unknown', 'unknown')
         : createLLMError(String(error), LLM_ERROR_TYPES.UNKNOWN_ERROR);
-      
+
       if (shouldFallback(llmError)) {
-        console.warn(`[ADK:LLM] Primary function failed, using fallback:`, llmError.message);
+        safeConsole.warn(`[ADK:LLM] Primary function failed, using fallback:`, llmError.message);
         return await fallbackFn(...args);
       }
       
@@ -424,7 +425,7 @@ export interface LLMErrorLogger {
 
 export const createLLMErrorLogger = (): LLMErrorLogger => ({
   logError: (error: LLMError, context?: Record<string, unknown>) => {
-    console.error(`[ADK:LLM:ERROR] ${error.code}: ${error.message}`, {
+    safeConsole.error(`[ADK:LLM:ERROR] ${error.code}: ${error.message}`, {
       provider: error.provider,
       model: error.model,
       retryable: error.retryable,
@@ -432,17 +433,17 @@ export const createLLMErrorLogger = (): LLMErrorLogger => ({
       context
     });
   },
-  
+
   logRetry: (error: LLMError, attempt: number, delay: number) => {
-    console.warn(`[ADK:LLM:RETRY] Attempt ${attempt} failed: ${error.message}. Retrying in ${delay}ms`, {
+    safeConsole.warn(`[ADK:LLM:RETRY] Attempt ${attempt} failed: ${error.message}. Retrying in ${delay}ms`, {
       provider: error.provider,
       model: error.model,
       code: error.code
     });
   },
-  
+
   logRecovery: (error: LLMError, recoveryMethod: string) => {
-    console.info(`[ADK:LLM:RECOVERY] Recovered from error using ${recoveryMethod}: ${error.message}`, {
+    safeConsole.info(`[ADK:LLM:RECOVERY] Recovered from error using ${recoveryMethod}: ${error.message}`, {
       provider: error.provider,
       model: error.model,
       code: error.code

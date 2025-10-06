@@ -306,13 +306,13 @@ export class ConsoleTraceCollector implements TraceCollector {
         console.log(`${prefix} Agent handoff: ${event.data.from} → ${event.data.to}`);
         break;
       case 'handoff_denied':
-        console.warn(`${prefix} Handoff denied: ${event.data.from} → ${event.data.to}. Reason: ${event.data.reason}`);
+        console.warn(`${prefix} Handoff denied: ${event.data.from} → ${event.data.to}. Reason:`, sanitizeObject({ reason: event.data.reason }));
         break;
       case 'guardrail_violation':
-        console.warn(`${prefix} Guardrail violation (${event.data.stage}): ${event.data.reason}`);
+        console.warn(`${prefix} Guardrail violation (${event.data.stage}):`, sanitizeObject({ reason: event.data.reason }));
         break;
       case 'decode_error':
-        console.error(`${prefix} Decode error:`, event.data.errors);
+        console.error(`${prefix} Decode error:`, sanitizeObject(event.data.errors));
         break;
       case 'agent_processing':
         console.log(`${prefix} Agent ${event.data.agentName} processing (turn ${event.data.turnCount}, ${event.data.messageCount} messages, ${event.data.toolsAvailable.length} tools)`);
@@ -531,7 +531,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             // Try direct attribute access
             if (context.query) {
               userQuery = context.query;
-              console.log(`[OTEL DEBUG] Found user_query from context.query: ${userQuery}`);
+              console.log(`[OTEL DEBUG] Found user_query from context.query:`, sanitizeObject({ query: userQuery }));
             }
             
             // Try to extract from combined_history
@@ -544,7 +544,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
                 console.log(`[OTEL DEBUG] History message ${history.length - 1 - i}:`, sanitizeObject(msg));
                 if (typeof msg === 'object' && msg?.role === 'user') {
                   userQuery = msg.content || '';
-                  console.log(`[OTEL DEBUG] Found user_query from history: ${userQuery}`);
+                  console.log(`[OTEL DEBUG] Found user_query from history:`, sanitizeObject({ query: userQuery }));
                   break;
                 }
               }
@@ -556,14 +556,14 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               console.log(`[OTEL DEBUG] Found token_response: ${typeof tokenResponse}`);
               if (typeof tokenResponse === 'object') {
                 userId = tokenResponse.email || tokenResponse.username || null;
-                console.log(`[OTEL DEBUG] Extracted user_id: ${userId}`);
+                console.log(`[OTEL DEBUG] Extracted user_id:`, sanitizeObject({ userId }));
               }
             }
             
             // Also try direct userId from context
             if (context.userId) {
               userId = context.userId;
-              console.log(`[OTEL DEBUG] Found userId directly in context: ${userId}`);
+              console.log(`[OTEL DEBUG] Found userId directly in context:`, sanitizeObject({ userId }));
             }
           }
           
@@ -579,13 +579,13 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               console.log(`[OTEL DEBUG] Message ${messages.length - 1 - i}:`, sanitizeObject(msg));
               if (typeof msg === 'object' && msg?.role === 'user') {
                 userQuery = msg.content || '';
-                console.log(`[OTEL DEBUG] Found user_query from messages: ${userQuery}`);
+                console.log(`[OTEL DEBUG] Found user_query from messages:`, sanitizeObject({ query: userQuery }));
                 break;
               }
             }
           }
           
-          console.log(`[OTEL DEBUG] Final extracted - user_query: ${userQuery}, user_id: ${userId}`);
+          console.log(`[OTEL DEBUG] Final extracted:`, sanitizeObject({ user_query: userQuery, user_id: userId }));
           
           // Create comprehensive input data for the trace (sanitized)
           const traceInput = {
@@ -616,7 +616,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
           // Store user_id and user_query for later use in generations
           (rootSpan as any)._user_id = userId || (data as any).userId;
           (rootSpan as any)._user_query = userQuery;
-          console.log(`[OTEL] Created trace with user query: ${userQuery ? userQuery.substring(0, 100) + '...' : 'None'}`);
+          console.log(`[OTEL] Created trace with user query:`, sanitizeObject({ query: userQuery ? userQuery.substring(0, 100) + '...' : 'None' }));
           break;
         }
 

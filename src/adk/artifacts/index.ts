@@ -1,11 +1,12 @@
 /**
  * JAF ADK Layer - Artifact Storage System
- * 
+ *
  * Provides persistent key-value storage for agent conversations
  * with support for multiple storage backends
  */
 
 import { Session } from '../types.js';
+import { safeConsole } from '../../utils/logger.js';
 
 // ========== Types ==========
 
@@ -251,11 +252,11 @@ export const createRedisArtifactStorage = (config: {
             artifacts.push(JSON.parse(value));
           } catch (error) {
             // Log error but continue with other artifacts
-            console.error(`[Artifacts] Failed to parse artifact: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            safeConsole.error(`[Artifacts] Failed to parse artifact: ${error instanceof Error ? error.message : 'Unknown error'}`);
           }
         }
       }
-      
+
       return artifacts;
     },
     
@@ -323,7 +324,7 @@ export const createPostgresArtifactStorage = (config: {
   
   // Initialize table asynchronously
   const initPromise = initializeTable().catch(error => {
-    console.error('Failed to initialize PostgreSQL artifact storage table:', error);
+    safeConsole.error('Failed to initialize PostgreSQL artifact storage table:', error);
     throw error;
   });
   

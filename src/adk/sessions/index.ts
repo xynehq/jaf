@@ -1,13 +1,13 @@
 /**
  * JAF ADK Layer - Session Management
- * 
+ *
  * Functional session management with pluggable providers
  */
 
-import { 
-  Session, 
-  SessionContext, 
-  SessionProvider, 
+import {
+  Session,
+  SessionContext,
+  SessionProvider,
   SessionMetadata,
   Content,
   SessionError,
@@ -15,6 +15,7 @@ import {
   throwSessionError,
   createSessionError
 } from '../types';
+import { safeConsole } from '../../utils/logger.js';
 
 // ========== Session Creation ==========
 
@@ -133,14 +134,14 @@ export const createMockRedisSessionProvider = (config: MockRedisConfig): Session
     
     // Handle connection errors
     redis.on('error', (err: any) => {
-      console.error('[ADK:Sessions] Redis connection error:', err);
+      safeConsole.error('[ADK:Sessions] Redis connection error:', err);
     });
-    
+
     redis.on('connect', () => {
-      console.log('[ADK:Sessions] Connected to Redis');
+      safeConsole.log('[ADK:Sessions] Connected to Redis');
     });
   } catch (error) {
-    console.warn('[ADK:Sessions] ioredis not found, falling back to mock implementation');
+    safeConsole.warn('[ADK:Sessions] ioredis not found, falling back to mock implementation');
     // Fallback to mock Map if ioredis not available
     redis = new Map<string, string>();
   }

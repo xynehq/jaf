@@ -1,8 +1,8 @@
 import { Message, TraceId } from '../../core/types';
-import { 
-  MemoryProvider, 
-  ConversationMemory, 
-  MemoryQuery, 
+import {
+  MemoryProvider,
+  ConversationMemory,
+  MemoryQuery,
   RedisConfig,
   Result,
   createSuccess,
@@ -11,6 +11,7 @@ import {
   createMemoryNotFoundError,
   createMemoryStorageError
 } from '../types';
+import { safeConsole } from '../../utils/logger.js';
 
 // Redis client interface - compatible with ioredis, node-redis, etc.
 interface RedisClient {
@@ -40,7 +41,7 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
   
   try {
     await redisClient.ping();
-    console.log(`[MEMORY:Redis] Connected to Redis at ${fullConfig.host}:${fullConfig.port}`);
+    safeConsole.log(`[MEMORY:Redis] Connected to Redis at ${fullConfig.host}:${fullConfig.port}`);
   } catch (error) {
     throw createMemoryConnectionError('Redis', error as Error);
   }
@@ -93,7 +94,7 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
         await client.expire(key, fullConfig.ttl);
       }
       
-      console.log(`[MEMORY:Redis] Stored ${messages.length} messages for conversation ${conversationId}`);
+      safeConsole.log(`[MEMORY:Redis] Stored ${messages.length} messages for conversation ${conversationId}`);
       return createSuccess(undefined);
     } catch (error) {
       return createFailure(createMemoryStorageError('store messages', 'Redis', error as Error));
@@ -134,9 +135,9 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
       };
       
       // Store updated last activity (fire and forget)
-      client.set(key, JSON.stringify(updatedConversation, null, 0)).catch(console.error);
-      
-      console.log(`[MEMORY:Redis] Retrieved conversation ${conversationId} with ${convertedConversation.messages.length} messages`);
+      client.set(key, JSON.stringify(updatedConversation, null, 0)).catch(safeConsole.error);
+
+      safeConsole.log(`[MEMORY:Redis] Retrieved conversation ${conversationId} with ${convertedConversation.messages.length} messages`);
       return createSuccess(updatedConversation);
     } catch (error) {
       return createFailure(createMemoryStorageError('get conversation', 'Redis', error as Error));
@@ -186,7 +187,7 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
         await client.expire(key, fullConfig.ttl);
       }
       
-      console.log(`[MEMORY:Redis] Appended ${messages.length} messages to conversation ${conversationId} (total: ${updatedMessages.length})`);
+      safeConsole.log(`[MEMORY:Redis] Appended ${messages.length} messages to conversation ${conversationId} (total: ${updatedMessages.length})`);
       return createSuccess(undefined);
     } catch (error) {
       return createFailure(createMemoryStorageError('append messages', 'Redis', error as Error));
@@ -268,7 +269,7 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
       const limit = query.limit || results.length;
       const paginatedResults = results.slice(offset, offset + limit);
       
-      console.log(`[MEMORY:Redis] Found ${paginatedResults.length} conversations matching query`);
+      safeConsole.log(`[MEMORY:Redis] Found ${paginatedResults.length} conversations matching query`);
       return createSuccess(paginatedResults);
     } catch (error) {
       return createFailure(createMemoryStorageError('find conversations', 'Redis', error as Error));
@@ -286,7 +287,7 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
     }
 
     const messages = conversationResult.data.messages.slice(-limit);
-    console.log(`[MEMORY:Redis] Retrieved ${messages.length} recent messages for conversation ${conversationId}`);
+    safeConsole.log(`[MEMORY:Redis] Retrieved ${messages.length} recent messages for conversation ${conversationId}`);
     return createSuccess(messages);
   };
 
@@ -297,7 +298,7 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
       const key = getKey(conversationId);
       const deleted = await client.del(key);
       
-      console.log(`[MEMORY:Redis] ${deleted > 0 ? 'Deleted' : 'Attempted to delete non-existent'} conversation ${conversationId}`);
+      safeConsole.log(`[MEMORY:Redis] ${deleted > 0 ? 'Deleted' : 'Attempted to delete non-existent'} conversation ${conversationId}`);
       return createSuccess(deleted > 0);
     } catch (error) {
       return createFailure(createMemoryStorageError('delete conversation', 'Redis', error as Error));
@@ -325,7 +326,7 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
         deletedCount += results.reduce((sum, result) => sum + result, 0);
       }
       
-      console.log(`[MEMORY:Redis] Cleared ${deletedCount} conversations for user ${userId}`);
+      safeConsole.log(`[MEMORY:Redis] Cleared ${deletedCount} conversations for user ${userId}`);
       return createSuccess(deletedCount);
     } catch (error) {
       return createFailure(createMemoryStorageError('clear user conversations', 'Redis', error as Error));
@@ -428,7 +429,7 @@ export async function createRedisProvider(config: RedisConfig, redisClient: Redi
   const close = async (): Promise<Result<void>> => {
     try {
       if (redisClient) {
-        console.log('[MEMORY:Redis] Closing Redis connection');
+        safeConsole.log('[MEMORY:Redis] Closing Redis connection');
         await redisClient.quit();
       }
       return createSuccess(undefined);
