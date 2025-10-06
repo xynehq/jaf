@@ -501,12 +501,12 @@ describe('Streaming System', () => {
       expect(events).toHaveLength(1);
     });
 
-    test('logStream should create logger function', () => {
+    test('logStream should create logger function', async () => {
       const logger = logStream('TEST');
       const event = createMessageDeltaEvent(createUserMessage('Test'));
 
       // Mock safeConsole.log to capture output (safeConsole sanitizes before logging)
-      const safeConsole = require('../../utils/logger').safeConsole;
+      const { safeConsole } = await import('../../utils/logger.js');
       const consoleSpy = jest.spyOn(safeConsole, 'log').mockImplementation();
 
       logger(event);
