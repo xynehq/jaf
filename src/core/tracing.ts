@@ -636,7 +636,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             if (outcome) {
               const attributes = {
                 'run_status': outcome.status || 'unknown',
-                'output': JSON.stringify(outcome.output),
+                'output': JSON.stringify(sanitizeObject(outcome.output)),
                 'model': model,
                 'gen_ai.request.model': model,
                 'llm.token_count.total': totalUsage.total,
@@ -648,7 +648,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
                 'gen_ai.usage.output_tokens': totalUsage.completion,
               };
               rootSpan.setAttributes(attributes);
-              console.log('[OTEL] Root span attributes:', attributes);
+              console.log('[OTEL] Root span attributes:', sanitizeObject(attributes));
               
               if (outcome.status !== 'completed' && outcome.error) {
                 rootSpan.recordException(new Error(outcome.error._tag || 'Unknown error'));
