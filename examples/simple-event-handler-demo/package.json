@@ -1,0 +1,21 @@
+{
+  "name": "jaf-simple-event-handler-demo",
+  "version": "1.0.0",
+  "description": "Demonstration of createSimpleEventHandler() for easier event handling in @xynehq/jaf",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "tsx index.ts",
+    "start": "tsx index.ts",
+    "build": "tsc",
+    "dist": "node dist/index.js"
+  },
+  "dependencies": {
+    "@xynehq/jaf": "workspace:*",
+    "dotenv": "^17.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
