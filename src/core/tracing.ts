@@ -753,7 +753,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               'gen_ai.response.id': choice.id || 'unknown',
             };
             generationSpan.setAttributes(attributes);
-            console.log('[OTEL] Generation span attributes:', attributes);
+            console.log('[OTEL] Generation span attributes:', sanitizeObject(attributes));
             
             console.log(`[OTEL] Usage data for cost tracking: prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokens}`);
             
