@@ -144,7 +144,7 @@ export function resetSanitizationConfig(): void {
  * @param depth - Current recursion depth
  * @param config - Optional sanitization config (uses global config if not provided)
  */
-export function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
+export function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig, currentPath = ''): any {
   const effectiveConfig = config || globalSanitizationConfig;
   const mode = effectiveConfig.mode || 'blacklist';
   const allowedFields = effectiveConfig.allowedFields || [];
@@ -163,11 +163,15 @@ export function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig)
   if (typeof obj !== 'object') return obj;
 
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item, depth + 1, config));
+    // For arrays, keep the same path (don't add indices)
+    return obj.map(item => sanitizeObject(item, depth + 1, config, currentPath));
   }
 
   const sanitized: any = {};
   for (const [key, value] of Object.entries(obj)) {
+    // Build the full path for this key
+    const fullPath = currentPath ? `${currentPath}.${key}` : key;
+
     // Try custom sanitizer first
     if (customSanitizer) {
       try {
@@ -183,20 +187,22 @@ export function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig)
     }
 
     const lowerKey = key.toLowerCase();
+    const lowerFullPath = fullPath.toLowerCase();
 
     // WHITELIST MODE: Redact everything EXCEPT allowed fields
     if (mode === 'whitelist') {
-      // Use exact match only for security (no substring matching)
-      const isAllowed = allowedFields.some(field =>
-        lowerKey === field.toLowerCase()
-      );
+      // Check if the full path OR just the key is in the whitelist
+      const isAllowed = allowedFields.some(field => {
+        const lowerField = field.toLowerCase();
+        return lowerFullPath === lowerField || lowerKey === lowerField;
+      });
 
       if (!isAllowed) {
         // Field not in whitelist - redact it
         sanitized[key] = redactionPlaceholder;
       } else if (typeof value === 'object' && value !== null) {
         // Field is allowed and is an object - sanitize recursively
-        sanitized[key] = sanitizeObject(value, depth + 1, config);
+        sanitized[key] = sanitizeObject(value, depth + 1, config, fullPath);
       } else {
         // Field is allowed and is a primitive - keep it
         sanitized[key] = value;
@@ -212,7 +218,7 @@ export function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig)
       // This prevents leaking sensitive information in nested objects
       sanitized[key] = redactionPlaceholder;
     } else if (typeof value === 'object' && value !== null) {
-      sanitized[key] = sanitizeObject(value, depth + 1, config);
+      sanitized[key] = sanitizeObject(value, depth + 1, config, fullPath);
     } else {
       sanitized[key] = value;
     }
