@@ -187,6 +187,10 @@ export type RunResult<Out> = {
       };
 };
 
+/**
+ * Comprehensive trace event system with discriminated unions
+ * All events follow the pattern: { type: string, data: {...properties} }
+ */
 export type TraceEvent =
   | { type: 'run_start'; data: { runId: RunId; traceId: TraceId; context?: any; userId?: string; sessionId?: string; messages?: readonly Message[]; } }
   | { type: 'turn_start'; data: { turn: number; agentName: string } }
@@ -209,6 +213,159 @@ export type TraceEvent =
   | { type: 'decode_error'; data: { errors: z.ZodIssue[] } }
   | { type: 'turn_end'; data: { turn: number; agentName: string } }
   | { type: 'run_end'; data: { outcome: RunResult<any>['outcome']; traceId: TraceId; runId: RunId; } };
+
+/**
+ * Helper type to extract event data by event type
+ * @example EventData<'llm_call_end'> -> { choice: any, fullResponse?: any, ... }
+ */
+export type EventData<T extends TraceEvent['type']> = Extract<TraceEvent, { type: T }>['data'];
+
+/**
+ * Token usage information from LLM calls
+ */
+export type TokenUsage = {
+  readonly prompt_tokens?: number;
+  readonly completion_tokens?: number;
+  readonly total_tokens?: number;
+};
+
+/**
+ * Cost estimation for LLM calls
+ */
+export type CostEstimate = {
+  readonly promptCost: number;
+  readonly completionCost: number;
+  readonly totalCost: number;
+};
+
+/**
+ * Simplified event handler interface for common use cases
+ * This provides an alternative to handling raw TraceEvent discriminated unions
+ *
+ * @example
+ * ```typescript
+ * const handler = createSimpleEventHandler({
+ *   onAssistantMessage: (content, thinking) => {
+ *     console.log('Assistant:', content);
+ *   },
+ *   onToolCalls: (calls) => {
+ *     console.log('Tools requested:', calls.map(c => c.name));
+ *   },
+ *   onToolResult: (toolName, result) => {
+ *     console.log(`${toolName} completed:`, result);
+ *   }
+ * });
+ * ```
+ */
+export type SimpleEventHandlers = {
+  /** Called when assistant generates a message */
+  onAssistantMessage?: (content: string, thinking?: string) => void;
+
+  /** Called when tool calls are requested */
+  onToolCalls?: (toolCalls: Array<{ id: string; name: string; args: any }>) => void;
+
+  /** Called when a tool execution completes */
+  onToolResult?: (toolName: string, result: string, error?: any) => void;
+
+  /** Called when an error occurs */
+  onError?: (error: any, context?: any) => void;
+
+  /** Called when run starts */
+  onRunStart?: (runId: RunId, traceId: TraceId) => void;
+
+  /** Called when run ends */
+  onRunEnd?: (outcome: RunResult<any>['outcome']) => void;
+
+  /** Called on token usage updates */
+  onTokenUsage?: (usage: TokenUsage) => void;
+
+  /** Called when agent hands off to another agent */
+  onHandoff?: (from: string, to: string) => void;
+};
+
+/**
+ * Create a TraceEvent handler from simple event handlers
+ * Converts the simplified handler API to a full TraceEvent handler
+ *
+ * @param handlers - Object with optional event handler callbacks
+ * @returns A function that handles TraceEvent discriminated unions
+ *
+ * @example
+ * ```typescript
+ * const config: RunConfig<MyContext> = {
+ *   // ... other config
+ *   onEvent: createSimpleEventHandler({
+ *     onAssistantMessage: (content) => console.log(content),
+ *     onToolCalls: (calls) => console.log('Tools:', calls),
+ *   })
+ * };
+ * ```
+ */
+export function createSimpleEventHandler(handlers: SimpleEventHandlers): (event: TraceEvent) => void {
+  return (event: TraceEvent) => {
+    switch (event.type) {
+      case 'run_start':
+        handlers.onRunStart?.(event.data.runId, event.data.traceId);
+        break;
+
+      case 'run_end':
+        handlers.onRunEnd?.(event.data.outcome);
+        break;
+
+      case 'assistant_message':
+        if (event.data.message.role === 'assistant') {
+          const content = getTextContent(event.data.message.content);
+          handlers.onAssistantMessage?.(content);
+        }
+        break;
+
+      case 'llm_call_end':
+        // Extract assistant message from LLM response
+        if (event.data.choice?.message) {
+          const content = getTextContent(event.data.choice.message.content || '');
+          if (content) {
+            handlers.onAssistantMessage?.(content);
+          }
+        }
+        // Handle token usage
+        if (event.data.usage) {
+          handlers.onTokenUsage?.(event.data.usage);
+        }
+        break;
+
+      case 'tool_requests':
+        handlers.onToolCalls?.(event.data.toolCalls);
+        break;
+
+      case 'tool_call_end':
+        handlers.onToolResult?.(
+          event.data.toolName,
+          event.data.result,
+          event.data.error
+        );
+        break;
+
+      case 'handoff':
+        handlers.onHandoff?.(event.data.from, event.data.to);
+        break;
+
+      case 'token_usage':
+        if (event.data.total || event.data.prompt || event.data.completion) {
+          handlers.onTokenUsage?.({
+            prompt_tokens: event.data.prompt,
+            completion_tokens: event.data.completion,
+            total_tokens: event.data.total,
+          });
+        }
+        break;
+
+      case 'decode_error':
+      case 'guardrail_violation':
+        handlers.onError?.(event.data);
+        break;
+    }
+  };
+}
 
 export type CompletionStreamChunk = {
   readonly delta?: string;
