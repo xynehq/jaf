@@ -3,11 +3,11 @@
  * Pure functional factory for creating A2A task providers
  */
 
-import { 
-  A2ATaskProvider, 
-  A2ATaskProviderConfig, 
-  A2AInMemoryTaskConfig, 
-  A2ARedisTaskConfig, 
+import {
+  A2ATaskProvider,
+  A2ATaskProviderConfig,
+  A2AInMemoryTaskConfig,
+  A2ARedisTaskConfig,
   A2APostgresTaskConfig,
   createA2ATaskStorageError,
   A2ATaskProviderConfigSchema
@@ -15,6 +15,7 @@ import {
 import { createA2AInMemoryTaskProvider } from './providers/in-memory.js';
 import { createA2ARedisTaskProvider } from './providers/redis.js';
 import { createA2APostgresTaskProvider } from './providers/postgres.js';
+import { safeConsole } from '../../utils/logger.js';
 
 /**
  * Create an A2A task provider from configuration
@@ -95,7 +96,7 @@ export const createA2ATaskProviderFromEnv = async (
     case 'redis':
       if (!externalClients?.redis) {
         // Fall back to in-memory provider when Redis client is not available
-        console.warn('Redis client not provided, falling back to in-memory A2A task provider');
+        safeConsole.warn('Redis client not provided, falling back to in-memory A2A task provider');
         return createA2AInMemoryTaskProvider({
           type: 'memory',
           keyPrefix: process.env.JAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'jaf:a2a:tasks:',
@@ -124,7 +125,7 @@ export const createA2ATaskProviderFromEnv = async (
     case 'postgres':
       if (!externalClients?.postgres) {
         // Fall back to in-memory provider when PostgreSQL client is not available
-        console.warn('PostgreSQL client not provided, falling back to in-memory A2A task provider');
+        safeConsole.warn('PostgreSQL client not provided, falling back to in-memory A2A task provider');
         return createA2AInMemoryTaskProvider({
           type: 'memory',
           keyPrefix: process.env.JAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'jaf:a2a:tasks:',
@@ -156,7 +157,7 @@ export const createA2ATaskProviderFromEnv = async (
 
     default:
       // Fall back to in-memory provider for unknown types
-      console.warn(`Unknown A2A task provider type "${taskMemoryType}", falling back to in-memory provider`);
+      safeConsole.warn(`Unknown A2A task provider type "${taskMemoryType}", falling back to in-memory provider`);
       return createA2AInMemoryTaskProvider({
         type: 'memory',
         keyPrefix: process.env.JAF_A2A_TASK_PROVIDER_KEY_PREFIX || 'jaf:a2a:tasks:',

@@ -501,15 +501,16 @@ describe('Streaming System', () => {
       expect(events).toHaveLength(1);
     });
 
-    test('logStream should create logger function', () => {
+    test('logStream should create logger function', async () => {
       const logger = logStream('TEST');
       const event = createMessageDeltaEvent(createUserMessage('Test'));
-      
-      // Mock console.log to capture output
-      const consoleSpy = jest.spyOn(console, 'log').mockImplementation();
-      
+
+      // Mock safeConsole.log to capture output (safeConsole sanitizes before logging)
+      const { safeConsole } = await import('../../utils/logger.js');
+      const consoleSpy = jest.spyOn(safeConsole, 'log').mockImplementation();
+
       logger(event);
-      
+
       expect(consoleSpy).toHaveBeenCalledWith(
         '[TEST] message_delta:',
         expect.objectContaining({
@@ -517,7 +518,7 @@ describe('Streaming System', () => {
           content: 'present'
         })
       );
-      
+
       consoleSpy.mockRestore();
     });
 

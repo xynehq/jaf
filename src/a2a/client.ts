@@ -3,16 +3,17 @@
  * All client operations are pure functions
  */
 
-import type { 
-  A2AClientConfig, 
-  A2AClientState, 
-  JSONRPCRequest, 
+import type {
+  A2AClientConfig,
+  A2AClientState,
+  JSONRPCRequest,
   JSONRPCResponse,
   SendMessageRequest,
   SendStreamingMessageRequest,
   AgentCard,
   A2AStreamEvent
 } from './types.js';
+import { safeConsole } from '../utils/logger.js';
 
 // Pure function to create A2A client
 export const createA2AClient = (baseUrl: string, config?: Partial<A2AClientConfig>): A2AClientState => ({
@@ -185,7 +186,7 @@ export const streamMessage = async function* (
                   yield event.result;
                 }
               } catch (error) {
-                console.warn('Failed to parse SSE data:', data);
+                safeConsole.warn('Failed to parse SSE data:', data);
               }
             }
           }
@@ -320,7 +321,7 @@ const streamToUrl = async function* (
                   yield event.result;
                 }
               } catch (error) {
-                console.warn('Failed to parse SSE data:', data);
+                safeConsole.warn('Failed to parse SSE data:', data);
               }
             }
           }

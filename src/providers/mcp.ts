@@ -4,6 +4,7 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { z } from 'zod';
 import { Tool } from '../core/types.js';
+import { safeConsole } from '../utils/logger.js';
 
 export interface MCPClient {
   listTools(): Promise<Array<{ 
@@ -42,7 +43,7 @@ export async function makeMCPClient(command: string, args: string[] = []): Promi
           inputSchema: tool.inputSchema
         }));
       } catch (error) {
-        console.error('Failed to list MCP tools:', error);
+        safeConsole.error('Failed to list MCP tools:', error);
         return [];
       }
     },
@@ -130,7 +131,7 @@ export async function makeMCPClientSSE(url: string, opts?: { headers?: Record<st
           inputSchema: tool.inputSchema
         }));
       } catch (error) {
-        console.error('Failed to list MCP tools (SSE):', error);
+        safeConsole.error('Failed to list MCP tools (SSE):', error);
         return [];
       }
     },
@@ -233,7 +234,7 @@ export async function makeMCPClientHTTP(url: string, opts?: {
           inputSchema: tool.inputSchema
         }));
       } catch (error) {
-        console.error('Failed to list MCP tools (HTTP):', error);
+        safeConsole.error('Failed to list MCP tools (HTTP):', error);
         return [];
       }
     },

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { safeConsole } from '../utils/logger.js';
 
 /**
  * Standardized tool result types for consistent error handling
@@ -136,12 +137,12 @@ export function withErrorHandling<TArgs, TResult, TContext>(
     const startTime = Date.now();
     
     try {
-      console.log(`[TOOL:${toolName}] Starting execution with args:`, args);
-      
+      safeConsole.log(`[TOOL:${toolName}] Starting execution with args:`, args);
+
       const result = await executor(args, context);
-      
+
       const executionTime = Date.now() - startTime;
-      console.log(`[TOOL:${toolName}] Completed successfully in ${executionTime}ms`);
+      safeConsole.log(`[TOOL:${toolName}] Completed successfully in ${executionTime}ms`);
       
       return ToolResponse.success(result, {
         executionTimeMs: executionTime,
@@ -150,7 +151,7 @@ export function withErrorHandling<TArgs, TResult, TContext>(
       
     } catch (error) {
       const executionTime = Date.now() - startTime;
-      console.error(`[TOOL:${toolName}] Failed after ${executionTime}ms:`, error);
+      safeConsole.error(`[TOOL:${toolName}] Failed after ${executionTime}ms:`, error);
       
       if (error instanceof Error) {
         return ToolResponse.error(
