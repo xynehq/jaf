@@ -130,6 +130,76 @@ Access the UI at http://localhost:16686
 - **Root Span**: `jaf.run.{traceId}` - spans the entire agent run
 - **Child Spans**: `jaf.{eventType}` - individual operations like LLM calls, tool executions
 
+### Proxy Support
+
+JAF provides flexible proxy support for routing OpenTelemetry traces through HTTP/HTTPS proxies. Choose between programmatic configuration or environment variables.
+
+#### Method 1: Programmatic Configuration (Recommended)
+
+Configure proxy settings directly in your code:
+
+```typescript
+import { configureProxy, OpenTelemetryTraceCollector } from '@xynehq/jaf';
+
+// Configure proxy BEFORE creating trace collectors
+configureProxy({
+  httpProxy: 'http://proxy.example.com:8080',
+  httpsProxy: 'http://proxy.example.com:8080',
+  noProxy: 'localhost,127.0.0.1,*.local'
+});
+
+// Now create your trace collector
+const collector = new OpenTelemetryTraceCollector();
+```
+
+**With Authentication:**
+
+```typescript
+configureProxy({
+  httpProxy: 'http://username:password@proxy.example.com:8080',
+  httpsProxy: 'http://username:password@proxy.example.com:8080'
+});
+```
+
+#### Method 2: Environment Variables
+
+Set proxy environment variables before running your application:
+
+```bash
+export HTTP_PROXY=http://proxy.example.com:8080
+export HTTPS_PROXY=http://proxy.example.com:8080
+export NO_PROXY=localhost,127.0.0.1
+export TRACE_COLLECTOR_URL=http://your-collector:4318/v1/traces
+```
+
+#### Priority
+
+Manual configuration via `configureProxy()` takes priority over environment variables.
+
+#### Bypass Specific Hosts
+
+Use `noProxy` / `NO_PROXY` to bypass the proxy for specific hosts:
+
+```typescript
+configureProxy({
+  httpsProxy: 'http://proxy.example.com:8080',
+  noProxy: 'localhost,127.0.0.1,*.internal.company.com,langfuse.local'
+});
+```
+
+#### Reset Configuration
+
+For testing or reconfiguration:
+
+```typescript
+import { resetProxyConfig } from '@xynehq/jaf';
+
+resetProxyConfig();  // Reset proxy configuration
+configureProxy({ ... });  // Reconfigure
+```
+
+See `examples/proxy-config-demo.ts` for complete examples.
+
 ## Langfuse Integration
 
 JAF integrates with [Langfuse](https://langfuse.com/) for LLM observability and analytics.

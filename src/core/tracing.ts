@@ -1,5 +1,6 @@
 import { mod } from 'mathjs';
 import { TraceEvent, TraceId, createTraceId } from './types.js';
+import * as globalAgent from 'global-agent';
 
 // Optional imports for tracing (these might not be available)
 let trace: any;
@@ -386,8 +387,119 @@ export class FileTraceCollector implements TraceCollector {
   }
 }
 
+/**
+ * Proxy configuration options
+ */
+export interface ProxyConfig {
+  /** HTTP proxy URL (e.g., 'http://proxy.example.com:8080') */
+  httpProxy?: string;
+  /** HTTPS proxy URL (e.g., 'http://proxy.example.com:8080') */
+  httpsProxy?: string;
+  /** Comma-separated list of hosts to bypass proxy (e.g., 'localhost,127.0.0.1') */
+  noProxy?: string;
+}
+
 // Global variables for OpenTelemetry setup
 let otelSdk: any = null;
+let proxyConfigured = false; // Track if proxy has been configured
+let manualProxyConfig: ProxyConfig | null = null; // Store manual proxy configuration
+
+/**
+ * Configure proxy settings for OpenTelemetry trace exports
+ *
+ * Call this BEFORE initializing OpenTelemetry collectors to ensure proxy is set up correctly.
+ *
+ * @param config - Proxy configuration object
+ *
+ * @example
+ * ```typescript
+ * // Configure proxy manually
+ * configureProxy({
+ *   httpProxy: 'http://proxy.example.com:8080',
+ *   httpsProxy: 'http://proxy.example.com:8080',
+ *   noProxy: 'localhost,127.0.0.1'
+ * });
+ *
+ * // Then create your trace collector
+ * const traceCollector = new OpenTelemetryTraceCollector();
+ * ```
+ */
+export function configureProxy(config: ProxyConfig): void {
+  if (proxyConfigured) {
+    console.warn('[JAF:PROXY] Proxy already configured. Call resetProxyConfig() first to reconfigure.');
+    return;
+  }
+
+  manualProxyConfig = config;
+  console.log('[JAF:PROXY] Manual proxy configuration stored. Will be applied on first trace collector initialization.');
+}
+
+/**
+ * Reset proxy configuration (useful for testing or reconfiguration)
+ *
+ * WARNING: This will not affect already-initialized OpenTelemetry SDKs.
+ * Only call this before creating trace collectors.
+ */
+export function resetProxyConfig(): void {
+  proxyConfigured = false;
+  manualProxyConfig = null;
+  console.log('[JAF:PROXY] Proxy configuration reset.');
+}
+
+/**
+ * Setup HTTP/HTTPS proxy support for OpenTelemetry
+ *
+ * NOTE: Node.js http.Agent does NOT support proxy configuration natively.
+ * This is why we use global-agent, which patches Node's http/https modules
+ * to intercept requests and route them through a proxy.
+ *
+ * Supports both:
+ * 1. Manual configuration via configureProxy()
+ * 2. Environment variables: HTTP_PROXY, HTTPS_PROXY, NO_PROXY
+ */
+function setupProxySupport(): void {
+  // Only configure proxy once
+  if (proxyConfigured) {
+    return;
+  }
+
+  // Priority: Manual config > Environment variables
+  let httpProxy: string | undefined;
+  let httpsProxy: string | undefined;
+  let noProxy: string | undefined;
+
+  if (manualProxyConfig) {
+    // Use manual configuration
+    httpProxy = manualProxyConfig.httpProxy;
+    httpsProxy = manualProxyConfig.httpsProxy;
+    noProxy = manualProxyConfig.noProxy;
+    console.log('[JAF:PROXY] Using manual proxy configuration');
+  } else {
+    // Fall back to environment variables
+    httpProxy = process.env.HTTP_PROXY || process.env.http_proxy;
+    httpsProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+    noProxy = process.env.NO_PROXY || process.env.no_proxy;
+    console.log('[JAF:PROXY] Using environment variable proxy configuration');
+  }
+
+  if (!httpProxy && !httpsProxy) {
+    proxyConfigured = true; // Mark as configured (even if no proxy) to avoid rechecking
+    console.log('[JAF:PROXY] No proxy configuration found');
+    return;
+  }
+
+  // Configure proxy URLs for global-agent
+  if (httpProxy) process.env.GLOBAL_AGENT_HTTP_PROXY = httpProxy;
+  if (httpsProxy) process.env.GLOBAL_AGENT_HTTPS_PROXY = httpsProxy;
+  if (noProxy) process.env.GLOBAL_AGENT_NO_PROXY = noProxy;
+
+  // Bootstrap global agent - patches http/https modules to support proxies
+  // This should only be called once per application
+  globalAgent.bootstrap();
+
+  proxyConfigured = true;
+  console.log(`[JAF:PROXY] Proxy support enabled (HTTP: ${!!httpProxy}, HTTPS: ${!!httpsProxy}, NO_PROXY: ${!!noProxy})`);
+}
 
 function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: string): void {
   if (!NodeSDK || !OTLPTraceExporter || !Resource || !SemanticResourceAttributes || !collectorUrl) {
@@ -395,6 +507,9 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
   }
 
   try {
+    // Setup proxy support before initializing OpenTelemetry
+    setupProxySupport();
+
     // Parse headers from environment variable
     const headersEnv = process.env.OTEL_EXPORTER_OTLP_HEADERS;
     const headers: Record<string, string> = {};
@@ -417,7 +532,7 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
     otelSdk = new NodeSDK({
       traceExporter: new OTLPTraceExporter({
         url: collectorUrl,
-        headers: headers,
+        headers: headers
       }),
       resource: resource.merge(new Resource({})),
       // Disable default resource detectors to minimize attributes
