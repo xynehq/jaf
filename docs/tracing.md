@@ -198,7 +198,45 @@ resetProxyConfig();  // Reset proxy configuration
 configureProxy({ httpProxy: '...' });  // Reconfigure
 ```
 
-See `examples/proxy-config-demo.ts` for complete examples.
+#### Important Notes
+
+**Initialization Timing**: Call `configureProxy()` early in your application startup, before creating trace collectors or making any HTTP requests. JAF uses `global-agent` which patches Node.js HTTP modules globally.
+
+**Authentication**: Proxy authentication in the URL (e.g., `http://user:pass@proxy:8080`) supports HTTP Basic Auth only. For NTLM or Kerberos authentication, you may need additional configuration outside of JAF.
+
+**Global Scope**: The proxy configuration affects all HTTP/HTTPS requests in your Node.js process, not just OpenTelemetry traces. Use `noProxy` to bypass specific hosts if needed.
+
+#### Security Considerations
+
+**WARNING - Credentials in Configuration**: Avoid hardcoding proxy credentials in source code. Use environment variables or secrets management systems:
+
+```typescript
+// GOOD: Use environment variables
+configureProxy({
+  httpsProxy: process.env.CORPORATE_PROXY_URL  // e.g., http://user:pass@proxy:8080
+});
+
+// BAD: Hardcoded credentials
+configureProxy({
+  httpsProxy: 'http://myusername:mypassword@proxy:8080'
+});
+```
+
+**Data Privacy**: Disabling auto-detected resource attributes (which JAF does by default) prevents leaking system information like hostnames, OS details, or cloud metadata through traces.
+
+#### Troubleshooting
+
+If traces aren't being exported through the proxy:
+
+1. **Check Proxy Logs**: Enable debug logging and verify your proxy receives requests
+2. **Test Proxy Manually**:
+   ```bash
+   curl --proxy http://your-proxy:8080 http://your-collector:4318/v1/traces
+   ```
+3. **Verify Configuration**: Check JAF logs for `[JAF:PROXY]` messages confirming proxy setup
+4. **NO_PROXY Issues**: Ensure your collector URL isn't in the `NO_PROXY` list
+5. **Timing**: Make sure `configureProxy()` is called before creating `OpenTelemetryTraceCollector`
+6. **Proxy Compatibility**: JAF uses standard Node.js environment variables (`HTTP_PROXY`, `HTTPS_PROXY`). If your proxy requires special configuration, it may not be supported.
 
 ## Langfuse Integration
 
@@ -403,6 +441,5 @@ For high-volume applications:
 Complete examples are available in the `examples/` directory:
 
 - `examples/otel-tracing-demo/` - OpenTelemetry integration with Jaeger and Langfuse
-- `examples/proxy-config-demo.ts` - Proxy configuration examples
 
-The OpenTelemetry demo includes setup instructions for both Jaeger (for development) and Langfuse (for production) integration.
+The OpenTelemetry demo includes setup instructions for both Jaeger (for development) and Langfuse (for production) integration, as well as proxy configuration examples.

@@ -408,6 +408,7 @@ let manualProxyConfig: ProxyConfig | null = null; // Store manual proxy configur
  * Configure proxy settings for OpenTelemetry trace exports
  *
  * Call this BEFORE initializing OpenTelemetry collectors to ensure proxy is set up correctly.
+ * For best results, call this early in your application startup, before any HTTP requests.
  *
  * @param config - Proxy configuration object
  *
@@ -430,7 +431,20 @@ export function configureProxy(config: ProxyConfig): void {
     return;
   }
 
-  manualProxyConfig = config;
+  // Normalize and validate noProxy configuration
+  const normalizedConfig: ProxyConfig = {
+    httpProxy: config.httpProxy,
+    httpsProxy: config.httpsProxy,
+    noProxy: config.noProxy
+      ? config.noProxy
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+          .join(',')
+      : undefined
+  };
+
+  manualProxyConfig = normalizedConfig;
   console.log('[JAF:PROXY] Manual proxy configuration stored. Will be applied on first trace collector initialization.');
 }
 
@@ -456,6 +470,9 @@ export function resetProxyConfig(): void {
  * Supports both:
  * 1. Manual configuration via configureProxy()
  * 2. Environment variables: HTTP_PROXY, HTTPS_PROXY, NO_PROXY
+ *
+ * WARNING: Uses global-agent which patches globals. Ensure this runs early
+ * in application lifecycle before other HTTP requests.
  */
 function setupProxySupport(): void {
   // Only configure proxy once
@@ -463,42 +480,63 @@ function setupProxySupport(): void {
     return;
   }
 
-  // Priority: Manual config > Environment variables
-  let httpProxy: string | undefined;
-  let httpsProxy: string | undefined;
-  let noProxy: string | undefined;
+  try {
+    // Priority: Manual config > Environment variables
+    let httpProxy: string | undefined;
+    let httpsProxy: string | undefined;
+    let noProxy: string | undefined;
 
-  if (manualProxyConfig) {
-    // Use manual configuration
-    httpProxy = manualProxyConfig.httpProxy;
-    httpsProxy = manualProxyConfig.httpsProxy;
-    noProxy = manualProxyConfig.noProxy;
-    console.log('[JAF:PROXY] Using manual proxy configuration');
-  } else {
-    // Fall back to environment variables
-    httpProxy = process.env.HTTP_PROXY || process.env.http_proxy;
-    httpsProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
-    noProxy = process.env.NO_PROXY || process.env.no_proxy;
-    console.log('[JAF:PROXY] Using environment variable proxy configuration');
+    if (manualProxyConfig) {
+      // Use manual configuration
+      httpProxy = manualProxyConfig.httpProxy;
+      httpsProxy = manualProxyConfig.httpsProxy;
+      noProxy = manualProxyConfig.noProxy;
+      console.log('[JAF:PROXY] Using manual proxy configuration');
+    } else {
+      // Fall back to environment variables
+      httpProxy = process.env.HTTP_PROXY || process.env.http_proxy;
+      httpsProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+      noProxy = process.env.NO_PROXY || process.env.no_proxy;
+      console.log('[JAF:PROXY] Using environment variable proxy configuration');
+    }
+
+    if (!httpProxy && !httpsProxy) {
+      proxyConfigured = true; // Mark as configured (even if no proxy) to avoid rechecking
+      console.log('[JAF:PROXY] No proxy configuration found');
+      return;
+    }
+
+    // Basic URL validation for proxy URLs
+    const validateProxyUrl = (url: string | undefined, name: string): boolean => {
+      if (!url) return true;
+      try {
+        new URL(url);
+        return true;
+      } catch (e) {
+        console.warn(`[JAF:PROXY] Invalid ${name} URL: ${url}. Proxy may not work correctly.`);
+        return false;
+      }
+    };
+
+    validateProxyUrl(httpProxy, 'HTTP_PROXY');
+    validateProxyUrl(httpsProxy, 'HTTPS_PROXY');
+
+    // Configure proxy URLs for global-agent
+    if (httpProxy) process.env.GLOBAL_AGENT_HTTP_PROXY = httpProxy;
+    if (httpsProxy) process.env.GLOBAL_AGENT_HTTPS_PROXY = httpsProxy;
+    if (noProxy) process.env.GLOBAL_AGENT_NO_PROXY = noProxy;
+
+    // Bootstrap global agent - patches http/https modules to support proxies
+    // This should only be called once per application
+    globalAgent.bootstrap();
+
+    proxyConfigured = true;
+    console.log(`[JAF:PROXY] Proxy support enabled (HTTP: ${!!httpProxy}, HTTPS: ${!!httpsProxy}, NO_PROXY: ${!!noProxy})`);
+  } catch (error) {
+    console.error('[JAF:PROXY] Failed to setup proxy support:', error);
+    console.error('[JAF:PROXY] Traces may not be exported through proxy. Check proxy configuration.');
+    proxyConfigured = true; // Mark as configured to prevent retry loops
   }
-
-  if (!httpProxy && !httpsProxy) {
-    proxyConfigured = true; // Mark as configured (even if no proxy) to avoid rechecking
-    console.log('[JAF:PROXY] No proxy configuration found');
-    return;
-  }
-
-  // Configure proxy URLs for global-agent
-  if (httpProxy) process.env.GLOBAL_AGENT_HTTP_PROXY = httpProxy;
-  if (httpsProxy) process.env.GLOBAL_AGENT_HTTPS_PROXY = httpsProxy;
-  if (noProxy) process.env.GLOBAL_AGENT_NO_PROXY = noProxy;
-
-  // Bootstrap global agent - patches http/https modules to support proxies
-  // This should only be called once per application
-  globalAgent.bootstrap();
-
-  proxyConfigured = true;
-  console.log(`[JAF:PROXY] Proxy support enabled (HTTP: ${!!httpProxy}, HTTPS: ${!!httpsProxy}, NO_PROXY: ${!!noProxy})`);
 }
 
 function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: string): void {
@@ -534,8 +572,9 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
         url: collectorUrl,
         headers: headers
       }),
-      resource: resource.merge(new Resource({})),
-      // Disable default resource detectors to minimize attributes
+      resource: resource,
+      // Disable default resource detectors to minimize attributes and prevent unintended data leakage
+      // This also prevents auto-detectors from making HTTP calls that might bypass proxy
       autoDetectResources: false
     });
 
