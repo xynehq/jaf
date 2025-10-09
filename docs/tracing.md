@@ -195,36 +195,56 @@ For testing or reconfiguration:
 import { resetProxyConfig } from '@xynehq/jaf';
 
 resetProxyConfig();  // Reset proxy configuration
-configureProxy({ ... });  // Reconfigure
+configureProxy({ httpProxy: '...' });  // Reconfigure
 ```
 
 See `examples/proxy-config-demo.ts` for complete examples.
 
 ## Langfuse Integration
 
-JAF integrates with [Langfuse](https://langfuse.com/) for LLM observability and analytics.
+JAF integrates with [Langfuse](https://langfuse.com/) for LLM observability and analytics through OpenTelemetry's OTLP protocol.
 
 ### Setup
 
-1. **Install Langfuse:**
+1. **Install OpenTelemetry dependencies** (if not already installed):
    ```bash
-   npm install langfuse
+   npm install @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/exporter-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions
    ```
 
-2. **Configure environment:**
+2. **Configure Langfuse OTLP endpoint:**
    ```bash
+   # Langfuse credentials
    export LANGFUSE_PUBLIC_KEY="pk-lf-your-public-key"
    export LANGFUSE_SECRET_KEY="sk-lf-your-secret-key"
-   export LANGFUSE_HOST="https://cloud.langfuse.com"  # or your self-hosted instance
+   export LANGFUSE_HOST="https://cloud.langfuse.com"  # or http://localhost:3000 for local
+
+   # OpenTelemetry configuration for Langfuse
+   export TRACE_COLLECTOR_URL="${LANGFUSE_HOST}/api/public/otel/v1/traces"
+   export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic $(echo -n ${LANGFUSE_PUBLIC_KEY}:${LANGFUSE_SECRET_KEY} | base64)"
    ```
 
 3. **Enable tracing:**
    ```typescript
    import { createCompositeTraceCollector, ConsoleTraceCollector } from '@xynehq/jaf/core';
 
-   // Langfuse collector is automatically added when API keys are set
+   // OpenTelemetry collector automatically sends to Langfuse OTLP endpoint
    const collector = createCompositeTraceCollector(new ConsoleTraceCollector());
    ```
+
+Alternatively, configure programmatically:
+
+```typescript
+import { OpenTelemetryTraceCollector } from '@xynehq/jaf';
+
+// Set up Langfuse OTLP endpoint
+const langfuseHost = 'http://localhost:3000';
+process.env.TRACE_COLLECTOR_URL = `${langfuseHost}/api/public/otel/v1/traces`;
+process.env.OTEL_EXPORTER_OTLP_HEADERS = `Authorization=Basic ${Buffer.from(
+  `${publicKey}:${secretKey}`
+).toString('base64')}`;
+
+const collector = new OpenTelemetryTraceCollector();
+```
 
 ### Local Development with Langfuse
 
@@ -382,7 +402,7 @@ For high-volume applications:
 
 Complete examples are available in the `examples/` directory:
 
-- `examples/otel-tracing-demo/` - OpenTelemetry integration
-- `examples/langfuse-tracing-demo/` - Langfuse integration
+- `examples/otel-tracing-demo/` - OpenTelemetry integration with Jaeger and Langfuse
+- `examples/proxy-config-demo.ts` - Proxy configuration examples
 
-Both examples include setup instructions and environment configuration guides.
+The OpenTelemetry demo includes setup instructions for both Jaeger (for development) and Langfuse (for production) integration.
