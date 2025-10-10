@@ -30,12 +30,14 @@ process.env.OTEL_EXPORTER_OTLP_HEADERS = `Authorization=Basic ${Buffer.from(
 
 // Method 2: Environment variables (recommended for production)
 // Set before running your application:
-// export PROXY_URL=http://proxy.example.com:8080
-// or
+// export HTTP_PROXY=http://proxy.example.com:8080
 // export HTTPS_PROXY=http://proxy.example.com:8080
+// or use ALL_PROXY for both:
+// export ALL_PROXY=http://proxy.example.com:8080
 // JAF will automatically detect and use the proxy
 
-// Priority: Manual config > PROXY_URL > HTTPS_PROXY > ALL_PROXY
+// Priority: Manual config > HTTP_PROXY > HTTPS_PROXY > ALL_PROXY
+// Note: Localhost collectors automatically bypass the proxy
 
 // Enhanced context type with comprehensive user information
 type DemoContext = {

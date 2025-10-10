@@ -168,12 +168,10 @@ resetProxyConfig();  // Clear manual proxy config
 Set proxy environment variables before running your application:
 
 ```bash
-# Option 1: Use PROXY_URL (JAF-specific)
-export PROXY_URL=http://proxy.example.com:8080
-
-# Option 2: Use standard environment variables
+# Use standard proxy environment variables
+export HTTP_PROXY=http://proxy.example.com:8080
 export HTTPS_PROXY=http://proxy.example.com:8080
-# or
+# or use ALL_PROXY for both
 export ALL_PROXY=http://proxy.example.com:8080
 
 # Set your trace collector URL
@@ -185,16 +183,19 @@ export TRACE_COLLECTOR_URL=http://your-collector:4318/v1/traces
 Include credentials directly in the proxy URL:
 
 ```bash
-export PROXY_URL=http://username:password@proxy.example.com:8080
+export HTTP_PROXY=http://username:password@proxy.example.com:8080
+export HTTPS_PROXY=http://username:password@proxy.example.com:8080
 ```
+
+**Note:** Both uppercase (`HTTP_PROXY`) and lowercase (`http_proxy`) variants are supported.
 
 #### Configuration Priority
 
 JAF checks for proxy configuration in this order:
 1. **Manual configuration** via `configureProxy()` (highest priority)
-2. `PROXY_URL` environment variable
-3. `HTTPS_PROXY` environment variable
-4. `ALL_PROXY` environment variable
+2. `HTTP_PROXY` / `http_proxy` environment variable
+3. `HTTPS_PROXY` / `https_proxy` environment variable
+4. `ALL_PROXY` / `all_proxy` environment variable
 
 #### How It Works
 
@@ -219,7 +220,7 @@ const proxyUrl = process.env.CORPORATE_PROXY_URL;
 configureProxy(proxyUrl);
 
 // ACCEPTABLE: Use environment variables
-export PROXY_URL=http://user:pass@proxy:8080
+export HTTP_PROXY=http://user:pass@proxy:8080
 
 // BAD: Hardcode in source code
 configureProxy('http://myusername:mypassword@proxy:8080');  // Never do this!
@@ -227,7 +228,7 @@ configureProxy('http://myusername:mypassword@proxy:8080');  // Never do this!
 
 ```bash
 # GOOD: Use a secrets manager
-export PROXY_URL=$(aws secretsmanager get-secret-value --secret-id corporate-proxy --query SecretString --output text)
+export HTTP_PROXY=$(aws secretsmanager get-secret-value --secret-id corporate-proxy --query SecretString --output text)
 
 # BAD: Hardcode in scripts committed to version control
 # Never commit files with hardcoded proxy credentials
@@ -243,7 +244,7 @@ If traces aren't being exported through the proxy:
 
 1. **Check Environment Variables**: Verify proxy variables are set correctly
    ```bash
-   echo $PROXY_URL
+   echo $HTTP_PROXY
    echo $HTTPS_PROXY
    echo $TRACE_COLLECTOR_URL
    ```

@@ -489,12 +489,12 @@ function getProxyConfiguration(collectorUrl: string) {
       console.log(`[JAF:OTEL:PROXY] Using manual proxy configuration: ${proxyUrl}`);
     } else {
       // Check for proxy environment variables
-      const httpProxy = process.env.PROXY_URL;
-      const httpsProxy = process.env.HTTPS_PROXY;
-      const allProxy = process.env.ALL_PROXY;
+      const httpProxy = process.env.HTTP_PROXY || process.env.http_proxy;
+      const httpsProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+      const allProxy = process.env.ALL_PROXY || process.env.all_proxy;
 
       console.log(`[JAF:OTEL:PROXY] Environment variables check:`);
-      console.log(`[JAF:OTEL:PROXY] - PROXY_URL: ${httpProxy || 'not set'}`);
+      console.log(`[JAF:OTEL:PROXY] - HTTP_PROXY: ${httpProxy || 'not set'}`);
       console.log(`[JAF:OTEL:PROXY] - HTTPS_PROXY: ${httpsProxy || 'not set'}`);
       console.log(`[JAF:OTEL:PROXY] - ALL_PROXY: ${allProxy || 'not set'}`);
 
