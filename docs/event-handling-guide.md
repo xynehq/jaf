@@ -342,9 +342,3 @@ const args = JSON.parse(toolCall.function.arguments);
 4. **Log events during development** - Use the debug handler pattern
 5. **Collect metrics in production** - Track tokens, costs, and tool usage
 6. **Handle errors gracefully** - Always implement `onError` handler
-
-## See Also
-
-- [API Reference: TraceEvent](./api/trace-event.md)
-- [API Reference: SimpleEventHandlers](./api/simple-event-handlers.md)
-- [Examples: Event Handling](../examples/event-handling/)

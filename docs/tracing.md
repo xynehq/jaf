@@ -130,31 +130,189 @@ Access the UI at http://localhost:16686
 - **Root Span**: `jaf.run.{traceId}` - spans the entire agent run
 - **Child Spans**: `jaf.{eventType}` - individual operations like LLM calls, tool executions
 
+### Proxy Support
+
+JAF provides flexible proxy support for routing OpenTelemetry traces through HTTP/HTTPS proxies. You can configure the proxy either programmatically or using environment variables.
+
+#### Method 1: Programmatic Configuration
+
+Configure the proxy directly in your code before creating trace collectors:
+
+```typescript
+import { configureProxy, OpenTelemetryTraceCollector } from '@xynehq/jaf';
+
+// Configure proxy before creating trace collector
+configureProxy('http://proxy.example.com:8080');
+
+// Now create your trace collector - it will use the configured proxy
+const collector = new OpenTelemetryTraceCollector();
+```
+
+**With Authentication:**
+
+```typescript
+configureProxy('http://username:password@proxy.example.com:8080');
+```
+
+**Reset Configuration:**
+
+```typescript
+import { resetProxyConfig } from '@xynehq/jaf';
+
+resetProxyConfig();  // Clear manual proxy config
+// Will now fall back to environment variables
+```
+
+#### Method 2: Environment Variables
+
+Set proxy environment variables before running your application:
+
+```bash
+# Use standard proxy environment variables
+export HTTP_PROXY=http://proxy.example.com:8080
+export HTTPS_PROXY=http://proxy.example.com:8080
+# or use ALL_PROXY for both
+export ALL_PROXY=http://proxy.example.com:8080
+
+# Set your trace collector URL
+export TRACE_COLLECTOR_URL=http://your-collector:4318/v1/traces
+```
+
+**With Authentication:**
+
+Include credentials directly in the proxy URL:
+
+```bash
+export HTTP_PROXY=http://username:password@proxy.example.com:8080
+export HTTPS_PROXY=http://username:password@proxy.example.com:8080
+```
+
+**Note:** Both uppercase (`HTTP_PROXY`) and lowercase (`http_proxy`) variants are supported.
+
+#### Configuration Priority
+
+JAF checks for proxy configuration in this order:
+1. **Manual configuration** via `configureProxy()` (highest priority)
+2. `HTTP_PROXY` / `http_proxy` environment variable
+3. `HTTPS_PROXY` / `https_proxy` environment variable
+4. `ALL_PROXY` / `all_proxy` environment variable
+
+#### How It Works
+
+JAF uses the `tunnel` package to create HTTP tunnels for routing HTTPS traffic through HTTP proxies. The implementation:
+
+1. Checks for proxy configuration in priority order (manual config → environment variables)
+2. Creates a tunnel agent that wraps all HTTP/HTTPS requests
+3. Automatically intercepts OpenTelemetry OTLP exporter requests to route them through the proxy
+4. Provides detailed logging for debugging proxy connectivity
+
+The proxy configuration is applied automatically when you create an `OpenTelemetryTraceCollector`. You can either:
+- Call `configureProxy()` before creating the collector for manual configuration
+- Set environment variables and let JAF detect them automatically
+
+#### Security Considerations
+
+**WARNING - Credentials in Configuration**: Store proxy credentials securely:
+
+```typescript
+// GOOD: Load from environment or secrets manager
+const proxyUrl = process.env.CORPORATE_PROXY_URL;
+configureProxy(proxyUrl);
+
+// ACCEPTABLE: Use environment variables
+export HTTP_PROXY=http://user:pass@proxy:8080
+
+// BAD: Hardcode in source code
+configureProxy('http://myusername:mypassword@proxy:8080');  // Never do this!
+```
+
+```bash
+# GOOD: Use a secrets manager
+export HTTP_PROXY=$(aws secretsmanager get-secret-value --secret-id corporate-proxy --query SecretString --output text)
+
+# BAD: Hardcode in scripts committed to version control
+# Never commit files with hardcoded proxy credentials
+```
+
+**Authentication Support**: Proxy authentication in the URL (e.g., `http://user:pass@proxy:8080`) supports HTTP Basic Auth only. For NTLM or Kerberos authentication, you may need to configure a local proxy forwarder.
+
+**Data Privacy**: JAF disables OpenTelemetry auto-detected resource attributes by default to prevent leaking system information like hostnames, OS details, or cloud metadata through traces.
+
+#### Troubleshooting
+
+If traces aren't being exported through the proxy:
+
+1. **Check Environment Variables**: Verify proxy variables are set correctly
+   ```bash
+   echo $HTTP_PROXY
+   echo $HTTPS_PROXY
+   echo $TRACE_COLLECTOR_URL
+   ```
+
+2. **Enable Debug Logging**: Look for `[JAF:OTEL:PROXY]` log messages that show:
+   - Proxy detection and configuration
+   - Tunnel agent creation
+   - Request interception and routing
+   - Response status codes
+
+3. **Test Proxy Manually**:
+   ```bash
+   curl --proxy http://your-proxy:8080 http://your-collector:4318/v1/traces
+   ```
+
+4. **Verify Connectivity**: Check that your proxy allows connections to the collector URL
+
+5. **Proxy Compatibility**: JAF uses the `tunnel` package which supports standard HTTP CONNECT proxies. If your proxy requires special configuration (SOCKS, authenticated NTLM, etc.), it may not work directly.
+
+6. **Network Issues**: Ensure there are no firewall rules blocking:
+   - Your application → Proxy
+   - Proxy → Trace collector
+
 ## Langfuse Integration
 
-JAF integrates with [Langfuse](https://langfuse.com/) for LLM observability and analytics.
+JAF integrates with [Langfuse](https://langfuse.com/) for LLM observability and analytics through OpenTelemetry's OTLP protocol.
 
 ### Setup
 
-1. **Install Langfuse:**
+1. **Install OpenTelemetry dependencies** (if not already installed):
    ```bash
-   npm install langfuse
+   npm install @opentelemetry/api @opentelemetry/sdk-node @opentelemetry/exporter-otlp-http @opentelemetry/resources @opentelemetry/semantic-conventions
    ```
 
-2. **Configure environment:**
+2. **Configure Langfuse OTLP endpoint:**
    ```bash
+   # Langfuse credentials
    export LANGFUSE_PUBLIC_KEY="pk-lf-your-public-key"
    export LANGFUSE_SECRET_KEY="sk-lf-your-secret-key"
-   export LANGFUSE_HOST="https://cloud.langfuse.com"  # or your self-hosted instance
+   export LANGFUSE_HOST="https://cloud.langfuse.com"  # or http://localhost:3000 for local
+
+   # OpenTelemetry configuration for Langfuse
+   export TRACE_COLLECTOR_URL="${LANGFUSE_HOST}/api/public/otel/v1/traces"
+   export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic $(echo -n ${LANGFUSE_PUBLIC_KEY}:${LANGFUSE_SECRET_KEY} | base64)"
    ```
 
 3. **Enable tracing:**
    ```typescript
    import { createCompositeTraceCollector, ConsoleTraceCollector } from '@xynehq/jaf/core';
 
-   // Langfuse collector is automatically added when API keys are set
+   // OpenTelemetry collector automatically sends to Langfuse OTLP endpoint
    const collector = createCompositeTraceCollector(new ConsoleTraceCollector());
    ```
+
+Alternatively, configure programmatically:
+
+```typescript
+import { OpenTelemetryTraceCollector } from '@xynehq/jaf';
+
+// Set up Langfuse OTLP endpoint
+const langfuseHost = 'http://localhost:3000';
+process.env.TRACE_COLLECTOR_URL = `${langfuseHost}/api/public/otel/v1/traces`;
+process.env.OTEL_EXPORTER_OTLP_HEADERS = `Authorization=Basic ${Buffer.from(
+  `${publicKey}:${secretKey}`
+).toString('base64')}`;
+
+const collector = new OpenTelemetryTraceCollector();
+```
 
 ### Local Development with Langfuse
 
@@ -312,7 +470,6 @@ For high-volume applications:
 
 Complete examples are available in the `examples/` directory:
 
-- `examples/otel-tracing-demo/` - OpenTelemetry integration
-- `examples/langfuse-tracing-demo/` - Langfuse integration
+- `examples/otel-tracing-demo/` - OpenTelemetry integration with Jaeger and Langfuse
 
-Both examples include setup instructions and environment configuration guides.
+The OpenTelemetry demo includes setup instructions for both Jaeger (for development) and Langfuse (for production) integration, as well as proxy configuration examples.
