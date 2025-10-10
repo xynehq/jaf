@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { config } from 'dotenv';
-import { run, createRunId, createTraceId, OpenTelemetryTraceCollector, makeLiteLLMProvider } from '@xynehq/jaf';
+import { run, createRunId, createTraceId, OpenTelemetryTraceCollector, makeLiteLLMProvider, configureProxy } from '@xynehq/jaf';
 
 // Load environment variables
 config();
@@ -9,15 +9,33 @@ config();
 // process.env.TRACE_COLLECTOR_URL = 'http://localhost:4318/v1/traces';
 // Set up OpenTelemetry to export to Langfuse via OTLP
 // // Langfuse OTLP endpoint is different from the regular API endpoint
-process.env.TRACE_COLLECTOR_URL = process.env.LANGFUSE_HOST 
+process.env.TRACE_COLLECTOR_URL = process.env.LANGFUSE_HOST
   ? `${process.env.LANGFUSE_HOST}/api/public/otel/v1/traces`
-  : 'https://cloud.langfuse.com/api/public/otel';
+  : 'http://localhost:3000/api/public/otel';
 
 // // Set OTLP headers for Langfuse authentication
 // // Langfuse expects the public and secret keys in specific headers
 process.env.OTEL_EXPORTER_OTLP_HEADERS = `Authorization=Basic ${Buffer.from(
   `${process.env.LANGFUSE_PUBLIC_KEY}:${process.env.LANGFUSE_SECRET_KEY}`
 ).toString('base64')}`;
+
+// ===== PROXY CONFIGURATION =====
+// You can configure a proxy in two ways:
+
+// Method 1: Programmatic configuration (recommended for dynamic configs)
+// Uncomment to use:
+// configureProxy('http://proxy.example.com:8080');
+// Or with authentication:
+// configureProxy('http://username:password@proxy.example.com:8080');
+
+// Method 2: Environment variables (recommended for production)
+// Set before running your application:
+// export PROXY_URL=http://proxy.example.com:8080
+// or
+// export HTTPS_PROXY=http://proxy.example.com:8080
+// JAF will automatically detect and use the proxy
+
+// Priority: Manual config > PROXY_URL > HTTPS_PROXY > ALL_PROXY
 
 // Enhanced context type with comprehensive user information
 type DemoContext = {

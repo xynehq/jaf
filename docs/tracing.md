@@ -132,33 +132,35 @@ Access the UI at http://localhost:16686
 
 ### Proxy Support
 
-JAF provides flexible proxy support for routing OpenTelemetry traces through HTTP/HTTPS proxies. Choose between programmatic configuration or environment variables.
+JAF provides flexible proxy support for routing OpenTelemetry traces through HTTP/HTTPS proxies. You can configure the proxy either programmatically or using environment variables.
 
-#### Method 1: Programmatic Configuration (Recommended)
+#### Method 1: Programmatic Configuration
 
-Configure proxy settings directly in your code:
+Configure the proxy directly in your code before creating trace collectors:
 
 ```typescript
 import { configureProxy, OpenTelemetryTraceCollector } from '@xynehq/jaf';
 
-// Configure proxy BEFORE creating trace collectors
-configureProxy({
-  httpProxy: 'http://proxy.example.com:8080',
-  httpsProxy: 'http://proxy.example.com:8080',
-  noProxy: 'localhost,127.0.0.1,*.local'
-});
+// Configure proxy before creating trace collector
+configureProxy('http://proxy.example.com:8080');
 
-// Now create your trace collector
+// Now create your trace collector - it will use the configured proxy
 const collector = new OpenTelemetryTraceCollector();
 ```
 
 **With Authentication:**
 
 ```typescript
-configureProxy({
-  httpProxy: 'http://username:password@proxy.example.com:8080',
-  httpsProxy: 'http://username:password@proxy.example.com:8080'
-});
+configureProxy('http://username:password@proxy.example.com:8080');
+```
+
+**Reset Configuration:**
+
+```typescript
+import { resetProxyConfig } from '@xynehq/jaf';
+
+resetProxyConfig();  // Clear manual proxy config
+// Will now fall back to environment variables
 ```
 
 #### Method 2: Environment Variables
@@ -166,77 +168,104 @@ configureProxy({
 Set proxy environment variables before running your application:
 
 ```bash
-export HTTP_PROXY=http://proxy.example.com:8080
+# Option 1: Use PROXY_URL (JAF-specific)
+export PROXY_URL=http://proxy.example.com:8080
+
+# Option 2: Use standard environment variables
 export HTTPS_PROXY=http://proxy.example.com:8080
-export NO_PROXY=localhost,127.0.0.1
+# or
+export ALL_PROXY=http://proxy.example.com:8080
+
+# Set your trace collector URL
 export TRACE_COLLECTOR_URL=http://your-collector:4318/v1/traces
 ```
 
-#### Priority
+**With Authentication:**
 
-Manual configuration via `configureProxy()` takes priority over environment variables.
+Include credentials directly in the proxy URL:
 
-#### Bypass Specific Hosts
-
-Use `noProxy` / `NO_PROXY` to bypass the proxy for specific hosts:
-
-```typescript
-configureProxy({
-  httpsProxy: 'http://proxy.example.com:8080',
-  noProxy: 'localhost,127.0.0.1,*.internal.company.com,langfuse.local'
-});
+```bash
+export PROXY_URL=http://username:password@proxy.example.com:8080
 ```
 
-#### Reset Configuration
+#### Configuration Priority
 
-For testing or reconfiguration:
+JAF checks for proxy configuration in this order:
+1. **Manual configuration** via `configureProxy()` (highest priority)
+2. `PROXY_URL` environment variable
+3. `HTTPS_PROXY` environment variable
+4. `ALL_PROXY` environment variable
 
-```typescript
-import { resetProxyConfig } from '@xynehq/jaf';
+#### How It Works
 
-resetProxyConfig();  // Reset proxy configuration
-configureProxy({ httpProxy: '...' });  // Reconfigure
-```
+JAF uses the `tunnel` package to create HTTP tunnels for routing HTTPS traffic through HTTP proxies. The implementation:
 
-#### Important Notes
+1. Checks for proxy configuration in priority order (manual config → environment variables)
+2. Creates a tunnel agent that wraps all HTTP/HTTPS requests
+3. Automatically intercepts OpenTelemetry OTLP exporter requests to route them through the proxy
+4. Provides detailed logging for debugging proxy connectivity
 
-**Initialization Timing**: Call `configureProxy()` early in your application startup, before creating trace collectors or making any HTTP requests. JAF uses `global-agent` which patches Node.js HTTP modules globally.
-
-**Authentication**: Proxy authentication in the URL (e.g., `http://user:pass@proxy:8080`) supports HTTP Basic Auth only. For NTLM or Kerberos authentication, you may need additional configuration outside of JAF.
-
-**Global Scope**: The proxy configuration affects all HTTP/HTTPS requests in your Node.js process, not just OpenTelemetry traces. Use `noProxy` to bypass specific hosts if needed.
+The proxy configuration is applied automatically when you create an `OpenTelemetryTraceCollector`. You can either:
+- Call `configureProxy()` before creating the collector for manual configuration
+- Set environment variables and let JAF detect them automatically
 
 #### Security Considerations
 
-**WARNING - Credentials in Configuration**: Avoid hardcoding proxy credentials in source code. Use environment variables or secrets management systems:
+**WARNING - Credentials in Configuration**: Store proxy credentials securely:
 
 ```typescript
-// GOOD: Use environment variables
-configureProxy({
-  httpsProxy: process.env.CORPORATE_PROXY_URL  // e.g., http://user:pass@proxy:8080
-});
+// GOOD: Load from environment or secrets manager
+const proxyUrl = process.env.CORPORATE_PROXY_URL;
+configureProxy(proxyUrl);
 
-// BAD: Hardcoded credentials
-configureProxy({
-  httpsProxy: 'http://myusername:mypassword@proxy:8080'
-});
+// ACCEPTABLE: Use environment variables
+export PROXY_URL=http://user:pass@proxy:8080
+
+// BAD: Hardcode in source code
+configureProxy('http://myusername:mypassword@proxy:8080');  // Never do this!
 ```
 
-**Data Privacy**: Disabling auto-detected resource attributes (which JAF does by default) prevents leaking system information like hostnames, OS details, or cloud metadata through traces.
+```bash
+# GOOD: Use a secrets manager
+export PROXY_URL=$(aws secretsmanager get-secret-value --secret-id corporate-proxy --query SecretString --output text)
+
+# BAD: Hardcode in scripts committed to version control
+# Never commit files with hardcoded proxy credentials
+```
+
+**Authentication Support**: Proxy authentication in the URL (e.g., `http://user:pass@proxy:8080`) supports HTTP Basic Auth only. For NTLM or Kerberos authentication, you may need to configure a local proxy forwarder.
+
+**Data Privacy**: JAF disables OpenTelemetry auto-detected resource attributes by default to prevent leaking system information like hostnames, OS details, or cloud metadata through traces.
 
 #### Troubleshooting
 
 If traces aren't being exported through the proxy:
 
-1. **Check Proxy Logs**: Enable debug logging and verify your proxy receives requests
-2. **Test Proxy Manually**:
+1. **Check Environment Variables**: Verify proxy variables are set correctly
+   ```bash
+   echo $PROXY_URL
+   echo $HTTPS_PROXY
+   echo $TRACE_COLLECTOR_URL
+   ```
+
+2. **Enable Debug Logging**: Look for `[JAF:OTEL:PROXY]` log messages that show:
+   - Proxy detection and configuration
+   - Tunnel agent creation
+   - Request interception and routing
+   - Response status codes
+
+3. **Test Proxy Manually**:
    ```bash
    curl --proxy http://your-proxy:8080 http://your-collector:4318/v1/traces
    ```
-3. **Verify Configuration**: Check JAF logs for `[JAF:PROXY]` messages confirming proxy setup
-4. **NO_PROXY Issues**: Ensure your collector URL isn't in the `NO_PROXY` list
-5. **Timing**: Make sure `configureProxy()` is called before creating `OpenTelemetryTraceCollector`
-6. **Proxy Compatibility**: JAF uses standard Node.js environment variables (`HTTP_PROXY`, `HTTPS_PROXY`). If your proxy requires special configuration, it may not be supported.
+
+4. **Verify Connectivity**: Check that your proxy allows connections to the collector URL
+
+5. **Proxy Compatibility**: JAF uses the `tunnel` package which supports standard HTTP CONNECT proxies. If your proxy requires special configuration (SOCKS, authenticated NTLM, etc.), it may not work directly.
+
+6. **Network Issues**: Ensure there are no firewall rules blocking:
+   - Your application → Proxy
+   - Proxy → Trace collector
 
 ## Langfuse Integration
 
