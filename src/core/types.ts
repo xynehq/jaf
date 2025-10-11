@@ -1,12 +1,19 @@
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 import { MemoryConfig } from '../memory/types';
 import type { ApprovalStorage } from '../memory/approval-storage';
 
 export type TraceId = string & { readonly _brand: 'TraceId' };
 export type RunId = string & { readonly _brand: 'RunId' };
+export type MessageId = string & { readonly _brand: 'MessageId' };
 
 export const createTraceId = (id: string): TraceId => id as TraceId;
 export const createRunId = (id: string): RunId => id as RunId;
+export const createMessageId = (id: string): MessageId => id as MessageId;
+
+export const generateMessageId = (): MessageId => {
+  return (`msg_${randomUUID()}`) as MessageId;
+};
 
 export type ValidationResult =
   | { readonly isValid: true }
@@ -37,6 +44,7 @@ export type MessageContentPart =
   | { readonly type: 'file'; readonly file: { readonly file_id: string; readonly format?: string } };
 
 export type Message = {
+  readonly id?: MessageId;
   readonly role: 'user' | 'assistant' | 'tool';
   readonly content: string | readonly MessageContentPart[];
   readonly attachments?: readonly Attachment[]; // Optional structured attachments
@@ -423,4 +431,3 @@ export const jsonParseLLMOutput = (text: string): any => {
     return null;
   }
 };
-

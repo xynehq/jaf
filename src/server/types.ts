@@ -24,6 +24,7 @@ export const attachmentSchema = z.object({
 });
 
 export const httpMessageSchema = z.object({
+  id: z.string().optional(),
   role: z.enum(['user', 'assistant', 'system']),
   content: z.string(),
   attachments: z.array(attachmentSchema).optional()
@@ -62,6 +63,7 @@ export type ApprovalMessage = z.infer<typeof approvalMessageSchema>;
 export const fullMessageSchema = z.union([
   httpMessageSchema,
   z.object({
+    id: z.string().optional(),
     role: z.literal('assistant'),
     content: z.string(),
     tool_calls: z.array(z.object({
@@ -74,6 +76,7 @@ export const fullMessageSchema = z.union([
     })).optional()
   }),
   z.object({
+    id: z.string().optional(),
     role: z.literal('tool'),
     content: z.string(),
     tool_call_id: z.string().optional()

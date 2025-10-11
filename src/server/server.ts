@@ -11,7 +11,7 @@ import {
   ApprovalMessage
 } from './types.js';
 import { run, runStream } from '../core/engine.js';
-import { RunState, Message, createRunId, createTraceId } from '../core/types.js';
+import { RunState, Message, createRunId, createTraceId, generateMessageId } from '../core/types.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // Helper: stable stringify to create deterministic signatures
@@ -75,6 +75,7 @@ const attachmentSchema = {
 const httpMessageSchema = {
   type: 'object',
   properties: {
+    id: { type: 'string' },
     role: { type: 'string', enum: ['user', 'assistant', 'system'] },
     content: { 
       oneOf: [
@@ -274,6 +275,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         
         // Convert HTTP messages to JAF messages
         const jafMessages: Message[] = validatedRequest.messages.map(msg => ({
+          id: (msg as any).id || generateMessageId(),
           role: msg.role === 'system' ? 'user' : msg.role as 'user' | 'assistant',
           content: msg.content,
           attachments: (msg as any).attachments
@@ -557,6 +559,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
           if (msg.role === 'tool') {
             // Include tool messages with special formatting
             return {
+              id: msg.id,
               role: 'tool',
               content: msg.content,
               tool_call_id: msg.tool_call_id
@@ -564,6 +567,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
           } else if (msg.role === 'assistant' && msg.tool_calls) {
             // Include assistant messages with tool calls
             return {
+              id: msg.id,
               role: msg.role,
               content: msg.content || '',
               tool_calls: msg.tool_calls.map(tc => ({
@@ -578,6 +582,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
           } else {
             // Regular user/assistant messages
             return {
+              id: msg.id,
               role: msg.role as 'user' | 'assistant',
               content: msg.content,
               ...(msg.attachments ? { attachments: msg.attachments } : {})
@@ -737,6 +742,66 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         success: true,
         data: { deleted: result.data }
       });
+    });
+
+    // Restore conversation to a checkpoint above a user message
+    app.post('/conversations/:conversationId/checkpoint', {
+      schema: {
+        body: {
+          oneOf: [
+            {
+              type: 'object',
+              properties: { byMessageId: { type: 'string' } },
+              required: ['byMessageId']
+            },
+            {
+              type: 'object',
+              properties: { byIndex: { type: 'number' } },
+              required: ['byIndex']
+            },
+            {
+              type: 'object',
+              properties: { byUserMessageNumber: { type: 'number' } },
+              required: ['byUserMessageNumber']
+            },
+            {
+              type: 'object',
+              properties: {
+                byText: { type: 'string' },
+                match: { type: 'string', enum: ['exact', 'startsWith', 'contains'] }
+              },
+              required: ['byText']
+            }
+          ]
+        }
+      }
+    }, async (
+      request: FastifyRequest<{ Params: { conversationId: string }; Body: { byMessageId?: string; byIndex?: number; byUserMessageNumber?: number; byText?: string; match?: 'exact' | 'startsWith' | 'contains' } }>,
+      reply: FastifyReply
+    ) => {
+      if (!config.defaultMemoryProvider) {
+        return reply.code(503).send({ success: false, error: 'Memory provider not configured' });
+      }
+
+      const criteria = request.body || {};
+      const selectors = [
+        criteria.byMessageId ? 'byMessageId' : null,
+        typeof criteria.byIndex === 'number' ? 'byIndex' : null,
+        typeof criteria.byUserMessageNumber === 'number' ? 'byUserMessageNumber' : null,
+        typeof criteria.byText === 'string' ? 'byText' : null
+      ].filter(Boolean) as string[];
+
+      if (selectors.length !== 1) {
+        return reply.code(400).send({ success: false, error: `Provide exactly one selector. Received: ${selectors.join(', ') || 'none'}` });
+      }
+
+      request.log.info({ selectorApplied: selectors[0], conversationId: request.params.conversationId }, 'Applying checkpoint selector');
+      const result = await config.defaultMemoryProvider.restoreToCheckpoint(request.params.conversationId, criteria);
+      if (!result.success) {
+        return reply.code(400).send({ success: false, error: result.error.message });
+      }
+
+      return reply.code(200).send({ success: true, data: result.data });
     });
 
     app.get('/memory/health', async (request: FastifyRequest, reply: FastifyReply) => {

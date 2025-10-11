@@ -1,4 +1,4 @@
-import { Message, TraceId } from '../../core/types';
+import { Message, TraceId, getTextContent } from '../../core/types';
 import { 
   MemoryProvider, 
   ConversationMemory, 
@@ -338,6 +338,75 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
     }
   };
 
+  const restoreToCheckpoint: MemoryProvider['restoreToCheckpoint'] = async (conversationId, criteria) => {
+    try {
+      const existingResult = await getConversation(conversationId);
+      if (!existingResult.success) {
+        return existingResult as unknown as Result<{ restored: boolean; removedMessagesCount: number; checkpointIndex: number; checkpointUserQuery?: string }>;
+      }
+      const conversation = existingResult.data;
+      if (!conversation) {
+        return createFailure(createMemoryNotFoundError(conversationId, 'InMemory'));
+      }
+
+      const msgs = conversation.messages as Message[];
+      let targetIdx: number | null = null;
+
+      if (typeof criteria.byMessageId === 'string') {
+        targetIdx = msgs.findIndex(m => m.id === (criteria.byMessageId as any));
+      } else if (typeof criteria.byIndex === 'number') {
+        targetIdx = criteria.byIndex;
+      } else if (typeof criteria.byUserMessageNumber === 'number') {
+        let count = 0;
+        for (let i = 0; i < msgs.length; i++) {
+          if (msgs[i].role === 'user') {
+            if (count === criteria.byUserMessageNumber) { targetIdx = i; break; }
+            count++;
+          }
+        }
+      } else if (typeof criteria.byText === 'string') {
+        const q = criteria.byText;
+        const mode = criteria.match || 'exact';
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const m = msgs[i];
+          if (m.role !== 'user') continue;
+          const text = getTextContent(m.content);
+          const match = mode === 'exact' ? (text === q)
+            : mode === 'startsWith' ? text.startsWith(q)
+            : text.includes(q);
+          if (match) { targetIdx = i; break; }
+        }
+      }
+
+      if (targetIdx == null || targetIdx < 0 || targetIdx >= msgs.length || msgs[targetIdx].role !== 'user') {
+        return createFailure(createMemoryStorageError('restore checkpoint', 'InMemory', new Error('Checkpoint user message not found')));
+      }
+
+      const checkpointUserQuery = getTextContent(msgs[targetIdx].content);
+      const newMessages = msgs.slice(0, targetIdx);
+      const removedCount = msgs.length - newMessages.length;
+
+      const now = new Date();
+      const updatedConversation: ConversationMemory = {
+        ...conversation,
+        messages: newMessages,
+        metadata: {
+          ...(conversation.metadata || { createdAt: now, updatedAt: now, lastActivity: now, totalMessages: newMessages.length }),
+          updatedAt: now,
+          lastActivity: now,
+          totalMessages: newMessages.length
+        }
+      };
+
+      conversations.set(conversationId, updatedConversation);
+      
+      console.log(`[MEMORY:InMemory] Restored conversation ${conversationId} to checkpoint at index ${targetIdx} (removed ${removedCount} messages)`);
+      return createSuccess({ restored: true, removedMessagesCount: removedCount, checkpointIndex: targetIdx, checkpointUserQuery });
+    } catch (error) {
+      return createFailure(createMemoryStorageError('restore checkpoint', 'InMemory', error as Error));
+    }
+  };
+
   return {
     storeMessages,
     getConversation,
@@ -348,6 +417,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
     clearUserConversations,
     getStats,
     healthCheck,
-    close
+    close,
+    restoreToCheckpoint
   };
 }

@@ -1,4 +1,4 @@
-import { Message, TraceId } from '../../core/types';
+import { Message, TraceId, getTextContent } from '../../core/types';
 import { 
   MemoryProvider, 
   ConversationMemory, 
@@ -492,6 +492,82 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
     }
   };
 
+  const restoreToCheckpoint: MemoryProvider['restoreToCheckpoint'] = async (conversationId, criteria) => {
+    const client = ensureConnected();
+    try {
+      const existingResult = await getConversation(conversationId);
+      if (!existingResult.success) {
+        return existingResult as unknown as Result<{ restored: boolean; removedMessagesCount: number; checkpointIndex: number; checkpointUserQuery?: string }>;
+      }
+      const conversation = existingResult.data;
+      if (!conversation) {
+        return createFailure(createMemoryNotFoundError(conversationId, 'PostgreSQL'));
+      }
+
+      const msgs = conversation.messages as Message[];
+      let targetIdx: number | null = null;
+
+      if (typeof criteria.byMessageId === 'string') {
+        targetIdx = msgs.findIndex(m => m.id === (criteria.byMessageId as any));
+      } else if (typeof criteria.byIndex === 'number') {
+        targetIdx = criteria.byIndex;
+      } else if (typeof criteria.byUserMessageNumber === 'number') {
+        let count = 0;
+        for (let i = 0; i < msgs.length; i++) {
+          if (msgs[i].role === 'user') {
+            if (count === criteria.byUserMessageNumber) { targetIdx = i; break; }
+            count++;
+          }
+        }
+      } else if (typeof criteria.byText === 'string') {
+        const q = criteria.byText;
+        const mode = criteria.match || 'exact';
+        for (let i = msgs.length - 1; i >= 0; i--) {
+          const m = msgs[i];
+          if (m.role !== 'user') continue;
+          const text = getTextContent(m.content);
+          const match = mode === 'exact' ? (text === q)
+            : mode === 'startsWith' ? text.startsWith(q)
+            : text.includes(q);
+          if (match) { targetIdx = i; break; }
+        }
+      }
+
+      if (targetIdx == null || targetIdx < 0 || targetIdx >= msgs.length || msgs[targetIdx].role !== 'user') {
+        return createFailure(createMemoryStorageError('restore checkpoint', 'PostgreSQL', new Error('Checkpoint user message not found')));
+      }
+
+      const checkpointUserQuery = getTextContent(msgs[targetIdx].content);
+      const newMessages = msgs.slice(0, targetIdx);
+      const removedCount = msgs.length - newMessages.length;
+
+      const now = new Date();
+      const updatedMetadata = {
+        ...(conversation.metadata || {}),
+        totalMessages: newMessages.length,
+        updatedAt: now,
+        lastActivity: now
+      };
+
+      const sql = `
+        UPDATE ${fullConfig.tableName}
+        SET messages = $1, metadata = $2, updated_at = $3, last_activity = $3
+        WHERE conversation_id = $4
+      `;
+      await client.query(sql, [
+        JSON.stringify(newMessages),
+        JSON.stringify(updatedMetadata),
+        now,
+        conversationId
+      ]);
+
+      console.log(`[MEMORY:Postgres] Restored conversation ${conversationId} to checkpoint at index ${targetIdx} (removed ${removedCount} messages)`);
+      return createSuccess({ restored: true, removedMessagesCount: removedCount, checkpointIndex: targetIdx, checkpointUserQuery });
+    } catch (error) {
+      return createFailure(createMemoryStorageError('restore checkpoint', 'PostgreSQL', error as Error));
+    }
+  };
+
   const cleanupOldConversations = async (olderThanDays: number): Promise<Result<number>> => {
     const client = ensureConnected();
     
@@ -568,7 +644,8 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
     clearUserConversations,
     getStats,
     healthCheck,
-    close
+    close,
+    restoreToCheckpoint
   };
 }
 

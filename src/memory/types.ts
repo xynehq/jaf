@@ -104,6 +104,38 @@ export type MemoryProvider = {
    * Close/cleanup the provider
    */
   readonly close: () => Promise<Result<void>>;
+  
+  /**
+   * Restore a conversation to a checkpoint above a specific user message.
+   * Removes the targeted user message and all messages after it.
+   * Returns the targeted user query text.
+   */
+  readonly restoreToCheckpoint: (
+    conversationId: string,
+    criteria: CheckpointCriteria
+  ) => Promise<Result<{
+    restored: boolean;
+    removedMessagesCount: number;
+    checkpointIndex: number;
+    checkpointUserQuery?: string;
+  }>>;
+};
+
+/**
+ * Criteria to identify the user message to checkpoint against.
+ * Provide exactly one of the selectors. If multiple are provided,
+ * precedence is: byMessageId > byIndex > byUserMessageNumber > byText.
+ *
+ * - byIndex: 0-based index into the messages array
+ * - byUserMessageNumber: 0-based index among only 'user' role messages
+ * - byText: match the message text using the specified match mode
+ */
+export type CheckpointCriteria = {
+  readonly byMessageId?: string;
+  readonly byIndex?: number;
+  readonly byUserMessageNumber?: number;
+  readonly byText?: string;
+  readonly match?: 'exact' | 'startsWith' | 'contains';
 };
 
 export interface MemoryConfig {
