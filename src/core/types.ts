@@ -85,6 +85,10 @@ export type Tool<A, Ctx> = {
         context: Readonly<Ctx>,
         params: Readonly<A>,
       ) => Promise<boolean> | boolean);
+  readonly onBeforeExecution?: (
+    params: A,
+    context: Readonly<Ctx>,
+  ) => Promise<{ params?: A } | void> | { params?: A } | void;
 };
 
 export type AdvancedGuardrailsConfig = {

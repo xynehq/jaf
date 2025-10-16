@@ -975,23 +975,6 @@ async function executeToolCalls<Ctx>(
     toolCalls.map(async (toolCall): Promise<ToolCallResult> => {
       const tool = agent.tools?.find(t => t.schema.name === toolCall.function.name);
       const startTime = Date.now();
-      
-      config.onEvent?.({
-        type: 'tool_call_start',
-        data: {
-          toolName: toolCall.function.name,
-          args: tryParseJSON(toolCall.function.arguments),
-          traceId: state.traceId,
-          runId: state.runId,
-          toolSchema: tool ? {
-            name: tool.schema.name,
-            description: tool.schema.description,
-            parameters: tool.schema.parameters
-          } : undefined,
-          context: state.context,
-          agentName: agent.name
-        }
-      });
 
       try {
         if (!tool) {
@@ -1003,8 +986,8 @@ async function executeToolCalls<Ctx>(
 
           config.onEvent?.({
             type: 'tool_call_end',
-            data: { 
-              toolName: toolCall.function.name, 
+            data: {
+              toolName: toolCall.function.name,
               result: errorResult,
               traceId: state.traceId,
               runId: state.runId,
@@ -1037,8 +1020,8 @@ async function executeToolCalls<Ctx>(
 
           config.onEvent?.({
             type: 'tool_call_end',
-            data: { 
-              toolName: toolCall.function.name, 
+            data: {
+              toolName: toolCall.function.name,
               result: errorResult,
               traceId: state.traceId,
               runId: state.runId,
@@ -1057,6 +1040,32 @@ async function executeToolCalls<Ctx>(
             }
           };
         }
+
+        let effectiveParams = parseResult.data;
+        if (tool.onBeforeExecution) {
+          const callbackResult = await tool.onBeforeExecution(parseResult.data, state.context);
+          if (callbackResult?.params !== undefined) {
+            effectiveParams = callbackResult.params;
+            console.log(`[JAF:ENGINE] Parameters modified by tool.onBeforeExecution:`, effectiveParams);
+          }
+        }
+
+        config.onEvent?.({
+          type: 'tool_call_start',
+          data: {
+            toolName: toolCall.function.name,
+            args: effectiveParams, 
+            traceId: state.traceId,
+            runId: state.runId,
+            toolSchema: {
+              name: tool.schema.name,
+              description: tool.schema.description,
+              parameters: tool.schema.parameters
+            },
+            context: state.context,
+            agentName: agent.name
+          }
+        });
 
         let needsApproval = false;
         if (typeof tool.needsApproval === 'function') {
@@ -1116,14 +1125,14 @@ async function executeToolCalls<Ctx>(
         }
 
         console.log(`[JAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
-        console.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
+        console.log(`[JAF:ENGINE] Tool args (final):`, effectiveParams);
         console.log(`[JAF:ENGINE] Tool context:`, state.context);
-        
-        const contextWithAdditional = additionalContext 
+
+        const contextWithAdditional = additionalContext
           ? { ...state.context, ...additionalContext }
           : state.context;
-        
-        const toolResult = await tool.execute(parseResult.data, contextWithAdditional);
+
+        const toolResult = await tool.execute(effectiveParams, contextWithAdditional);
         
         let resultString: string;
         let toolResultObj: any = null;
