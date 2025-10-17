@@ -1,8 +1,12 @@
 /**
  * JAF Logging System
- * 
+ *
  * Provides structured logging with different levels and output targets
+ * Automatically sanitizes sensitive data before logging
  */
+
+// Import sanitizeObject from tracing to apply sanitization
+import { sanitizeObject } from '../core/tracing.js';
 
 export enum LogLevel {
   DEBUG = 0,
@@ -61,8 +65,12 @@ if (process.env.NODE_ENV === 'test') {
 
 /**
  * Format log entry based on format type
+ * Applies sanitization to all metadata before formatting
  */
 const formatLogEntry = (entry: LogEntry, format: LogFormat): string => {
+  // Sanitize metadata before formatting
+  const sanitizedMetadata = entry.metadata ? sanitizeObject(entry.metadata) : undefined;
+
   switch (format) {
     case 'json':
       return JSON.stringify({
@@ -70,7 +78,7 @@ const formatLogEntry = (entry: LogEntry, format: LogFormat): string => {
         timestamp: entry.timestamp.toISOString(),
         message: entry.message,
         context: entry.context,
-        ...entry.metadata,
+        ...sanitizedMetadata,
         ...(entry.error && {
           error: {
             message: entry.error.message,
@@ -79,7 +87,7 @@ const formatLogEntry = (entry: LogEntry, format: LogFormat): string => {
           }
         })
       });
-    
+
     case 'pretty': {
       const levelColors: Record<number, string> = {
         [LogLevel.DEBUG]: '\x1b[36m', // Cyan
@@ -93,19 +101,19 @@ const formatLogEntry = (entry: LogEntry, format: LogFormat): string => {
       const color = levelColors[entry.level] || '';
       const levelStr = LogLevel[entry.level].padEnd(5);
       const contextStr = entry.context ? `[${entry.context}] ` : '';
-      const metaStr = entry.metadata ? ` ${JSON.stringify(entry.metadata)}` : '';
+      const metaStr = sanitizedMetadata ? ` ${JSON.stringify(sanitizedMetadata)}` : '';
       const errorStr = entry.error ? `\n  ${entry.error.stack || entry.error.message}` : '';
-      
+
       return `${color}${levelStr}${reset} ${contextStr}${entry.message}${metaStr}${errorStr}`;
     }
-    
+
     case 'text':
     default: {
       const level = LogLevel[entry.level].padEnd(5);
       const context = entry.context ? `[${entry.context}] ` : '';
-      const meta = entry.metadata ? ` ${JSON.stringify(entry.metadata)}` : '';
+      const meta = sanitizedMetadata ? ` ${JSON.stringify(sanitizedMetadata)}` : '';
       const error = entry.error ? ` Error: ${entry.error.message}` : '';
-      
+
       return `${level} ${context}${entry.message}${meta}${error}`;
     }
   }
@@ -251,5 +259,66 @@ export const stringifyError = (error: unknown): string => {
     return JSON.stringify(error);
   } catch {
     return String(error);
+  }
+};
+
+/**
+ * Re-export sanitizeObject for use in custom logging
+ */
+export { sanitizeObject } from '../core/tracing.js';
+
+/**
+ * Safe console logging with automatic sanitization
+ * Use these instead of direct console.log/warn/error calls
+ */
+export const safeConsole = {
+  /**
+   * Log a message with sanitized data
+   */
+  log: (message: string, ...data: any[]) => {
+    const sanitizedData = data.map(item =>
+      typeof item === 'object' && item !== null ? sanitizeObject(item) : item
+    );
+    console.log(message, ...sanitizedData);
+  },
+
+  /**
+   * Warn with sanitized data
+   */
+  warn: (message: string, ...data: any[]) => {
+    const sanitizedData = data.map(item =>
+      typeof item === 'object' && item !== null ? sanitizeObject(item) : item
+    );
+    console.warn(message, ...sanitizedData);
+  },
+
+  /**
+   * Error with sanitized data
+   */
+  error: (message: string, ...data: any[]) => {
+    const sanitizedData = data.map(item =>
+      typeof item === 'object' && item !== null ? sanitizeObject(item) : item
+    );
+    console.error(message, ...sanitizedData);
+  },
+
+  /**
+   * Info with sanitized data
+   */
+  info: (message: string, ...data: any[]) => {
+    const sanitizedData = data.map(item =>
+      typeof item === 'object' && item !== null ? sanitizeObject(item) : item
+    );
+    console.info(message, ...sanitizedData);
+  },
+
+  /**
+   * Debug with sanitized data
+   */
+  debug: (message: string, ...data: any[]) => {
+    const sanitizedData = data.map(item =>
+      typeof item === 'object' && item !== null ? sanitizeObject(item) : item
+    );
+    console.debug(message, ...sanitizedData);
   }
 };

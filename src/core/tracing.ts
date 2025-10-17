@@ -146,7 +146,7 @@ export function resetSanitizationConfig(): void {
  * @param depth - Current recursion depth
  * @param config - Optional sanitization config (uses global config if not provided)
  */
-function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
+export function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig, currentPath = ''): any {
   const effectiveConfig = config || globalSanitizationConfig;
   const mode = effectiveConfig.mode || 'blacklist';
   const allowedFields = effectiveConfig.allowedFields || [];
@@ -165,11 +165,15 @@ function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
   if (typeof obj !== 'object') return obj;
 
   if (Array.isArray(obj)) {
-    return obj.map(item => sanitizeObject(item, depth + 1, config));
+    // For arrays, keep the same path (don't add indices)
+    return obj.map(item => sanitizeObject(item, depth + 1, config, currentPath));
   }
 
   const sanitized: any = {};
   for (const [key, value] of Object.entries(obj)) {
+    // Build the full path for this key
+    const fullPath = currentPath ? `${currentPath}.${key}` : key;
+
     // Try custom sanitizer first
     if (customSanitizer) {
       try {
@@ -185,20 +189,22 @@ function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
     }
 
     const lowerKey = key.toLowerCase();
+    const lowerFullPath = fullPath.toLowerCase();
 
     // WHITELIST MODE: Redact everything EXCEPT allowed fields
     if (mode === 'whitelist') {
-      // Use exact match only for security (no substring matching)
-      const isAllowed = allowedFields.some(field =>
-        lowerKey === field.toLowerCase()
-      );
+      // Check if the full path OR just the key is in the whitelist
+      const isAllowed = allowedFields.some(field => {
+        const lowerField = field.toLowerCase();
+        return lowerFullPath === lowerField || lowerKey === lowerField;
+      });
 
       if (!isAllowed) {
         // Field not in whitelist - redact it
         sanitized[key] = redactionPlaceholder;
       } else if (typeof value === 'object' && value !== null) {
         // Field is allowed and is an object - sanitize recursively
-        sanitized[key] = sanitizeObject(value, depth + 1, config);
+        sanitized[key] = sanitizeObject(value, depth + 1, config, fullPath);
       } else {
         // Field is allowed and is a primitive - keep it
         sanitized[key] = value;
@@ -214,7 +220,7 @@ function sanitizeObject(obj: any, depth = 0, config?: SanitizationConfig): any {
       // This prevents leaking sensitive information in nested objects
       sanitized[key] = redactionPlaceholder;
     } else if (typeof value === 'object' && value !== null) {
-      sanitized[key] = sanitizeObject(value, depth + 1, config);
+      sanitized[key] = sanitizeObject(value, depth + 1, config, fullPath);
     } else {
       sanitized[key] = value;
     }
@@ -308,13 +314,13 @@ export class ConsoleTraceCollector implements TraceCollector {
         console.log(`${prefix} Agent handoff: ${event.data.from} → ${event.data.to}`);
         break;
       case 'handoff_denied':
-        console.warn(`${prefix} Handoff denied: ${event.data.from} → ${event.data.to}. Reason: ${event.data.reason}`);
+        console.warn(`${prefix} Handoff denied: ${event.data.from} → ${event.data.to}. Reason:`, sanitizeObject({ reason: event.data.reason }));
         break;
       case 'guardrail_violation':
-        console.warn(`${prefix} Guardrail violation (${event.data.stage}): ${event.data.reason}`);
+        console.warn(`${prefix} Guardrail violation (${event.data.stage}):`, sanitizeObject({ reason: event.data.reason }));
         break;
       case 'decode_error':
-        console.error(`${prefix} Decode error:`, event.data.errors);
+        console.error(`${prefix} Decode error:`, sanitizeObject(event.data.errors));
         break;
       case 'agent_processing':
         console.log(`${prefix} Agent ${event.data.agentName} processing (turn ${event.data.turnCount}, ${event.data.messageCount} messages, ${event.data.toolsAvailable.length} tools)`);
@@ -776,6 +782,8 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             const context = (data as any).context;
             console.log(`[OTEL DEBUG] Context type: ${typeof context}`);
             console.log(`[OTEL DEBUG] Context keys: ${Object.keys(context || {}).join(', ')}`);
+            // Log sanitized context for debugging
+            console.log(`[OTEL DEBUG] Sanitized context:`, sanitizeObject(context));
           }
           
           // Try to extract from context first
@@ -784,7 +792,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             // Try direct attribute access
             if (context.query) {
               userQuery = context.query;
-              console.log(`[OTEL DEBUG] Found user_query from context.query: ${userQuery}`);
+              console.log(`[OTEL DEBUG] Found user_query from context.query:`, sanitizeObject({ query: userQuery }));
             }
             
             // Try to extract from combined_history
@@ -793,10 +801,11 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               console.log(`[OTEL DEBUG] Found combined_history with ${history.length} messages`);
               for (let i = history.length - 1; i >= 0; i--) {
                 const msg = history[i];
-                console.log(`[OTEL DEBUG] History message ${history.length - 1 - i}: ${JSON.stringify(msg).substring(0, 100)}...`);
+                // Log sanitized message instead of raw content
+                console.log(`[OTEL DEBUG] History message ${history.length - 1 - i}:`, sanitizeObject(msg));
                 if (typeof msg === 'object' && msg?.role === 'user') {
                   userQuery = msg.content || '';
-                  console.log(`[OTEL DEBUG] Found user_query from history: ${userQuery}`);
+                  console.log(`[OTEL DEBUG] Found user_query from history:`, sanitizeObject({ query: userQuery }));
                   break;
                 }
               }
@@ -808,14 +817,14 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               console.log(`[OTEL DEBUG] Found token_response: ${typeof tokenResponse}`);
               if (typeof tokenResponse === 'object') {
                 userId = tokenResponse.email || tokenResponse.username || null;
-                console.log(`[OTEL DEBUG] Extracted user_id: ${userId}`);
+                console.log(`[OTEL DEBUG] Extracted user_id:`, sanitizeObject({ userId }));
               }
             }
             
             // Also try direct userId from context
             if (context.userId) {
               userId = context.userId;
-              console.log(`[OTEL DEBUG] Found userId directly in context: ${userId}`);
+              console.log(`[OTEL DEBUG] Found userId directly in context:`, sanitizeObject({ userId }));
             }
           }
           
@@ -827,16 +836,17 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             // Find the last user message which should be the current query
             for (let i = messages.length - 1; i >= 0; i--) {
               const msg = messages[i];
-              console.log(`[OTEL DEBUG] Message ${messages.length - 1 - i}: ${JSON.stringify(msg).substring(0, 100)}...`);
+              // Log sanitized message instead of raw content
+              console.log(`[OTEL DEBUG] Message ${messages.length - 1 - i}:`, sanitizeObject(msg));
               if (typeof msg === 'object' && msg?.role === 'user') {
                 userQuery = msg.content || '';
-                console.log(`[OTEL DEBUG] Found user_query from messages: ${userQuery}`);
+                console.log(`[OTEL DEBUG] Found user_query from messages:`, sanitizeObject({ query: userQuery }));
                 break;
               }
             }
           }
           
-          console.log(`[OTEL DEBUG] Final extracted - user_query: ${userQuery}, user_id: ${userId}`);
+          console.log(`[OTEL DEBUG] Final extracted:`, sanitizeObject({ user_query: userQuery, user_id: userId }));
           
           // Create comprehensive input data for the trace (sanitized)
           const traceInput = {
@@ -867,7 +877,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
           // Store user_id and user_query for later use in generations
           (rootSpan as any)._user_id = userId || (data as any).userId;
           (rootSpan as any)._user_query = userQuery;
-          console.log(`[OTEL] Created trace with user query: ${userQuery ? userQuery.substring(0, 100) + '...' : 'None'}`);
+          console.log(`[OTEL] Created trace with user query:`, sanitizeObject({ query: userQuery ? userQuery.substring(0, 100) + '...' : 'None' }));
           break;
         }
 
@@ -887,7 +897,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             if (outcome) {
               const attributes = {
                 'run_status': outcome.status || 'unknown',
-                'output': JSON.stringify(outcome.output),
+                'output': JSON.stringify(sanitizeObject(outcome.output)),
                 'model': model,
                 'gen_ai.request.model': model,
                 'llm.token_count.total': totalUsage.total,
@@ -899,7 +909,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
                 'gen_ai.usage.output_tokens': totalUsage.completion,
               };
               rootSpan.setAttributes(attributes);
-              console.log('[OTEL] Root span attributes:', attributes);
+              console.log('[OTEL] Root span attributes:', sanitizeObject(attributes));
               
               if (outcome.status !== 'completed' && outcome.error) {
                 rootSpan.recordException(new Error(outcome.error._tag || 'Unknown error'));
@@ -998,7 +1008,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               'gen_ai.response.id': choice.id || 'unknown',
             };
             generationSpan.setAttributes(attributes);
-            console.log('[OTEL] Generation span attributes:', attributes);
+            console.log('[OTEL] Generation span attributes:', sanitizeObject(attributes));
             
             console.log(`[OTEL] Usage data for cost tracking: prompt=${promptTokens}, completion=${completionTokens}, total=${totalTokens}`);
             

@@ -1,17 +1,18 @@
 /**
  * Real PostgreSQL Session Provider Implementation
- * 
+ *
  * This provides a production-ready PostgreSQL-based session provider
  * with proper connection pooling, transactions, and error handling
  */
 
-import { 
-  SessionProvider, 
-  Session, 
+import {
+  SessionProvider,
+  Session,
   SessionContext,
-  throwSessionError 
+  throwSessionError
 } from '../types.js';
 import { createSession } from './index.js';
+import { safeConsole } from '../../utils/logger.js';
 
 // Helper type for PostgreSQL client
 type PgPool = any; // Will be properly typed when pg is added
@@ -59,24 +60,24 @@ export const createPostgresSessionProvider = (config: PostgresConfig): SessionPr
     
     // Handle pool events
     pool.on('error', (err: any, client: any) => {
-      console.error('[ADK:Sessions] PostgreSQL pool error:', err);
+      safeConsole.error('[ADK:Sessions] PostgreSQL pool error:', err);
     });
-    
+
     pool.on('connect', (client: any) => {
-      console.log('[ADK:Sessions] New PostgreSQL client connected');
+      safeConsole.log('[ADK:Sessions] New PostgreSQL client connected');
     });
-    
+
     pool.on('acquire', (client: any) => {
-      console.log('[ADK:Sessions] PostgreSQL client acquired from pool');
+      safeConsole.log('[ADK:Sessions] PostgreSQL client acquired from pool');
     });
-    
+
     pool.on('remove', (client: any) => {
-      console.log('[ADK:Sessions] PostgreSQL client removed from pool');
+      safeConsole.log('[ADK:Sessions] PostgreSQL client removed from pool');
     });
-    
+
     // Initialize table
     initializeTable().catch(err => {
-      console.error('[ADK:Sessions] Failed to initialize PostgreSQL table:', err);
+      safeConsole.error('[ADK:Sessions] Failed to initialize PostgreSQL table:', err);
     });
     
   } catch (error) {
@@ -94,9 +95,9 @@ export const createPostgresSessionProvider = (config: PostgresConfig): SessionPr
       // Use dynamic table name safely
       const createTableQuery = SQL_CREATE_TABLE.replace(/\$1/g, tableName);
       await client.query(createTableQuery);
-      console.log(`[ADK:Sessions] PostgreSQL table ${tableName} initialized`);
+      safeConsole.log(`[ADK:Sessions] PostgreSQL table ${tableName} initialized`);
     } catch (error) {
-      console.error('[ADK:Sessions] Failed to create table:', error);
+      safeConsole.error('[ADK:Sessions] Failed to create table:', error);
       throw error;
     } finally {
       client.release();

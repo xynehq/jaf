@@ -1,11 +1,12 @@
 /**
  * JAF ADK Layer - LLM Configuration Bridge
- * 
+ *
  * Functional configuration system for LLM providers following JAF patterns
  */
 
 import { Model } from '../types.js';
 import type { AdkLLMServiceConfig } from '../providers/llm-service.js';
+import { safeConsole } from '../../utils/logger.js';
 
 // ========== Configuration Types ==========
 
@@ -476,40 +477,40 @@ export const createDefaultAdkLLMConfig = (): AdkLLMConfig => {
 
 export const createAdkLLMConfigFromEnvironment = (): AdkLLMConfig => {
   const envConfig = loadEnvironmentConfig();
-  
-  console.log('🔍 [CONFIG-DEBUG] Environment Config:', {
+
+  safeConsole.log('🔍 [CONFIG-DEBUG] Environment Config:', {
     openaiApiKey: envConfig.openaiApiKey ? `${envConfig.openaiApiKey.substring(0, 10)}...` : 'NOT SET',
     anthropicApiKey: envConfig.anthropicApiKey ? `${envConfig.anthropicApiKey.substring(0, 10)}...` : 'NOT SET',
     googleApiKey: envConfig.googleApiKey ? `${envConfig.googleApiKey.substring(0, 10)}...` : 'NOT SET',
     defaultProvider: envConfig.defaultProvider || 'NOT SET'
   });
-  
+
   // Determine provider based on available API keys
   let provider = 'litellm';
-  console.log('🔍 [CONFIG-DEBUG] Starting with default provider:', provider);
-  
+  safeConsole.log('🔍 [CONFIG-DEBUG] Starting with default provider:', provider);
+
   if (envConfig.openaiApiKey) {
-    console.log('🔍 [CONFIG-DEBUG] OpenAI API key found, switching to openai provider');
+    safeConsole.log('🔍 [CONFIG-DEBUG] OpenAI API key found, switching to openai provider');
     provider = 'openai';
   } else if (envConfig.anthropicApiKey) {
-    console.log('🔍 [CONFIG-DEBUG] Anthropic API key found, switching to anthropic provider');
+    safeConsole.log('🔍 [CONFIG-DEBUG] Anthropic API key found, switching to anthropic provider');
     provider = 'anthropic';
   } else if (envConfig.googleApiKey) {
-    console.log('🔍 [CONFIG-DEBUG] Google API key found, switching to google provider');
+    safeConsole.log('🔍 [CONFIG-DEBUG] Google API key found, switching to google provider');
     provider = 'google';
   } else if (envConfig.azureApiKey && envConfig.azureEndpoint) {
-    console.log('🔍 [CONFIG-DEBUG] Azure credentials found, switching to azure provider');
+    safeConsole.log('🔍 [CONFIG-DEBUG] Azure credentials found, switching to azure provider');
     provider = 'azure';
   }
-  
+
   // Override with explicit setting
   if (envConfig.defaultProvider) {
-    console.log('🔍 [CONFIG-DEBUG] Explicit provider override:', envConfig.defaultProvider);
+    safeConsole.log('🔍 [CONFIG-DEBUG] Explicit provider override:', envConfig.defaultProvider);
     provider = envConfig.defaultProvider;
   }
-  
-  console.log('🔍 [CONFIG-DEBUG] Final provider selected:', provider);
-  
+
+  safeConsole.log('🔍 [CONFIG-DEBUG] Final provider selected:', provider);
+
   return createAdkLLMConfig(provider, {
     defaultModel: envConfig.defaultModel
   });
@@ -518,22 +519,22 @@ export const createAdkLLMConfigFromEnvironment = (): AdkLLMConfig => {
 // ========== Configuration Debugging ==========
 
 export const debugAdkLLMConfig = (config: AdkLLMConfig): void => {
-  console.log('[ADK:CONFIG] LLM Configuration:');
-  console.log(`  Provider: ${config.provider}`);
-  console.log(`  Base URL: ${config.baseUrl}`);
-  console.log(`  API Key: ${config.apiKey ? '[REDACTED]' : '[NOT SET]'}`);
-  console.log(`  Default Model: ${config.defaultModel}`);
-  console.log(`  Temperature: ${config.temperature}`);
-  console.log(`  Max Tokens: ${config.maxTokens}`);
-  console.log(`  Streaming: ${config.streaming}`);
-  console.log(`  Timeout: ${config.timeout}ms`);
-  console.log(`  Retries: ${config.retries}`);
-  
+  safeConsole.log('[ADK:CONFIG] LLM Configuration:');
+  safeConsole.log(`  Provider: ${config.provider}`);
+  safeConsole.log(`  Base URL: ${config.baseUrl}`);
+  safeConsole.log(`  API Key: ${config.apiKey ? '[REDACTED]' : '[NOT SET]'}`);
+  safeConsole.log(`  Default Model: ${config.defaultModel}`);
+  safeConsole.log(`  Temperature: ${config.temperature}`);
+  safeConsole.log(`  Max Tokens: ${config.maxTokens}`);
+  safeConsole.log(`  Streaming: ${config.streaming}`);
+  safeConsole.log(`  Timeout: ${config.timeout}ms`);
+  safeConsole.log(`  Retries: ${config.retries}`);
+
   const validation = validateAdkLLMConfig(config);
   if (validation.length > 0) {
-    console.warn('[ADK:CONFIG] Configuration issues:');
-    validation.forEach(error => console.warn(`  - ${error}`));
+    safeConsole.warn('[ADK:CONFIG] Configuration issues:');
+    validation.forEach(error => safeConsole.warn(`  - ${error}`));
   } else {
-    console.log('[ADK:CONFIG] Configuration is valid');
+    safeConsole.log('[ADK:CONFIG] Configuration is valid');
   }
 };

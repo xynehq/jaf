@@ -1,6 +1,6 @@
 /**
  * JAF ADK Layer - Runner System
- * 
+ *
  * Functional agent execution system
  */
 
@@ -30,12 +30,12 @@ import {
   throwSessionError
 } from '../types';
 
-import { 
-  generateRunnerGraph, 
-  generateAgentGraph, 
+import {
+  generateRunnerGraph,
+  generateAgentGraph,
   generateToolGraph,
   GraphOptions,
-  GraphResult 
+  GraphResult
 } from '../../visualization/graphviz';
 
 import { getOrCreateSession, addMessageToSession, addArtifactToSession } from '../sessions';
@@ -43,6 +43,7 @@ import { executeTool } from '../tools';
 import { createModelMessage, getFunctionCalls, createUserMessage } from '../content';
 import { createAdkLLMService } from '../providers/llm-service.js';
 import { createAdkLLMConfigFromEnvironment } from '../config/llm-config.js';
+import { safeConsole } from '../../utils/logger.js';
 
 // ========== Core Runner Functions ==========
 
@@ -544,8 +545,8 @@ const executeAgentStream = async function* (
       }
     }
   } catch (error) {
-    console.error('[ADK:STREAM] Real streaming failed:', error);
-    
+    safeConsole.error('[ADK:STREAM] Real streaming failed:', error);
+
     // Yield error event but don't throw - streaming should complete gracefully
     yield createAgentEvent('error', {
       error: `Streaming error: ${error instanceof Error ? error.message : 'Unknown error'}`
@@ -988,8 +989,8 @@ const callRealLLM = async (
     
     return response.content;
   } catch (error) {
-    console.error('[ADK:LLM] Real LLM call failed:', error);
-    
+    safeConsole.error('[ADK:LLM] Real LLM call failed:', error);
+
     // Always propagate errors for proper handling
     throw error;
   }

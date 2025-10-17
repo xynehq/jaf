@@ -5,10 +5,10 @@
 
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import cors from '@fastify/cors';
-import type { 
-  A2AServerConfig, 
-  JSONRPCRequest, 
-  JSONRPCResponse, 
+import type {
+  A2AServerConfig,
+  JSONRPCRequest,
+  JSONRPCResponse,
   AgentCard,
   A2AAgent,
   A2ATask
@@ -16,6 +16,7 @@ import type {
 import { generateAgentCard } from './agent-card.js';
 import { createProtocolHandlerConfig } from './protocol.js';
 import { createA2ATaskProvider, createSimpleA2ATaskProvider } from './memory/factory.js';
+import { safeConsole } from '../utils/logger.js';
 
 // Pure function to create A2A server configuration
 export const createA2AServerConfig = async (config: A2AServerConfig) => {
@@ -43,14 +44,14 @@ export const createA2AServerConfig = async (config: A2AServerConfig) => {
   if (config.taskProvider) {
     try {
       taskProvider = await createA2ATaskProvider(
-        { 
+        {
           type: config.taskProvider.type,
           ...config.taskProvider.config
         },
         config.taskProvider.externalClients
       );
     } catch (error) {
-      console.warn(`Failed to create A2A task provider: ${(error as Error).message}. Falling back to in-memory provider.`);
+      safeConsole.warn(`Failed to create A2A task provider: ${(error as Error).message}. Falling back to in-memory provider.`);
       taskProvider = await createSimpleA2ATaskProvider('memory');
     }
   } else {
@@ -329,26 +330,26 @@ const startA2AServerInternal = async (
   try {
     await setupMiddleware(app);
     setupA2ARoutes(app, config);
-    
+
     const host = config.host || 'localhost';
     const port = config.port;
-    
-    console.log(`🔧 Starting A2A-enabled JAF server on ${host}:${port}...`);
+
+    safeConsole.log(`🔧 Starting A2A-enabled JAF server on ${host}:${port}...`);
     await app.listen({ port, host });
-    
-    console.log(`🚀 A2A Server running on http://${host}:${port}`);
-    console.log(`🤖 Available agents: ${Array.from(config.agents.keys()).join(', ')}`);
-    console.log(`📋 Agent Card: http://${host}:${port}/.well-known/agent-card`);
-    console.log(`🔗 A2A Endpoint: http://${host}:${port}/a2a`);
-    console.log(`🏥 A2A Health: http://${host}:${port}/a2a/health`);
-    console.log(`⚡ A2A Capabilities: http://${host}:${port}/a2a/capabilities`);
-    
+
+    safeConsole.log(`🚀 A2A Server running on http://${host}:${port}`);
+    safeConsole.log(`🤖 Available agents: ${Array.from(config.agents.keys()).join(', ')}`);
+    safeConsole.log(`📋 Agent Card: http://${host}:${port}/.well-known/agent-card`);
+    safeConsole.log(`🔗 A2A Endpoint: http://${host}:${port}/a2a`);
+    safeConsole.log(`🏥 A2A Health: http://${host}:${port}/a2a/health`);
+    safeConsole.log(`⚡ A2A Capabilities: http://${host}:${port}/a2a/capabilities`);
+
     config.agents.forEach((agent, name) => {
-      console.log(`🎯 Agent ${name}: http://${host}:${port}/a2a/agents/${name}`);
+      safeConsole.log(`🎯 Agent ${name}: http://${host}:${port}/a2a/agents/${name}`);
     });
-    
+
   } catch (error) {
-    console.error('Failed to start A2A server:', error);
+    safeConsole.error('Failed to start A2A server:', error);
     process.exit(1);
   }
 };
@@ -356,7 +357,7 @@ const startA2AServerInternal = async (
 // Pure function to stop A2A server
 const stopA2AServer = async (app: FastifyInstance) => {
   await app.close();
-  console.log('🛑 A2A Server stopped');
+  safeConsole.log('🛑 A2A Server stopped');
 };
 
 // Pure function to handle A2A requests

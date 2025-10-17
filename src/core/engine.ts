@@ -13,6 +13,7 @@ import {
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
 import { buildEffectiveGuardrails, executeInputGuardrailsParallel, executeInputGuardrailsSequential, executeOutputGuardrails } from './guardrails.js';
+import { safeConsole } from '../utils/logger.js';
 
 
 export async function run<Ctx, Out>(
@@ -34,27 +35,27 @@ export async function run<Ctx, Out>(
 
     let stateWithMemory = initialState;
     if (config.memory?.autoStore && config.conversationId) {
-      console.log(`[JAF:ENGINE] Loading conversation history for ${config.conversationId}`);
+      safeConsole.log(`[JAF:ENGINE] Loading conversation history for ${config.conversationId}`);
       stateWithMemory = await loadConversationHistory(initialState, config);
     } else {
-      console.log(`[JAF:ENGINE] Skipping memory load - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}`);
+      safeConsole.log(`[JAF:ENGINE] Skipping memory load - autoStore: ${config.memory?.autoStore}, conversationId: ${config.conversationId}`);
     }
 
     if (config.approvalStorage) {
-      console.log(`[JAF:ENGINE] Loading approvals for runId ${stateWithMemory.runId}`);
+      safeConsole.log(`[JAF:ENGINE] Loading approvals for runId ${stateWithMemory.runId}`);
       const { loadApprovalsIntoState } = await import('./state');
       stateWithMemory = await loadApprovalsIntoState(stateWithMemory, config);
     }
 
     const result = await runInternal<Ctx, Out>(stateWithMemory, config);
-    
+
     if (config.memory?.autoStore && config.conversationId && result.outcome.status === 'completed' && config.memory.storeOnCompletion) {
-      console.log(`[JAF:ENGINE] Storing final completed conversation for ${config.conversationId}`);
+      safeConsole.log(`[JAF:ENGINE] Storing final completed conversation for ${config.conversationId}`);
       await storeConversationHistory(result.finalState, config);
     } else if (result.outcome.status === 'interrupted') {
-      console.log(`[JAF:ENGINE] Conversation interrupted - storage already handled during interruption`);
+      safeConsole.log(`[JAF:ENGINE] Conversation interrupted - storage already handled during interruption`);
     } else {
-      console.log(`[JAF:ENGINE] Skipping memory store - status: ${result.outcome.status}, storeOnCompletion: ${config.memory?.storeOnCompletion}`);
+      safeConsole.log(`[JAF:ENGINE] Skipping memory store - status: ${result.outcome.status}, storeOnCompletion: ${config.memory?.storeOnCompletion}`);
     }
 
     config.onEvent?.({
@@ -279,12 +280,12 @@ async function runInternal<Ctx, Out>(
     };
   }
 
-  const hasAdvancedGuardrails = !!(currentAgent.advancedConfig?.guardrails && 
-    (currentAgent.advancedConfig.guardrails.inputPrompt || 
-     currentAgent.advancedConfig.guardrails.outputPrompt || 
+  const hasAdvancedGuardrails = !!(currentAgent.advancedConfig?.guardrails &&
+    (currentAgent.advancedConfig.guardrails.inputPrompt ||
+     currentAgent.advancedConfig.guardrails.outputPrompt ||
      currentAgent.advancedConfig.guardrails.requireCitations));
-     
-  console.log('[JAF:ENGINE] Debug guardrails setup:', {
+
+  safeConsole.log('[JAF:ENGINE] Debug guardrails setup:', {
     agentName: currentAgent.name,
     hasAdvancedConfig: !!currentAgent.advancedConfig,
     hasAdvancedGuardrails,
@@ -304,21 +305,21 @@ async function runInternal<Ctx, Out>(
     effectiveOutputGuardrails = [...(config.finalOutputGuardrails || [])];
   }
 
-  const inputGuardrailsToRun = (state.turnCount === 0 && effectiveInputGuardrails.length > 0) 
-    ? effectiveInputGuardrails 
+  const inputGuardrailsToRun = (state.turnCount === 0 && effectiveInputGuardrails.length > 0)
+    ? effectiveInputGuardrails
     : [];
-    
-  console.log('[JAF:ENGINE] Input guardrails to run:', {
+
+  safeConsole.log('[JAF:ENGINE] Input guardrails to run:', {
     turnCount: state.turnCount,
     effectiveInputLength: effectiveInputGuardrails.length,
     inputGuardrailsToRunLength: inputGuardrailsToRun.length,
     hasAdvancedGuardrails
   });
 
-  console.log(`[JAF:ENGINE] Using agent: ${currentAgent.name}`);
-  console.log(`[JAF:ENGINE] Agent has ${currentAgent.tools?.length || 0} tools available`);
+  safeConsole.log(`[JAF:ENGINE] Using agent: ${currentAgent.name}`);
+  safeConsole.log(`[JAF:ENGINE] Agent has ${currentAgent.tools?.length || 0} tools available`);
   if (currentAgent.tools) {
-    console.log(`[JAF:ENGINE] Available tools:`, currentAgent.tools.map(t => t.schema.name));
+    safeConsole.log(`[JAF:ENGINE] Available tools:`, currentAgent.tools.map(t => t.schema.name));
   }
 
   config.onEvent?.({
@@ -414,8 +415,8 @@ async function runInternal<Ctx, Out>(
             }
           };
         }
-        
-        console.log(`✅ All input guardrails passed. Starting LLM call.`);
+
+        safeConsole.log(`✅ All input guardrails passed. Starting LLM call.`);
         llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
       } else {
         const guardrailPromise = executeInputGuardrailsParallel(inputGuardrailsToRun, firstUserMessage, config);
@@ -427,10 +428,10 @@ async function runInternal<Ctx, Out>(
         ]);
         
         llmResponse = llmResult;
-        
+
         if (!guardrailResult.isValid) {
-          console.log(`🚨 Input guardrail violation: ${guardrailResult.errorMessage}`);
-          console.log(`[JAF:GUARDRAILS] Discarding LLM response due to input guardrail violation`);
+          safeConsole.log(`🚨 Input guardrail violation: ${guardrailResult.errorMessage}`);
+          safeConsole.log(`[JAF:GUARDRAILS] Discarding LLM response due to input guardrail violation`);
           return {
             finalState: state,
             outcome: {
@@ -442,11 +443,11 @@ async function runInternal<Ctx, Out>(
             }
           };
         }
-        
-        console.log(`✅ All input guardrails passed. Using LLM response.`);
+
+        safeConsole.log(`✅ All input guardrails passed. Using LLM response.`);
         }
       } else {
-        console.log('[JAF:ENGINE] Using LEGACY guardrails path with', inputGuardrailsToRun.length, 'guardrails');
+        safeConsole.log('[JAF:ENGINE] Using LEGACY guardrails path with', inputGuardrailsToRun.length, 'guardrails');
         for (const guardrail of inputGuardrailsToRun) {
           const result = await guardrail(getTextContent(firstUserMessage.content));
           if (!result.isValid) {
@@ -512,7 +513,7 @@ async function runInternal<Ctx, Out>(
                     }
                   : {})
               };
-              try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { console.error('Error in config.onEvent:', err); }
+              try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { safeConsole.error('Error in config.onEvent:', err); }
             }
           }
 
@@ -585,7 +586,7 @@ async function runInternal<Ctx, Out>(
                   }
                 : {})
             };
-            try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { console.error('Error in config.onEvent:', err); }
+            try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { safeConsole.error('Error in config.onEvent:', err); }
           }
         }
 
@@ -683,8 +684,8 @@ async function runInternal<Ctx, Out>(
   const updatedTurnCount = state.turnCount + 1;
 
   if (llmResponse.message.tool_calls && llmResponse.message.tool_calls.length > 0) {
-    console.log(`[JAF:ENGINE] Processing ${llmResponse.message.tool_calls.length} tool calls`);
-    console.log(`[JAF:ENGINE] Tool calls:`, llmResponse.message.tool_calls);
+    safeConsole.log(`[JAF:ENGINE] Processing ${llmResponse.message.tool_calls.length} tool calls`);
+    safeConsole.log(`[JAF:ENGINE] Tool calls:`, llmResponse.message.tool_calls);
     
     try {
       const requests = llmResponse.message.tool_calls.map((tc: any) => ({
@@ -728,7 +729,7 @@ async function runInternal<Ctx, Out>(
       };
 
       if (config.memory?.autoStore && config.conversationId) {
-        console.log(`[JAF:ENGINE] Storing conversation state due to interruption for ${config.conversationId}`);
+        safeConsole.log(`[JAF:ENGINE] Storing conversation state due to interruption for ${config.conversationId}`);
         const stateForStorage = {
           ...interruptedState,
           messages: [...interruptedState.messages, ...approvalRequiredResults.map(r => r.message)]
@@ -744,8 +745,8 @@ async function runInternal<Ctx, Out>(
         },
       };
     }
-    
-    console.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
+
+    safeConsole.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
 
     config.onEvent?.({
       type: 'tool_results_to_llm',
@@ -943,8 +944,8 @@ async function runInternal<Ctx, Out>(
   }
 
   config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
-  
-  console.error(`[JAF:ENGINE] No tool calls or content returned by model. LLMResponse: `, llmResponse);
+
+  safeConsole.error(`[JAF:ENGINE] No tool calls or content returned by model. LLMResponse: `, llmResponse);
   return {
     finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
     outcome: {
@@ -1115,9 +1116,9 @@ async function executeToolCalls<Ctx>(
           };
         }
 
-        console.log(`[JAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
-        console.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
-        console.log(`[JAF:ENGINE] Tool context:`, state.context);
+        safeConsole.log(`[JAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
+        safeConsole.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
+        safeConsole.log(`[JAF:ENGINE] Tool context:`, state.context);
         
         const contextWithAdditional = additionalContext 
           ? { ...state.context, ...additionalContext }
@@ -1130,13 +1131,13 @@ async function executeToolCalls<Ctx>(
         
         if (typeof toolResult === 'string') {
           resultString = toolResult;
-          console.log(`[JAF:ENGINE] Tool ${toolCall.function.name} returned string:`, resultString);
+          safeConsole.log(`[JAF:ENGINE] Tool ${toolCall.function.name} returned string:`, resultString);
         } else {
           toolResultObj = toolResult;
           const { toolResultToString } = await import('./tool-results');
           resultString = toolResultToString(toolResult);
-          console.log(`[JAF:ENGINE] Tool ${toolCall.function.name} returned ToolResult:`, toolResult);
-          console.log(`[JAF:ENGINE] Converted to string:`, resultString);
+          safeConsole.log(`[JAF:ENGINE] Tool ${toolCall.function.name} returned ToolResult:`, toolResult);
+          safeConsole.log(`[JAF:ENGINE] Converted to string:`, resultString);
         }
 
         config.onEvent?.({
@@ -1264,12 +1265,12 @@ async function loadConversationHistory<Ctx>(
 
   const result = await config.memory.provider.getConversation(config.conversationId);
   if (!result.success) {
-    console.warn(`[JAF:MEMORY] Failed to load conversation history: ${result.error}`);
+    safeConsole.warn(`[JAF:MEMORY] Failed to load conversation history: ${result.error}`);
     return initialState;
   }
 
   if (!result.data) {
-    console.log(`[JAF:MEMORY] No existing conversation found for ${config.conversationId}`);
+    safeConsole.log(`[JAF:MEMORY] No existing conversation found for ${config.conversationId}`);
     return initialState;
   }
 
@@ -1301,13 +1302,13 @@ async function loadConversationHistory<Ctx>(
     ? new Map(Object.entries(storedApprovals) as [string, any][])
     : (initialState.approvals ?? new Map());
 
-  console.log(`[JAF:MEMORY] Loaded ${allMemoryMessages.length} messages from memory, filtered to ${memoryMessages.length} for LLM context (removed halted messages)`);
+  safeConsole.log(`[JAF:MEMORY] Loaded ${allMemoryMessages.length} messages from memory, filtered to ${memoryMessages.length} for LLM context (removed halted messages)`);
   if (storedApprovals) {
-    console.log(`[JAF:MEMORY] Loaded ${Object.keys(storedApprovals).length} approvals from memory`);
+    safeConsole.log(`[JAF:MEMORY] Loaded ${Object.keys(storedApprovals).length} approvals from memory`);
   }
-  console.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
-  console.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
-  console.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+  safeConsole.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+  safeConsole.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+  safeConsole.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
   
   return {
     ...initialState,
@@ -1336,8 +1337,8 @@ async function storeConversationHistory<Ctx>(
       ...messagesToStore.slice(0, keepFirst),
       ...messagesToStore.slice(-keepRecent)
     ];
-    
-    console.log(`[JAF:MEMORY] Compressed conversation from ${finalState.messages.length} to ${messagesToStore.length} messages`);
+
+    safeConsole.log(`[JAF:MEMORY] Compressed conversation from ${finalState.messages.length} to ${messagesToStore.length} messages`);
   }
 
   const metadata = {
@@ -1351,9 +1352,9 @@ async function storeConversationHistory<Ctx>(
 
   const result = await config.memory.provider.storeMessages(config.conversationId, messagesToStore, metadata);
   if (!result.success) {
-    console.warn(`[JAF:MEMORY] Failed to store conversation history: ${JSON.stringify(result.error)}`);
+    safeConsole.warn(`[JAF:MEMORY] Failed to store conversation history: ${JSON.stringify(result.error)}`);
     return;
   }
-  
-  console.log(`[JAF:MEMORY] Stored ${messagesToStore.length} messages for conversation ${config.conversationId}`);
+
+  safeConsole.log(`[JAF:MEMORY] Stored ${messagesToStore.length} messages for conversation ${config.conversationId}`);
 }

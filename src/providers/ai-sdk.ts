@@ -13,6 +13,7 @@ import {
   zodSchema,
 } from 'ai';
 import { ModelProvider, Message, getTextContent } from '../core/types.js';
+import { safeConsole } from '../utils/logger.js';
 
 export type AiSdkFunctionTool = {
   type: 'function';
@@ -199,9 +200,9 @@ export const createAiSdkProvider = <Ctx>(
         return { message: { content: JSON.stringify(object) } };
       }
 
-      console.log(`[DEBUG] Tools passed to AI SDK: ${toolsForAiSDK ? Object.keys(toolsForAiSDK).length : 0} (hasCompletedTools: ${hasCompletedTools})`);
+      safeConsole.log(`[DEBUG] Tools passed to AI SDK: ${toolsForAiSDK ? Object.keys(toolsForAiSDK).length : 0} (hasCompletedTools: ${hasCompletedTools})`);
       try {
-        console.log('[DEBUG] Messages being passed to AI SDK:', JSON.stringify(messages, null, 2));
+        safeConsole.log('[DEBUG] Messages being passed to AI SDK:', JSON.stringify(messages, null, 2));
 
         const completeResponse = await generateText({
           model: lm,
@@ -212,7 +213,7 @@ export const createAiSdkProvider = <Ctx>(
           maxOutputTokens: agent.modelConfig?.maxTokens,
         });
 
-        console.log('[DEBUG] AI SDK generateText response summary:', {
+        safeConsole.log('[DEBUG] AI SDK generateText response summary:', {
           text: completeResponse.text?.slice(0, 100),
           toolCallsCount: completeResponse.toolCalls?.length ?? 0,
         });
@@ -228,7 +229,7 @@ export const createAiSdkProvider = <Ctx>(
           },
         };
       } catch (error) {
-        console.error('[DEBUG] AI SDK generateText error:', error);
+        safeConsole.error('[DEBUG] AI SDK generateText error:', error);
         throw error;
       }
     },
