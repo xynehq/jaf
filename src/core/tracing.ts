@@ -1,4 +1,6 @@
-import { mod } from 'mathjs';
+import tunnel from 'tunnel';
+import http from 'http';
+import https from 'https';
 import { TraceEvent, TraceId, createTraceId } from './types.js';
 
 // Optional imports for tracing (these might not be available)
@@ -394,6 +396,155 @@ export class FileTraceCollector implements TraceCollector {
 
 // Global variables for OpenTelemetry setup
 let otelSdk: any = null;
+let manualProxyConfig: string | null = null; // Store manual proxy URL
+
+/**
+ * Configure proxy settings manually for OpenTelemetry trace exports
+ *
+ * This function allows you to programmatically set a proxy URL that will be used
+ * for all OpenTelemetry trace exports. It takes priority over environment variables.
+ *
+ * @param proxyUrl - The proxy URL (e.g., 'http://proxy.example.com:8080')
+ *
+ * @example
+ * ```typescript
+ * import { configureProxy, OpenTelemetryTraceCollector } from '@xynehq/jaf';
+ *
+ * // Configure proxy before creating trace collector
+ * configureProxy('http://proxy.example.com:8080');
+ *
+ * // With authentication
+ * configureProxy('http://username:password@proxy.example.com:8080');
+ *
+ * // Then create your trace collector
+ * const collector = new OpenTelemetryTraceCollector();
+ * ```
+ */
+export function configureProxy(proxyUrl: string): void {
+  if (!proxyUrl) {
+    console.warn('[JAF:PROXY] Empty proxy URL provided to configureProxy()');
+    return;
+  }
+
+  // Validate proxy URL format
+  try {
+    new URL(proxyUrl);
+  } catch (error) {
+    console.error(`[JAF:PROXY] Invalid proxy URL format: ${proxyUrl}`);
+    throw new Error(`Invalid proxy URL: ${proxyUrl}`);
+  }
+
+  manualProxyConfig = proxyUrl;
+  console.log(`[JAF:PROXY] Manual proxy configuration set: ${proxyUrl}`);
+}
+
+/**
+ * Reset manual proxy configuration
+ *
+ * This clears any manually configured proxy settings. After calling this,
+ * JAF will fall back to environment variables for proxy configuration.
+ *
+ * @example
+ * ```typescript
+ * import { resetProxyConfig } from '@xynehq/jaf';
+ *
+ * resetProxyConfig();  // Clear manual proxy config
+ * ```
+ */
+export function resetProxyConfig(): void {
+  manualProxyConfig = null;
+  console.log('[JAF:PROXY] Manual proxy configuration cleared');
+}
+
+const createTunnelAgent = (proxyUrl: string, isHttps: boolean) => {
+  const url = new URL(proxyUrl);
+
+  console.log(`[JAF:OTEL:PROXY] Creating tunnel agent for proxy: ${proxyUrl} (${isHttps ? 'HTTPS' : 'HTTP'} traffic)`);
+  console.log(`[JAF:OTEL:PROXY] Proxy host: ${url.hostname}, port: ${url.port}`);
+
+  // Create appropriate tunnel agent based on target protocol
+  const agent: any = isHttps
+    ? tunnel.httpsOverHttp({
+        proxy: {
+          host: url.hostname,
+          port: parseInt(url.port)
+        },
+        rejectUnauthorized: false
+      })
+    : tunnel.httpOverHttp({
+        proxy: {
+          host: url.hostname,
+          port: parseInt(url.port)
+        }
+      });
+
+  console.log(`[JAF:OTEL:PROXY] Tunnel agent created successfully`);
+  return agent;
+};
+
+function getProxyConfiguration(collectorUrl: string) {
+  try {
+    // Check if collector URL is localhost - skip proxy for localhost
+    const collectorUrlObj = new URL(collectorUrl);
+
+    // Priority: Manual config > Environment variables
+    let proxyUrl: string | undefined;
+
+    if (manualProxyConfig) {
+      proxyUrl = manualProxyConfig;
+      console.log(`[JAF:OTEL:PROXY] Using manual proxy configuration: ${proxyUrl}`);
+    } else {
+      // Check for proxy environment variables
+      const httpProxy = process.env.HTTP_PROXY || process.env.http_proxy;
+      const httpsProxy = process.env.HTTPS_PROXY || process.env.https_proxy;
+      const allProxy = process.env.ALL_PROXY || process.env.all_proxy;
+
+      console.log(`[JAF:OTEL:PROXY] Environment variables check:`);
+      console.log(`[JAF:OTEL:PROXY] - HTTP_PROXY: ${httpProxy || 'not set'}`);
+      console.log(`[JAF:OTEL:PROXY] - HTTPS_PROXY: ${httpsProxy || 'not set'}`);
+      console.log(`[JAF:OTEL:PROXY] - ALL_PROXY: ${allProxy || 'not set'}`);
+
+      // Use the first available proxy configuration
+      proxyUrl = httpProxy || httpsProxy || allProxy;
+    }
+
+    if (proxyUrl) {
+      console.log(`[JAF:OTEL:PROXY] Using proxy URL: ${proxyUrl}`);
+
+      // Validate proxy URL format
+      try {
+        new URL(proxyUrl);
+      } catch (urlError) {
+        console.error(`[JAF:OTEL:PROXY] Invalid proxy URL format: ${proxyUrl}`);
+        return undefined;
+      }
+
+      // Determine if collector uses HTTPS
+      const isHttps = collectorUrl.startsWith('https://');
+
+      const tunnelAgent = createTunnelAgent(proxyUrl, isHttps);
+      console.log(`[JAF:OTEL:PROXY] Created tunnel agent successfully for ${isHttps ? 'HTTPS' : 'HTTP'} traffic`);
+
+      return {
+        httpsAgent: isHttps ? tunnelAgent : undefined,
+        httpAgent: !isHttps ? tunnelAgent : undefined,
+        proxyUrl: proxyUrl
+      };
+    } else {
+      console.log(`[JAF:OTEL:PROXY] No proxy configuration found - using direct connection`);
+      return {
+        httpsAgent: undefined,
+        httpAgent: undefined,
+        proxyUrl: undefined
+      };
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[JAF:OTEL:PROXY] Error configuring proxy: ${errorMessage}`);
+    console.error(`[JAF:OTEL:PROXY] Stack trace:`, error);
+    return undefined;
+  }
+}
 
 function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: string): void {
   if (!NodeSDK || !OTLPTraceExporter || !Resource || !SemanticResourceAttributes || !collectorUrl) {
@@ -406,7 +557,8 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
     const headers: Record<string, string> = {};
 
     if (headersEnv) {
-      // Parse comma-separated key=value pairs (do not log the header values for security)
+      console.log(`[JAF:OTEL] Parsing headers: ${headersEnv}`);
+      // Parse comma-separated key=value pairs
       headersEnv.split(',').forEach(header => {
         const [key, value] = header.trim().split('=');
         if (key && value) {
@@ -416,15 +568,118 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
       console.log(`[JAF:OTEL] Parsed headers:`, Object.keys(headers));
     }
 
+    // Configure proxy settings
+    const proxyConfig = getProxyConfiguration(collectorUrl);
+
     const resource = new Resource({
       [SemanticResourceAttributes.SERVICE_NAME]: serviceName,
     });
 
+    // Create exporter configuration with proxy support
+    const exporterConfig: any = {
+      url: collectorUrl,
+      headers: headers,
+    };
+
+    // Add proxy agents if configured
+    if (proxyConfig && (proxyConfig.httpsAgent || proxyConfig.httpAgent)) {
+      console.log(`[JAF:OTEL:PROXY] Configuring OTLP exporter with proxy: ${proxyConfig.proxyUrl}`);
+      console.log(`[JAF:OTEL:PROXY] Target collector: ${collectorUrl}`);
+
+      // Override the global HTTP/HTTPS modules to use our proxy agents
+      const originalHttpsRequest = https.request;
+      const originalHttpRequest = http.request;
+
+      if (proxyConfig.httpsAgent) {
+        console.log(`[JAF:OTEL:PROXY] Configuring HTTPS proxy agent`);
+        https.request = function(options: any, callback: any) {
+          console.log(`[JAF:OTEL:PROXY] HTTPS request intercepted:`, {
+            hostname: options.hostname,
+            port: options.port,
+            path: options.path,
+            method: options.method
+          });
+
+          // Force use of our proxy agent
+          options.agent = proxyConfig.httpsAgent;
+
+          const req = originalHttpsRequest.call(this, options, callback);
+
+          req.on('response', (res: any) => {
+            console.log(`[JAF:OTEL:PROXY] HTTPS response via proxy:`, {
+              statusCode: res.statusCode,
+              statusMessage: res.statusMessage
+            });
+          });
+
+          req.on('error', (error: any) => {
+            console.error(`[JAF:OTEL:PROXY] HTTPS request error via proxy:`, error.message);
+          });
+
+          return req;
+        };
+
+        // Also override https.get for consistency
+        const originalHttpsGet = https.get;
+        https.get = function(options: any, callback: any) {
+          options.agent = proxyConfig.httpsAgent;
+          return originalHttpsGet.call(this, options, callback);
+        };
+
+        console.log(`[JAF:OTEL:PROXY] Overridden https.request to use HTTPS proxy agent`);
+      }
+
+      if (proxyConfig.httpAgent) {
+        console.log(`[JAF:OTEL:PROXY] Configuring HTTP proxy agent`);
+        http.request = function(options: any, callback: any) {
+          console.log(`[JAF:OTEL:PROXY] HTTP request intercepted:`, {
+            hostname: options.hostname,
+            port: options.port,
+            path: options.path,
+            method: options.method
+          });
+
+          options.agent = proxyConfig.httpAgent;
+
+          const req = originalHttpRequest.call(this, options, callback);
+
+          req.on('response', (res: any) => {
+            console.log(`[JAF:OTEL:PROXY] HTTP response via proxy:`, {
+              statusCode: res.statusCode,
+              statusMessage: res.statusMessage
+            });
+          });
+
+          req.on('error', (error: any) => {
+            console.error(`[JAF:OTEL:PROXY] HTTP request error via proxy:`, error.message);
+          });
+
+          return req;
+        };
+
+        console.log(`[JAF:OTEL:PROXY] Overridden http.request to use HTTP proxy agent`);
+      }
+
+      // Add request timeout for better debugging
+      exporterConfig.timeoutMillis = 30000;
+
+      console.log(`[JAF:OTEL:PROXY] OTLP exporter configured to use proxy for requests to: ${collectorUrl}`);
+      console.log(`[JAF:OTEL:PROXY] Request timeout set to: ${exporterConfig.timeoutMillis}ms`);
+    } else {
+      console.log(`[JAF:OTEL:PROXY] OTLP exporter configured for direct connection to: ${collectorUrl}`);
+    }
+
+    console.log(`[JAF:OTEL:CONFIG] Final exporter configuration:`, {
+      url: exporterConfig.url,
+      headers: Object.keys(exporterConfig.headers || {}),
+      hasHttpsAgent: !!proxyConfig?.httpsAgent,
+      hasHttpAgent: !!proxyConfig?.httpAgent,
+      timeoutMillis: exporterConfig.timeoutMillis || 'default',
+      proxyUrl: proxyConfig?.proxyUrl || 'none'
+    });
+
     otelSdk = new NodeSDK({
-      traceExporter: new OTLPTraceExporter({
-        url: collectorUrl,
-        headers: headers,
-      }),
+      traceExporter: new OTLPTraceExporter(exporterConfig),
       resource: resource.merge(new Resource({})),
       // Disable default resource detectors to minimize attributes
       autoDetectResources: false
@@ -433,7 +688,7 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
     console.log(`[JAF:OTEL] Starting OpenTelemetry SDK with URL: ${collectorUrl}`);
     otelSdk.start();
     console.log(`[JAF:OTEL] OpenTelemetry SDK started successfully`);
-    
+
     // Add shutdown hook to flush traces
     process.on('beforeExit', async () => {
       console.log('[JAF:OTEL] Flushing traces before exit...');
@@ -444,7 +699,7 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
         console.error('[JAF:OTEL] Error flushing traces:', JSON.stringify(error, null, 2));
       }
     });
-    
+
   } catch (error) {
     console.error('[JAF:OTEL] Failed to setup OpenTelemetry:', error);
   }
