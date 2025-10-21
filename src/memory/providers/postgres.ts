@@ -1,8 +1,8 @@
 import { Message, TraceId } from '../../core/types';
-import { 
-  MemoryProvider, 
-  ConversationMemory, 
-  MemoryQuery, 
+import {
+  MemoryProvider,
+  ConversationMemory,
+  MemoryQuery,
   PostgresConfig,
   Result,
   createSuccess,
@@ -12,6 +12,7 @@ import {
   createMemoryStorageError,
   ConversationStatus
 } from '../types';
+import { safeConsole } from '../../utils/logger.js';
 
 // PostgreSQL client interface - compatible with pg, postgres.js, etc.
 interface PostgresClient {
@@ -47,7 +48,7 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
   try {
     // Test connection and create table if needed
     await initializeSchema(postgresClient, fullConfig);
-    console.log(`[MEMORY:Postgres] Connected to PostgreSQL at ${fullConfig.host}:${fullConfig.port}/${fullConfig.database}`);
+    safeConsole.log(`[MEMORY:Postgres] Connected to PostgreSQL at ${fullConfig.host}:${fullConfig.port}/${fullConfig.database}`);
   } catch (error) {
     throw createMemoryConnectionError('PostgreSQL', error as Error);
   }
@@ -96,7 +97,7 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
         now
       ]);
       
-      console.log(`[MEMORY:Postgres] Stored ${messages.length} messages for conversation ${conversationId}`);
+      safeConsole.log(`[MEMORY:Postgres] Stored ${messages.length} messages for conversation ${conversationId}`);
       return createSuccess(undefined);
     } catch (error) {
       return createFailure(createMemoryStorageError('store messages', 'PostgreSQL', error as Error));
@@ -107,28 +108,28 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
     const client = ensureConnected();
     
     try {
-      console.log(`[MEMORY:Postgres] Getting conversation ${conversationId}`);
-      
+      safeConsole.log(`[MEMORY:Postgres] Getting conversation ${conversationId}`);
+
       const sql = `
         SELECT conversation_id, user_id, messages, metadata, created_at, updated_at, last_activity
         FROM ${fullConfig.tableName}
         WHERE conversation_id = $1
       `;
-      
-      console.log(`[MEMORY:Postgres] Executing SQL: ${sql}`);
-      console.log(`[MEMORY:Postgres] Parameters:`, [conversationId]);
+
+      safeConsole.log(`[MEMORY:Postgres] Executing SQL: ${sql}`);
+      safeConsole.log(`[MEMORY:Postgres] Parameters:`, [conversationId]);
       
       const result = await client.query(sql, [conversationId]);
-      
-      console.log(`[MEMORY:Postgres] Query result: ${result.rows.length} rows found`);
-      
+
+      safeConsole.log(`[MEMORY:Postgres] Query result: ${result.rows.length} rows found`);
+
       if (result.rows.length === 0) {
-        console.log(`[MEMORY:Postgres] No conversation found for ${conversationId}`);
+        safeConsole.log(`[MEMORY:Postgres] No conversation found for ${conversationId}`);
         return createSuccess(null);
       }
 
       const row = result.rows[0];
-      console.log(`[MEMORY:Postgres] Raw row data:`, {
+      safeConsole.log(`[MEMORY:Postgres] Raw row data:`, {
         conversation_id: row.conversation_id,
         user_id: row.user_id,
         messages_length: row.messages?.length || 0,
@@ -146,8 +147,8 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
       `;
       await client.query(updateSQL, [conversationId]);
 
-      console.log(`[MEMORY:Postgres] Parsing messages JSON:`, row.messages);
-      console.log(`[MEMORY:Postgres] Messages type:`, typeof row.messages);
+      safeConsole.log(`[MEMORY:Postgres] Parsing messages JSON:`, row.messages);
+      safeConsole.log(`[MEMORY:Postgres] Messages type:`, typeof row.messages);
       
       // Handle both string and object messages (PostgreSQL JSONB can return either)
       let parsedMessages;
@@ -158,10 +159,10 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
       } else {
         throw new Error('Invalid messages format: expected string or array');
       }
-      console.log(`[MEMORY:Postgres] Parsed ${parsedMessages.length} messages`);
-      
-      console.log(`[MEMORY:Postgres] Parsing metadata JSON:`, row.metadata);
-      console.log(`[MEMORY:Postgres] Metadata type:`, typeof row.metadata);
+      safeConsole.log(`[MEMORY:Postgres] Parsed ${parsedMessages.length} messages`);
+
+      safeConsole.log(`[MEMORY:Postgres] Parsing metadata JSON:`, row.metadata);
+      safeConsole.log(`[MEMORY:Postgres] Metadata type:`, typeof row.metadata);
       
       // Handle both string and object metadata (PostgreSQL JSONB can return either)
       let parsedMetadata;
@@ -172,7 +173,7 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
       } else {
         parsedMetadata = {};
       }
-      console.log(`[MEMORY:Postgres] Parsed metadata:`, parsedMetadata);
+      safeConsole.log(`[MEMORY:Postgres] Parsed metadata:`, parsedMetadata);
 
       const conversation: ConversationMemory = {
         conversationId: row.conversation_id,
@@ -186,13 +187,13 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
           totalMessages: parsedMessages.length
         }
       };
-      
-      console.log(`[MEMORY:Postgres] Successfully created conversation object with ${conversation.messages.length} messages`);
-      console.log(`[MEMORY:Postgres] Retrieved conversation ${conversationId} with ${conversation.messages.length} messages`);
+
+      safeConsole.log(`[MEMORY:Postgres] Successfully created conversation object with ${conversation.messages.length} messages`);
+      safeConsole.log(`[MEMORY:Postgres] Retrieved conversation ${conversationId} with ${conversation.messages.length} messages`);
       return createSuccess(conversation);
     } catch (error) {
-      console.error(`[MEMORY:Postgres] Error in getConversation:`, error);
-      console.error(`[MEMORY:Postgres] Error stack:`, (error as Error).stack);
+      safeConsole.error(`[MEMORY:Postgres] Error in getConversation:`, error);
+      safeConsole.error(`[MEMORY:Postgres] Error stack:`, (error as Error).stack);
       return createFailure(createMemoryStorageError('get conversation', 'PostgreSQL', error as Error));
     }
   };
@@ -239,7 +240,7 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
         conversationId
       ]);
       
-      console.log(`[MEMORY:Postgres] Appended ${messages.length} messages to conversation ${conversationId} (total: ${updatedMessages.length})`);
+      safeConsole.log(`[MEMORY:Postgres] Appended ${messages.length} messages to conversation ${conversationId} (total: ${updatedMessages.length})`);
       return createSuccess(undefined);
     } catch (error) {
       return createFailure(createMemoryStorageError('append messages', 'PostgreSQL', error as Error));
@@ -341,7 +342,7 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
         };
       });
       
-      console.log(`[MEMORY:Postgres] Found ${conversations.length} conversations matching query`);
+      safeConsole.log(`[MEMORY:Postgres] Found ${conversations.length} conversations matching query`);
       return createSuccess(conversations);
     } catch (error) {
       return createFailure(createMemoryStorageError('find conversations', 'PostgreSQL', error as Error));
@@ -359,7 +360,7 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
     }
 
     const messages = conversationResult.data.messages.slice(-limit);
-    console.log(`[MEMORY:Postgres] Retrieved ${messages.length} recent messages for conversation ${conversationId}`);
+    safeConsole.log(`[MEMORY:Postgres] Retrieved ${messages.length} recent messages for conversation ${conversationId}`);
     return createSuccess(messages);
   };
 
@@ -371,7 +372,7 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
       const result = await client.query(sql, [conversationId]);
       
       const deleted = result.rowCount > 0;
-      console.log(`[MEMORY:Postgres] ${deleted ? 'Deleted' : 'Attempted to delete non-existent'} conversation ${conversationId}`);
+      safeConsole.log(`[MEMORY:Postgres] ${deleted ? 'Deleted' : 'Attempted to delete non-existent'} conversation ${conversationId}`);
       return createSuccess(deleted);
     } catch (error) {
       return createFailure(createMemoryStorageError('delete conversation', 'PostgreSQL', error as Error));
@@ -386,7 +387,7 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
       const result = await client.query(sql, [userId]);
       
       const deletedCount = result.rowCount;
-      console.log(`[MEMORY:Postgres] Cleared ${deletedCount} conversations for user ${userId}`);
+      safeConsole.log(`[MEMORY:Postgres] Cleared ${deletedCount} conversations for user ${userId}`);
       return createSuccess(deletedCount);
     } catch (error) {
       return createFailure(createMemoryStorageError('clear user conversations', 'PostgreSQL', error as Error));
@@ -483,7 +484,7 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
   const close = async (): Promise<Result<void>> => {
     try {
       if (postgresClient) {
-        console.log('[MEMORY:Postgres] Closing PostgreSQL connection');
+        safeConsole.log('[MEMORY:Postgres] Closing PostgreSQL connection');
         await postgresClient.end();
       }
       return createSuccess(undefined);
@@ -503,8 +504,8 @@ export async function createPostgresProvider(config: PostgresConfig, postgresCli
       
       const result = await client.query(sql);
       const deletedCount = result.rowCount;
-      
-      console.log(`[MEMORY:Postgres] Cleaned up ${deletedCount} conversations older than ${olderThanDays} days`);
+
+      safeConsole.log(`[MEMORY:Postgres] Cleaned up ${deletedCount} conversations older than ${olderThanDays} days`);
       return createSuccess(deletedCount);
     } catch (error) {
       return createFailure(createMemoryStorageError('cleanup old conversations', 'PostgreSQL', error as Error));
@@ -601,11 +602,11 @@ async function initializeSchema(client: PostgresClient, config: PostgresConfig &
   // Drop status column if it exists (migration from older versions)
   try {
     await client.query(`ALTER TABLE ${config.tableName} DROP COLUMN IF EXISTS status`);
-    console.log(`[MEMORY:Postgres] Dropped status column if it existed`);
+    safeConsole.log(`[MEMORY:Postgres] Dropped status column if it existed`);
   } catch (error) {
     // Ignore errors if column doesn't exist
-    console.log(`[MEMORY:Postgres] Status column migration completed`);
+    safeConsole.log(`[MEMORY:Postgres] Status column migration completed`);
   }
-  
-  console.log(`[MEMORY:Postgres] Schema initialized for table ${config.tableName}`);
+
+  safeConsole.log(`[MEMORY:Postgres] Schema initialized for table ${config.tableName}`);
 }

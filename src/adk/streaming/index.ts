@@ -1,6 +1,6 @@
 /**
  * JAF ADK Layer - Streaming System
- * 
+ *
  * Functional streaming and live interaction utilities
  */
 
@@ -14,6 +14,7 @@ import {
   FunctionCall,
   FunctionResponse
 } from '../types';
+import { safeConsole } from '../../utils/logger.js';
 
 // ========== Live Request Queue ==========
 
@@ -419,16 +420,16 @@ export const monitorStream = async function* (
       monitor(event);
     } catch (error) {
       // Monitor errors shouldn't break the stream
-      console.warn('Stream monitor error:', error);
+      safeConsole.warn('Stream monitor error:', error);
     }
-    
+
     yield event;
   }
 };
 
-export const logStream = (prefix: string = 'STREAM') => 
+export const logStream = (prefix: string = 'STREAM') =>
   (event: AgentEvent) => {
-    console.log(`[${prefix}] ${event.type}:`, {
+    safeConsole.log(`[${prefix}] ${event.type}:`, {
       timestamp: event.timestamp,
       content: event.content ? 'present' : 'none',
       error: event.error,

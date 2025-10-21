@@ -1,8 +1,8 @@
 import { Message, TraceId } from '../../core/types';
-import { 
-  MemoryProvider, 
-  ConversationMemory, 
-  MemoryQuery, 
+import {
+  MemoryProvider,
+  ConversationMemory,
+  MemoryQuery,
   InMemoryConfig,
   Result,
   createSuccess,
@@ -10,6 +10,7 @@ import {
   createMemoryNotFoundError,
   createMemoryStorageError
 } from '../types';
+import { safeConsole } from '../../utils/logger.js';
 
 /**
  * In-memory memory provider - no persistence across server restarts
@@ -25,7 +26,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
   
   const conversations = new Map<string, ConversationMemory>();
   
-  console.log(`[MEMORY:InMemory] Initialized with max ${fullConfig.maxConversations} conversations, ${fullConfig.maxMessagesPerConversation} messages each`);
+  safeConsole.log(`[MEMORY:InMemory] Initialized with max ${fullConfig.maxConversations} conversations, ${fullConfig.maxMessagesPerConversation} messages each`);
 
   const enforceMemoryLimits = (): void => {
     if (conversations.size <= fullConfig.maxConversations) {
@@ -46,7 +47,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
       conversations.delete(id);
     }
 
-    console.log(`[MEMORY:InMemory] Enforced memory limits, removed ${toRemove.length} oldest conversations`);
+    safeConsole.log(`[MEMORY:InMemory] Enforced memory limits, removed ${toRemove.length} oldest conversations`);
   };
 
   const storeMessages = async (
@@ -73,7 +74,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
       conversations.set(conversationId, conversation);
       enforceMemoryLimits();
       
-      console.log(`[MEMORY:InMemory] Stored ${messages.length} messages for conversation ${conversationId}`);
+      safeConsole.log(`[MEMORY:InMemory] Stored ${messages.length} messages for conversation ${conversationId}`);
       return createSuccess(undefined);
     } catch (error) {
       return createFailure(createMemoryStorageError('store messages', 'InMemory', error as Error));
@@ -98,7 +99,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
       
       conversations.set(conversationId, updatedConversation);
       
-      console.log(`[MEMORY:InMemory] Retrieved conversation ${conversationId} with ${conversation.messages.length} messages`);
+      safeConsole.log(`[MEMORY:InMemory] Retrieved conversation ${conversationId} with ${conversation.messages.length} messages`);
       return createSuccess(updatedConversation);
     } catch (error) {
       return createFailure(createMemoryStorageError('get conversation', 'InMemory', error as Error));
@@ -139,7 +140,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
 
       conversations.set(conversationId, updatedConversation);
       
-      console.log(`[MEMORY:InMemory] Appended ${messages.length} messages to conversation ${conversationId} (total: ${finalMessages.length})`);
+      safeConsole.log(`[MEMORY:InMemory] Appended ${messages.length} messages to conversation ${conversationId} (total: ${finalMessages.length})`);
       return createSuccess(undefined);
     } catch (error) {
       return createFailure(createMemoryStorageError('append messages', 'InMemory', error as Error));
@@ -190,7 +191,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
       const limit = query.limit || results.length;
       const paginatedResults = results.slice(offset, offset + limit);
       
-      console.log(`[MEMORY:InMemory] Found ${paginatedResults.length} conversations matching query`);
+      safeConsole.log(`[MEMORY:InMemory] Found ${paginatedResults.length} conversations matching query`);
       return createSuccess(paginatedResults);
     } catch (error) {
       return createFailure(createMemoryStorageError('find conversations', 'InMemory', error as Error));
@@ -208,7 +209,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
     }
 
     const messages = conversationResult.data.messages.slice(-limit);
-    console.log(`[MEMORY:InMemory] Retrieved ${messages.length} recent messages for conversation ${conversationId}`);
+    safeConsole.log(`[MEMORY:InMemory] Retrieved ${messages.length} recent messages for conversation ${conversationId}`);
     return createSuccess(messages);
   };
 
@@ -217,7 +218,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
       const existed = conversations.has(conversationId);
       conversations.delete(conversationId);
       
-      console.log(`[MEMORY:InMemory] ${existed ? 'Deleted' : 'Attempted to delete non-existent'} conversation ${conversationId}`);
+      safeConsole.log(`[MEMORY:InMemory] ${existed ? 'Deleted' : 'Attempted to delete non-existent'} conversation ${conversationId}`);
       return createSuccess(existed);
     } catch (error) {
       return createFailure(createMemoryStorageError('delete conversation', 'InMemory', error as Error));
@@ -235,7 +236,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
         }
       }
       
-      console.log(`[MEMORY:InMemory] Cleared ${deletedCount} conversations for user ${userId}`);
+      safeConsole.log(`[MEMORY:InMemory] Cleared ${deletedCount} conversations for user ${userId}`);
       return createSuccess(deletedCount);
     } catch (error) {
       return createFailure(createMemoryStorageError('clear user conversations', 'InMemory', error as Error));
@@ -330,7 +331,7 @@ export function createInMemoryProvider(config: InMemoryConfig = { type: 'memory'
 
   const close = async (): Promise<Result<void>> => {
     try {
-      console.log(`[MEMORY:InMemory] Closing provider, clearing ${conversations.size} conversations`);
+      safeConsole.log(`[MEMORY:InMemory] Closing provider, clearing ${conversations.size} conversations`);
       conversations.clear();
       return createSuccess(undefined);
     } catch (error) {

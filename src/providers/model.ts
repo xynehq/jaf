@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import tunnel from 'tunnel';
 import { ModelProvider, Message, MessageContentPart, getTextContent, type RunState, type Agent, type RunConfig } from '../core/types.js';
 import { extractDocumentContent, isDocumentSupported, getDocumentDescription } from '../utils/document-processor.js';
+import { safeConsole } from '../utils/logger.js';
 
 interface ProxyConfig {
   httpProxy?: string;
@@ -18,15 +19,15 @@ function createProxyAgent(url?: any,proxyConfig?: ProxyConfig) {
   }
 
   try {
-    console.log(`[JAF:PROXY] Configuring proxy agents:`);
-    if (httpProxy) console.log(`HTTP_PROXY: ${httpProxy}`);
-    if (noProxy) console.log(`NO_PROXY: ${noProxy}`);
+    safeConsole.log(`[JAF:PROXY] Configuring proxy agents:`);
+    if (httpProxy) safeConsole.log(`HTTP_PROXY: ${httpProxy}`);
+    if (noProxy) safeConsole.log(`NO_PROXY: ${noProxy}`);
 
     return {
       httpAgent: httpProxy ? createTunnelAgent(httpProxy) : undefined,
     };
   } catch (error) {
-    console.warn(`[JAF:PROXY] Failed to create proxy agents. Install 'https-proxy-agent' and 'http-proxy-agent' packages for proxy support:`, error instanceof Error ? error.message : String(error));
+    safeConsole.warn(`[JAF:PROXY] Failed to create proxy agents. Install 'https-proxy-agent' and 'http-proxy-agent' packages for proxy support:`, error instanceof Error ? error.message : String(error));
     return undefined;
   }
 }
@@ -62,9 +63,9 @@ export const makeLiteLLMProvider = <Ctx>(
     if (proxyAgents.httpAgent) {
       clientConfig.httpAgent = proxyAgents.httpAgent;
     }
-    console.log(`[JAF:PROXY] LiteLLM provider configured with proxy support`);
+    safeConsole.log(`[JAF:PROXY] LiteLLM provider configured with proxy support`);
   } else {
-    console.log(`[JAF:PROXY] LiteLLM provider configured without proxy (direct connection)`);
+    safeConsole.log(`[JAF:PROXY] LiteLLM provider configured without proxy (direct connection)`);
   }
 
   const client = new OpenAI(clientConfig);
@@ -73,7 +74,7 @@ export const makeLiteLLMProvider = <Ctx>(
     async getCompletion(state, agent, config) {
       const { model, params } = await buildChatCompletionParams(state, agent, config, baseURL);
 
-      console.log(`📞 Calling model: ${model} with params: ${JSON.stringify(params, null, 2)}`);
+      safeConsole.log(`📞 Calling model: ${model} with params: ${JSON.stringify(params, null, 2)}`);
       const resp = await client.chat.completions.create(
         params as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
       );
@@ -91,7 +92,7 @@ export const makeLiteLLMProvider = <Ctx>(
     async *getCompletionStream(state, agent, config) {
       const { model, params: baseParams } = await buildChatCompletionParams(state, agent, config, baseURL);
 
-      console.log(`📡 Streaming model: ${model} with params: ${JSON.stringify(baseParams, null, 2)}`);
+      safeConsole.log(`📡 Streaming model: ${model} with params: ${JSON.stringify(baseParams, null, 2)}`);
 
       // Enable streaming on request
       const streamParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
@@ -184,17 +185,17 @@ async function isVisionModel(model: string, baseURL: string): Promise<boolean> {
         return result;
       }
     } else {
-      console.warn(`Vision API returned status ${response.status} for model ${model}`);
+      safeConsole.warn(`Vision API returned status ${response.status} for model ${model}`);
     }
   } catch (error) {
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
-        console.warn(`Vision API timeout for model ${model}`);
+        safeConsole.warn(`Vision API timeout for model ${model}`);
       } else {
-        console.warn(`Vision API error for model ${model}: ${error.message}`);
+        safeConsole.warn(`Vision API error for model ${model}: ${error.message}`);
       }
     } else {
-      console.warn(`Unknown error checking vision support for model ${model}`);
+      safeConsole.warn(`Unknown error checking vision support for model ${model}`);
     }
   }
 

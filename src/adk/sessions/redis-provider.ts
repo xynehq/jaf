@@ -1,17 +1,18 @@
 /**
  * Real Redis Session Provider Implementation
- * 
+ *
  * This provides a production-ready Redis-based session provider
  * with proper error handling and connection management
  */
 
-import { 
-  SessionProvider, 
-  Session, 
+import {
+  SessionProvider,
+  Session,
   SessionContext,
-  throwSessionError 
+  throwSessionError
 } from '../types.js';
 import { createSession } from './index.js';
+import { safeConsole } from '../../utils/logger.js';
 
 // Helper type for Redis client
 type RedisClient = any; // Will be properly typed when ioredis is added
@@ -53,22 +54,22 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
     if (process.env.NODE_ENV !== 'test') {
       // Handle connection events
       redis.on('error', (err: any) => {
-        console.error('[ADK:Sessions] Redis connection error:', err);
+        safeConsole.error('[ADK:Sessions] Redis connection error:', err);
       });
-      
+
       redis.on('connect', () => {
-        console.log('[ADK:Sessions] Connected to Redis');
+        safeConsole.log('[ADK:Sessions] Connected to Redis');
       });
       redis.on('ready', () => {
-        console.log('[ADK:Sessions] Redis ready for commands');
+        safeConsole.log('[ADK:Sessions] Redis ready for commands');
       });
-      
+
       redis.on('close', () => {
-        console.log('[ADK:Sessions] Redis connection closed');
+        safeConsole.log('[ADK:Sessions] Redis connection closed');
       });
-      
+
       redis.on('reconnecting', (delay: number) => {
-        console.log(`[ADK:Sessions] Reconnecting to Redis in ${delay}ms`);
+        safeConsole.log(`[ADK:Sessions] Reconnecting to Redis in ${delay}ms`);
       });
     }
   } catch (error) {
@@ -106,11 +107,11 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
     try {
       return await redis.get(key);
     } catch (error) {
-      console.error(`[ADK:Sessions] Redis GET error for key ${key}:`, error);
+      safeConsole.error(`[ADK:Sessions] Redis GET error for key ${key}:`, error);
       throw error;
     }
   };
-  
+
   const redisSet = async (key: string, value: string, ttlSeconds?: number): Promise<void> => {
     try {
       if (ttlSeconds) {
@@ -119,7 +120,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
         await redis.set(key, value);
       }
     } catch (error) {
-      console.error(`[ADK:Sessions] Redis SET error for key ${key}:`, error);
+      safeConsole.error(`[ADK:Sessions] Redis SET error for key ${key}:`, error);
       throw error;
     }
   };
@@ -131,7 +132,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
     try {
       return await redis.smembers(key);
     } catch (error) {
-      console.error(`[ADK:Sessions] Redis SMEMBERS error for key ${key}:`, error);
+      safeConsole.error(`[ADK:Sessions] Redis SMEMBERS error for key ${key}:`, error);
       throw error;
     }
   };
@@ -217,7 +218,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
               sessions.push(deserializeSession(sessionData));
             } catch (error) {
               // Skip invalid sessions
-              console.warn(`[ADK:Sessions] Skipping invalid session ${sessionId}:`, error);
+              safeConsole.warn(`[ADK:Sessions] Skipping invalid session ${sessionId}:`, error);
               deadSessionIds.push(sessionId);
             }
           } else {

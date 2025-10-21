@@ -11,6 +11,7 @@ import {
   Guardrail,
   validateGuardrailsConfig
 } from './types.js';
+import { safeConsole } from '../utils/logger.js';
 
 // Constants for content length limits
 const SHORT_TIMEOUT_MAX_CONTENT = 10000;
@@ -189,7 +190,7 @@ async function createLLMGuardrail<Ctx>(
     const modelToUse = fastModel || config.defaultFastModel;
     if (!modelToUse) {
       const message = `[JAF:GUARDRAILS] No fast model available for LLM guardrail evaluation, using failSafe: ${failSafe}`;
-      console.warn(message);
+      safeConsole.warn(message);
       return failSafe === 'allow'
         ? { isValid: true as const }
         : { isValid: false as const, errorMessage: 'No model available for guardrail evaluation' };
@@ -197,22 +198,22 @@ async function createLLMGuardrail<Ctx>(
 
     const cachedResult = guardrailCache.get(stage, rulePrompt, content, modelToUse);
     if (cachedResult) {
-      console.log(`[JAF:GUARDRAILS] Cache hit for ${stage} guardrail`);
-      console.log(`[JAF:GUARDRAILS] Cache performance - hit for ${stage} on model ${modelToUse}`);
+      safeConsole.log(`[JAF:GUARDRAILS] Cache hit for ${stage} guardrail`);
+      safeConsole.log(`[JAF:GUARDRAILS] Cache performance - hit for ${stage} on model ${modelToUse}`);
       return cachedResult;
     }
 
     const circuitBreaker = getCircuitBreaker(stage, modelToUse);
     if (circuitBreaker.isOpen()) {
       const message = `[JAF:GUARDRAILS] Circuit breaker open for ${stage} guardrail on model ${modelToUse}, using failSafe: ${failSafe}`;
-      console.warn(message);
+      safeConsole.warn(message);
       return failSafe === 'allow'
         ? { isValid: true as const }
         : { isValid: false as const, errorMessage: 'Circuit breaker open - too many recent failures' };
     }
 
     if (!content || typeof content !== 'string') {
-      console.warn(`[JAF:GUARDRAILS] Invalid content provided to ${stage} guardrail`);
+      safeConsole.warn(`[JAF:GUARDRAILS] Invalid content provided to ${stage} guardrail`);
       return failSafe === 'allow'
         ? { isValid: true as const }
         : { isValid: false as const, errorMessage: 'Invalid content provided to guardrail' };
@@ -220,7 +221,7 @@ async function createLLMGuardrail<Ctx>(
 
     const maxContentLength = timeoutMs < 10000 ? SHORT_TIMEOUT_MAX_CONTENT : LONG_TIMEOUT_MAX_CONTENT;
     if (content.length > maxContentLength) {
-      console.warn(`[JAF:GUARDRAILS] Content too large for ${stage} guardrail (${content.length} chars, max: ${maxContentLength})`);
+      safeConsole.warn(`[JAF:GUARDRAILS] Content too large for ${stage} guardrail (${content.length} chars, max: ${maxContentLength})`);
       return failSafe === 'allow'
         ? { isValid: true as const }
         : { isValid: false as const, errorMessage: `Content too large for guardrail evaluation (${content.length} > ${maxContentLength} chars)` };
@@ -306,14 +307,14 @@ ${sanitizedContent}
       
       const logMessage = `[JAF:GUARDRAILS] ${stage} guardrail evaluation failed`;
       if (isTimeout) {
-        console.warn(`${logMessage} due to timeout (${timeoutMs}ms), using failSafe: ${failSafe}`, {
+        safeConsole.warn(`${logMessage} due to timeout (${timeoutMs}ms), using failSafe: ${failSafe}`, {
           stage,
           modelToUse,
           contentLength: content.length,
           timeoutMs
         });
       } else {
-        console.warn(`${logMessage}, using failSafe: ${failSafe}`, {
+        safeConsole.warn(`${logMessage}, using failSafe: ${failSafe}`, {
           stage,
           modelToUse,
           error: errorMessage,
@@ -344,10 +345,10 @@ export async function buildEffectiveGuardrails<Ctx>(
 
     const fastModel = guardrailsCfg.fastModel || config.defaultFastModel;
     if (!fastModel && (guardrailsCfg.inputPrompt || guardrailsCfg.outputPrompt)) {
-      console.warn('[JAF:GUARDRAILS] No fast model available for LLM guardrails - skipping LLM-based validation');
+      safeConsole.warn('[JAF:GUARDRAILS] No fast model available for LLM guardrails - skipping LLM-based validation');
     }
-    
-    console.log('[JAF:GUARDRAILS] Configuration:', {
+
+    safeConsole.log('[JAF:GUARDRAILS] Configuration:', {
       hasInputPrompt: !!guardrailsCfg.inputPrompt,
       hasOutputPrompt: !!guardrailsCfg.outputPrompt,
       requireCitations: guardrailsCfg.requireCitations,
@@ -366,13 +367,13 @@ export async function buildEffectiveGuardrails<Ctx>(
       const timeoutMs = guardrailsCfg.timeoutMs || 30000;
       
       if (!fastModel) {
-        console.warn(`[JAF:GUARDRAILS] No model available for ${stage} guardrail - using failSafe: ${failSafe}`);
+        safeConsole.warn(`[JAF:GUARDRAILS] No model available for ${stage} guardrail - using failSafe: ${failSafe}`);
         return failSafe === 'allow'
           ? { isValid: true as const }
           : { isValid: false as const, errorMessage: 'No model available for guardrail evaluation' };
       }
       
-      console.log(`[JAF:GUARDRAILS] Evaluating ${stage} guardrail`);
+      safeConsole.log(`[JAF:GUARDRAILS] Evaluating ${stage} guardrail`);
       config.onEvent?.({
         type: 'guardrail_check',
         data: { guardrailName: `${stage}-guardrail`, content, isValid: undefined }
@@ -382,7 +383,7 @@ export async function buildEffectiveGuardrails<Ctx>(
         const evaluator = await createLLMGuardrail(config, stage, rulePrompt, fastModel, failSafe, timeoutMs);
         const result = await evaluator(content);
         
-        console.log(`[JAF:GUARDRAILS] ${stage} guardrail result:`, result);
+        safeConsole.log(`[JAF:GUARDRAILS] ${stage} guardrail result:`, result);
         config.onEvent?.({
           type: 'guardrail_check',
           data: { guardrailName: `${stage}-guardrail`, content, isValid: result.isValid, errorMessage: result.isValid ? undefined : result.errorMessage }
@@ -391,7 +392,7 @@ export async function buildEffectiveGuardrails<Ctx>(
         return result;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error in guardrail evaluation';
-        console.error(`[JAF:GUARDRAILS] Failed to create or execute ${stage} guardrail:`, error);
+        safeConsole.error(`[JAF:GUARDRAILS] Failed to create or execute ${stage} guardrail:`, error);
         
         config.onEvent?.({
           type: 'guardrail_check',
@@ -448,7 +449,7 @@ export async function buildEffectiveGuardrails<Ctx>(
       });
     }
   } catch (e) {
-    console.error('[JAF:GUARDRAILS] Failed to configure advanced guardrails:', e);
+    safeConsole.error('[JAF:GUARDRAILS] Failed to configure advanced guardrails:', e);
     effectiveInputGuardrails = [...(config.initialInputGuardrails || [])];
     effectiveOutputGuardrails = [...(config.finalOutputGuardrails || [])];
   }
@@ -468,7 +469,7 @@ export async function executeInputGuardrailsSequential<Ctx>(
     return { isValid: true };
   }
 
-  console.log(`[JAF:GUARDRAILS] Starting ${inputGuardrails.length} input guardrails (sequential)`);
+  safeConsole.log(`[JAF:GUARDRAILS] Starting ${inputGuardrails.length} input guardrails (sequential)`);
   
   const messageContent = firstUserMessage?.content;
   const content = getTextContent(messageContent);
@@ -478,7 +479,7 @@ export async function executeInputGuardrailsSequential<Ctx>(
     const guardrailName = `input-guardrail-${i + 1}`;
     
     try {
-      console.log(`[JAF:GUARDRAILS] Starting ${guardrailName}`);
+      safeConsole.log(`[JAF:GUARDRAILS] Starting ${guardrailName}`);
       
       const timeoutMs = 10000;
       const guardrailResult = guardrail(content);
@@ -488,11 +489,11 @@ export async function executeInputGuardrailsSequential<Ctx>(
         `${guardrailName} execution timed out after ${timeoutMs}ms`
       );
       
-      console.log(`[JAF:GUARDRAILS] ${guardrailName} completed:`, result);
+      safeConsole.log(`[JAF:GUARDRAILS] ${guardrailName} completed:`, result);
       
       if (!result.isValid) {
         const errorMessage = 'errorMessage' in result ? result.errorMessage : 'Guardrail violation';
-        console.log(`🚨 ${guardrailName} violation: ${errorMessage}`);
+        safeConsole.log(`🚨 ${guardrailName} violation: ${errorMessage}`);
         config.onEvent?.({
           type: 'guardrail_violation',
           data: { stage: 'input', reason: errorMessage }
@@ -501,12 +502,12 @@ export async function executeInputGuardrailsSequential<Ctx>(
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[JAF:GUARDRAILS] ${guardrailName} failed:`, errorMessage);
+      safeConsole.error(`[JAF:GUARDRAILS] ${guardrailName} failed:`, errorMessage);
       
       const isSystemError = errorMessage.includes('Timeout') || errorMessage.includes('Circuit breaker');
       
       if (isSystemError) {
-        console.warn(`[JAF:GUARDRAILS] ${guardrailName} system error, continuing: ${errorMessage}`);
+        safeConsole.warn(`[JAF:GUARDRAILS] ${guardrailName} system error, continuing: ${errorMessage}`);
         continue;
       } else {
         config.onEvent?.({
@@ -518,7 +519,7 @@ export async function executeInputGuardrailsSequential<Ctx>(
     }
   }
   
-  console.log(`✅ All input guardrails passed (sequential).`);
+  safeConsole.log(`✅ All input guardrails passed (sequential).`);
   return { isValid: true };
 }
 
@@ -531,13 +532,13 @@ export async function executeInputGuardrailsParallel<Ctx>(
     return { isValid: true };
   }
 
-  console.log(`[JAF:GUARDRAILS] Starting ${inputGuardrails.length} input guardrails`);
+  safeConsole.log(`[JAF:GUARDRAILS] Starting ${inputGuardrails.length} input guardrails`);
   
   const inputGuardrailPromises = inputGuardrails.map(async (guardrail, index) => {
     const guardrailName = `input-guardrail-${index + 1}`;
     
     try {
-      console.log(`[JAF:GUARDRAILS] Starting ${guardrailName}`);
+      safeConsole.log(`[JAF:GUARDRAILS] Starting ${guardrailName}`);
       
       const timeoutMs = config.defaultFastModel ? 10000 : 5000;
       const messageContent = firstUserMessage?.content;
@@ -550,11 +551,11 @@ export async function executeInputGuardrailsParallel<Ctx>(
         `${guardrailName} execution timed out after ${timeoutMs}ms`
       );
       
-      console.log(`[JAF:GUARDRAILS] ${guardrailName} completed:`, result);
+      safeConsole.log(`[JAF:GUARDRAILS] ${guardrailName} completed:`, result);
       return { ...result, guardrailIndex: index };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[JAF:GUARDRAILS] ${guardrailName} failed:`, {
+      safeConsole.error(`[JAF:GUARDRAILS] ${guardrailName} failed:`, {
         error: errorMessage,
         index,
         stack: error instanceof Error ? error.stack : undefined
@@ -571,7 +572,7 @@ export async function executeInputGuardrailsParallel<Ctx>(
   try {
     const settledResults = await Promise.allSettled(inputGuardrailPromises);
     
-    console.log(`[JAF:GUARDRAILS] Input guardrails completed. Checking results...`);
+    safeConsole.log(`[JAF:GUARDRAILS] Input guardrails completed. Checking results...`);
     
     const results: any[] = [];
     const warnings: string[] = [];
@@ -588,20 +589,20 @@ export async function executeInputGuardrailsParallel<Ctx>(
         }
       } else {
         const errorMessage = settled.reason instanceof Error ? settled.reason.message : 'Unknown error';
-        console.warn(`[JAF:GUARDRAILS] Input guardrail ${i + 1} promise rejected:`, errorMessage);
+        safeConsole.warn(`[JAF:GUARDRAILS] Input guardrail ${i + 1} promise rejected:`, errorMessage);
         warnings.push(`Guardrail ${i + 1} failed: ${errorMessage}`);
         results.push({ isValid: true, guardrailIndex: i, warning: `Promise rejected: ${errorMessage}` });
       }
     }
     
     if (warnings.length > 0) {
-      console.warn(`[JAF:GUARDRAILS] ${warnings.length} guardrail warnings:`, warnings);
+      safeConsole.warn(`[JAF:GUARDRAILS] ${warnings.length} guardrail warnings:`, warnings);
     }
     
     for (const result of results) {
       if (!result.isValid) {
         const errorMessage = 'errorMessage' in result ? result.errorMessage : 'Guardrail violation';
-        console.log(`🚨 Input guardrail ${result.guardrailIndex + 1} violation: ${errorMessage}`);
+        safeConsole.log(`🚨 Input guardrail ${result.guardrailIndex + 1} violation: ${errorMessage}`);
         config.onEvent?.({
           type: 'guardrail_violation',
           data: { stage: 'input', reason: errorMessage }
@@ -610,10 +611,10 @@ export async function executeInputGuardrailsParallel<Ctx>(
       }
     }
     
-    console.log(`✅ All input guardrails passed.`);
+    safeConsole.log(`✅ All input guardrails passed.`);
     return { isValid: true };
   } catch (error) {
-    console.error(`[JAF:GUARDRAILS] Catastrophic failure in input guardrail execution:`, error);
+    safeConsole.error(`[JAF:GUARDRAILS] Catastrophic failure in input guardrail execution:`, error);
     
     return { isValid: true };
   }
@@ -628,7 +629,7 @@ export async function executeOutputGuardrails<Ctx>(
     return { isValid: true };
   }
 
-  console.log(`[JAF:GUARDRAILS] Checking ${outputGuardrails.length} output guardrails`);
+  safeConsole.log(`[JAF:GUARDRAILS] Checking ${outputGuardrails.length} output guardrails`);
   
   for (let i = 0; i < outputGuardrails.length; i++) {
     const guardrail = outputGuardrails[i];
@@ -646,7 +647,7 @@ export async function executeOutputGuardrails<Ctx>(
       
       if (!result.isValid) {
         const errorMessage = 'errorMessage' in result ? result.errorMessage : 'Guardrail violation';
-        console.log(`🚨 ${guardrailName} violation: ${errorMessage}`);
+        safeConsole.log(`🚨 ${guardrailName} violation: ${errorMessage}`);
         config.onEvent?.({ 
           type: 'guardrail_violation', 
           data: { stage: 'output', reason: errorMessage } 
@@ -654,10 +655,10 @@ export async function executeOutputGuardrails<Ctx>(
         return { isValid: false, errorMessage };
       }
       
-      console.log(`✅ ${guardrailName} passed`);
+      safeConsole.log(`✅ ${guardrailName} passed`);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[JAF:GUARDRAILS] ${guardrailName} failed:`, {
+      safeConsole.error(`[JAF:GUARDRAILS] ${guardrailName} failed:`, {
         error: errorMessage,
         index: i,
         stack: error instanceof Error ? error.stack : undefined
@@ -666,7 +667,7 @@ export async function executeOutputGuardrails<Ctx>(
       const isSystemError = errorMessage.includes('Timeout') || errorMessage.includes('Circuit breaker');
       
       if (isSystemError) {
-        console.warn(`[JAF:GUARDRAILS] ${guardrailName} system error, allowing output: ${errorMessage}`);
+        safeConsole.warn(`[JAF:GUARDRAILS] ${guardrailName} system error, allowing output: ${errorMessage}`);
         continue;
       } else {
         config.onEvent?.({ 
@@ -678,7 +679,7 @@ export async function executeOutputGuardrails<Ctx>(
     }
   }
   
-  console.log(`✅ All output guardrails passed`);
+  safeConsole.log(`✅ All output guardrails passed`);
   return { isValid: true };
 }
 
@@ -705,7 +706,7 @@ export const guardrailCacheManager = {
   
   logStats: () => {
     const metrics = guardrailCacheManager.getMetrics();
-    console.log('[JAF:GUARDRAILS] Cache stats:', metrics);
+    safeConsole.log('[JAF:GUARDRAILS] Cache stats:', metrics);
   },
   
   cleanup: () => {

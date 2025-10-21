@@ -1,6 +1,6 @@
 /**
  * JAF ADK Layer - LLM Service Bridge
- * 
+ *
  * Bridges ADK types to Core ModelProvider interface following functional patterns
  */
 
@@ -20,6 +20,7 @@ import {
   ToolParameter
 } from '../types.js';
 import OpenAI from 'openai';
+import { safeConsole } from '../../utils/logger.js';
 
 // ========== ADK LLM Service Types ==========
 

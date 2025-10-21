@@ -1,4 +1,5 @@
 import { RunState, Interruption, RunConfig } from './types';
+import { safeConsole } from '../utils/logger.js';
 
 export async function approve<Ctx>(
   state: RunState<Ctx>,
@@ -21,7 +22,7 @@ export async function approve<Ctx>(
         approvalValue
       );
       if (!result.success) {
-        console.warn('Failed to store approval:', result.error);
+        safeConsole.warn('Failed to store approval:', result.error);
         // Continue with in-memory fallback
       }
     }
@@ -58,7 +59,7 @@ export async function reject<Ctx>(
         approvalValue
       );
       if (!result.success) {
-        console.warn('Failed to store approval:', result.error);
+        safeConsole.warn('Failed to store approval:', result.error);
         // Continue with in-memory fallback
       }
     }
@@ -90,7 +91,7 @@ export async function loadApprovalsIntoState<Ctx>(
       approvals: result.data,
     };
   } else {
-    console.warn('Failed to load approvals:', result.error);
+    safeConsole.warn('Failed to load approvals:', result.error);
     return state;
   }
 }

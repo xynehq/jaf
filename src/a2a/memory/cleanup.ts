@@ -4,6 +4,7 @@
  */
 
 import { A2ATaskProvider, A2AResult, createA2ATaskStorageError, createSuccess, createFailure } from './types.js';
+import { safeConsole } from '../../utils/logger.js';
 
 /**
  * Configuration for task cleanup policies
@@ -64,7 +65,7 @@ export const performTaskCleanup = async (
         if (expiredResult.success) {
           expiredCleaned = expiredResult.data;
           if (config.dryRun) {
-            console.log(`[DRY RUN] Would clean up ${expiredCleaned} expired tasks`);
+            safeConsole.log(`[DRY RUN] Would clean up ${expiredCleaned} expired tasks`);
             expiredCleaned = 0; // Reset for dry run
           }
         } else {
@@ -96,9 +97,9 @@ export const performTaskCleanup = async (
               });
 
             const tasksToDelete = sortedTasks.slice(0, sortedTasks.length - config.maxCompletedTasks);
-            
+
             if (config.dryRun) {
-              console.log(`[DRY RUN] Would clean up ${tasksToDelete.length} excess completed tasks`);
+              safeConsole.log(`[DRY RUN] Would clean up ${tasksToDelete.length} excess completed tasks`);
             } else {
               for (const task of tasksToDelete) {
                 const deleteResult = await taskProvider.deleteTask(task.id);
@@ -139,9 +140,9 @@ export const performTaskCleanup = async (
               });
 
             const tasksToDelete = sortedTasks.slice(0, sortedTasks.length - config.maxFailedTasks);
-            
+
             if (config.dryRun) {
-              console.log(`[DRY RUN] Would clean up ${tasksToDelete.length} excess failed tasks`);
+              safeConsole.log(`[DRY RUN] Would clean up ${tasksToDelete.length} excess failed tasks`);
             } else {
               for (const task of tasksToDelete) {
                 const deleteResult = await taskProvider.deleteTask(task.id);
@@ -178,9 +179,9 @@ export const performTaskCleanup = async (
 
           if (oldTasksResult.success) {
             const oldTasks = oldTasksResult.data;
-            
+
             if (config.dryRun) {
-              console.log(`[DRY RUN] Would clean up ${oldTasks.length} old ${state} tasks`);
+              safeConsole.log(`[DRY RUN] Would clean up ${oldTasks.length} old ${state} tasks`);
             } else {
               for (const task of oldTasks) {
                 const deleteResult = await taskProvider.deleteTask(task.id);
@@ -241,19 +242,19 @@ export const createTaskCleanupScheduler = (
         
         if (result.success) {
           const { totalCleaned, errors } = result.data;
-          
+
           if (totalCleaned > 0 || errors.length > 0) {
-            console.log(`A2A task cleanup completed: ${totalCleaned} tasks cleaned`);
-            
+            safeConsole.log(`A2A task cleanup completed: ${totalCleaned} tasks cleaned`);
+
             if (errors.length > 0) {
-              console.warn(`A2A task cleanup errors: ${errors.join(', ')}`);
+              safeConsole.warn(`A2A task cleanup errors: ${errors.join(', ')}`);
             }
           }
         } else {
-          console.error(`A2A task cleanup failed: ${result.error.message}`);
+          safeConsole.error(`A2A task cleanup failed: ${result.error.message}`);
         }
       } catch (error) {
-        console.error(`A2A task cleanup error: ${(error as Error).message}`);
+        safeConsole.error(`A2A task cleanup error: ${(error as Error).message}`);
       }
     };
 
