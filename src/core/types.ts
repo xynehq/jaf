@@ -197,6 +197,7 @@ export type TraceEvent =
   | { type: 'llm_call_start'; data: { agentName: string; model: string; traceId: TraceId; runId: RunId; messages?: readonly Message[]; tools?: any[]; modelConfig?: any; turnCount?: number; context?: any; } }
   | { type: 'llm_call_end'; data: { choice: any; fullResponse?: any; prompt?: any; traceId: TraceId; runId: RunId; agentName?: string; model?: string; usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number; }; estimatedCost?: { promptCost: number; completionCost: number; totalCost: number; }; } }
   | { type: 'token_usage'; data: { prompt?: number; completion?: number; total?: number; model?: string } }
+  | { type: 'before_tool_execution'; data: { toolName: string; args: any; toolCall: ToolCall; traceId: TraceId; runId: RunId; toolSchema?: any; context?: any; state?: any; agentName?: string; } }
   | { type: 'tool_call_start'; data: { toolName: string; args: any; traceId: TraceId; runId: RunId; toolSchema?: any; context?: any; agentName?: string; } }
   | { type: 'tool_call_end'; data: { toolName: string; result: string; toolResult?: any; status?: string; traceId: TraceId; runId: RunId; executionTime?: number; error?: any; metadata?: any; } }
   | { type: 'agent_processing'; data: { agentName: string; traceId: TraceId; runId: RunId; turnCount: number; messageCount: number; toolsAvailable: Array<{ name: string; description: string }>; handoffsAvailable: readonly string[]; modelConfig?: any; hasOutputCodec: boolean; context: any; currentState: any; } }
@@ -409,7 +410,7 @@ export type RunConfig<Ctx> = {
   readonly modelOverride?: string;
   readonly initialInputGuardrails?: readonly Guardrail<string>[];
   readonly finalOutputGuardrails?: readonly Guardrail<any>[];
-  readonly onEvent?: (event: TraceEvent) => void;
+  readonly onEvent?: (event: TraceEvent) => void | any | Promise<void | any>;
   readonly memory?: MemoryConfig;
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;

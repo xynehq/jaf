@@ -132,16 +132,41 @@ function createAsyncEventStream<T>() {
 /**
  * Stream run events as they happen via an async generator.
  * Consumers can iterate events to build live UIs or forward via SSE.
+ *
+ * @param initialState - The initial run state
+ * @param config - Run configuration
+ * @param streamEventHandler - Optional event handler for the stream consumer to handle/modify events
  */
 export async function* runStream<Ctx, Out>(
   initialState: RunState<Ctx>,
-  config: RunConfig<Ctx>
+  config: RunConfig<Ctx>,
+  streamEventHandler?: (event: TraceEvent) => void | any | Promise<void | any>
 ): AsyncGenerator<TraceEvent, void, unknown> {
   const stream = createAsyncEventStream<TraceEvent>();
-  
-  const onEvent = (event: TraceEvent) => {
+
+  const onEvent = async (event: TraceEvent) => {
+    // First, let the stream consumer handle it (can modify before events)
+    let eventResult: any;
+    if (streamEventHandler) {
+      try {
+        eventResult = await streamEventHandler(event);
+      } catch { /* ignore */ }
+    }
+
+    // Then push to stream for observation
     try { stream.push(event); } catch { /* ignore */ }
-    try { config.onEvent?.(event); } catch { /* ignore */ }
+
+    // Also call config.onEvent if provided
+    try {
+      const configResult = await config.onEvent?.(event);
+      // If config.onEvent returns a value and streamEventHandler didn't, use config result
+      if (configResult !== undefined && eventResult === undefined) {
+        eventResult = configResult;
+      }
+    } catch { /* ignore */ }
+
+    // Return the result (for before events)
+    return eventResult;
   };
 
   const runPromise = run<Ctx, Out>(initialState, { ...config, onEvent });
@@ -977,11 +1002,49 @@ async function executeToolCalls<Ctx>(
       const tool = agent.tools?.find(t => t.schema.name === toolCall.function.name);
       const startTime = Date.now();
       
+      let rawArgs = tryParseJSON(toolCall.function.arguments);
+
+      // Emit before_tool_execution event - handler can return modified args
+      if (config.onEvent) {
+        try {
+          const beforeEventResponse = await config.onEvent({
+            type: 'before_tool_execution',
+            data: {
+              toolName: toolCall.function.name,
+              args: rawArgs,
+              toolCall,
+              traceId: state.traceId,
+              runId: state.runId,
+              toolSchema: tool ? {
+                name: tool.schema.name,
+                description: tool.schema.description,
+                parameters: tool.schema.parameters
+              } : undefined,
+              context: state.context,
+              state,
+              agentName: agent.name
+            }
+          });
+
+          // If event handler returns a value, use it to override the args
+          if (beforeEventResponse !== undefined && beforeEventResponse !== null) {
+            console.log(`[JAF:ENGINE] Tool args modified by before_tool_execution event handler for ${toolCall.function.name}`);
+            console.log(`[JAF:ENGINE] Original args:`, rawArgs);
+            console.log(`[JAF:ENGINE] Modified args:`, beforeEventResponse);
+            rawArgs = beforeEventResponse;
+          }
+        } catch (eventError) {
+          console.error(`[JAF:ENGINE] Error in before_tool_execution event handler:`, eventError);
+          // Continue with original args if event handler fails
+        }
+      }
+
+      // Emit tool_call_start event (for observation) with potentially modified args
       config.onEvent?.({
         type: 'tool_call_start',
         data: {
           toolName: toolCall.function.name,
-          args: tryParseJSON(toolCall.function.arguments),
+          args: rawArgs,
           traceId: state.traceId,
           runId: state.runId,
           toolSchema: tool ? {
@@ -1004,8 +1067,8 @@ async function executeToolCalls<Ctx>(
 
           config.onEvent?.({
             type: 'tool_call_end',
-            data: { 
-              toolName: toolCall.function.name, 
+            data: {
+              toolName: toolCall.function.name,
               result: errorResult,
               traceId: state.traceId,
               runId: state.runId,
@@ -1025,7 +1088,6 @@ async function executeToolCalls<Ctx>(
           };
         }
 
-        const rawArgs = tryParseJSON(toolCall.function.arguments);
         const parseResult = tool.schema.parameters.safeParse(rawArgs);
 
         if (!parseResult.success) {
