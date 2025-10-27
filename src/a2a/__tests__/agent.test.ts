@@ -19,7 +19,7 @@ import {
   type A2AToolResult,
   type ToolContext,
   StreamEvent,
-} from '../index';
+} from '../index.js';
 
 describe('A2A Agent', () => {
   describe('createA2ATool', () => {

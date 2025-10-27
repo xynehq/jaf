@@ -11,7 +11,7 @@ export {
   generateRunnerGraph,
   getGraphDot,
   validateGraphOptions
-} from './graphviz';
+} from './graphviz.js';
 
 // Types
 export type {
@@ -19,7 +19,7 @@ export type {
   GraphResult,
   NodeStyle,
   EdgeStyle
-} from './graphviz';
+} from './graphviz.js';
 
 // Runner integration (re-export for convenience)
 export {
@@ -27,10 +27,10 @@ export {
   generateAgentVisualization,
   generateToolVisualization,
   generateRunnerGraphPng
-} from '../adk/runners';
+} from '../adk/runners/index.js';
 
 // Examples and utilities
 export {
   runVisualizationExamples,
   quickStartVisualization
-} from './example';
+} from './example.js';

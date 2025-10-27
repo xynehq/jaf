@@ -22,12 +22,12 @@ import {
   createEchoTool,
   createCalculatorTool,
   createTimestampTool
-} from '../tools';
+} from '../tools/index.js';
 
-import { createAgent } from '../agents';
-import { createInMemorySessionProvider } from '../sessions';
-import { createUserMessage } from '../content';
-import { Tool, ToolContext, OpenAPISpec, Model, ToolParameterType } from '../types';
+import { createAgent } from '../agents/index.js';
+import { createInMemorySessionProvider } from '../sessions/index.js';
+import { createUserMessage } from '../content/index.js';
+import { Tool, ToolContext, OpenAPISpec, Model, ToolParameterType } from '../types.js';
 
 describe('Tool System', () => {
   const mockSession = {

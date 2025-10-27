@@ -13,7 +13,7 @@ import {
   ResponseModality,
   FunctionCall,
   FunctionResponse
-} from '../types';
+} from '../types.js';
 import { safeConsole } from '../../utils/logger.js';
 
 // ========== Live Request Queue ==========
