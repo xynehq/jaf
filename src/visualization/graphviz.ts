@@ -4,7 +4,7 @@
  * Functional visualization system for agents and tools using Graphviz
  */
 
-import { Agent, Tool, RunnerConfig } from '../adk/types';
+import { Agent, Tool, RunnerConfig } from '../adk/types.js';
 import { writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 

@@ -4,14 +4,14 @@
  * Example demonstrating how to use the Graphviz visualization functionality
  */
 
-import { Agent, Tool, RunnerConfig } from '../adk/types';
-import { createRunnerConfig } from '../adk/runners';
-import { createInMemorySessionProvider } from '../adk/sessions';
-import { 
-  generateAgentVisualization, 
-  generateToolVisualization, 
-  generateRunnerGraphPng 
-} from '../adk/runners';
+import { Agent, Tool, RunnerConfig } from '../adk/types.js';
+import { createRunnerConfig } from '../adk/runners/index.js';
+import { createInMemorySessionProvider } from '../adk/sessions/index.js';
+import {
+  generateAgentVisualization,
+  generateToolVisualization,
+  generateRunnerGraphPng
+} from '../adk/runners/index.js';
 
 // ========== Example Agent and Tools ==========
 

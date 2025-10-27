@@ -18,7 +18,7 @@ import {
   type SendMessageRequest,
   type A2AAgent,
   type A2ATaskProvider
-} from '../index';
+} from '../index.js';
 
 describe('A2A Protocol', () => {
   // Mock agent for testing

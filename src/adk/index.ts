@@ -5,7 +5,7 @@
  */
 
 // ========== Core Types ==========
-export * from './types';
+export * from './types.js';
 
 // ========== Model Definitions ==========
 export { 
@@ -18,7 +18,7 @@ export {
   CLAUDE_3_OPUS,
   CLAUDE_3_SONNET,
   CLAUDE_3_HAIKU
-} from './models';
+} from './models.js';
 
 // ========== Content System ==========
 export {
@@ -65,7 +65,7 @@ export {
   getLastModelMessage,
   getContentStats,
   getConversationStats
-} from './content';
+} from './content/index.js';
 
 // ========== Agent System ==========
 export {
@@ -109,7 +109,7 @@ export {
   // Error Handling
   createAgentError,
   withAgentErrorHandling
-} from './agents';
+} from './agents/index.js';
 
 // ========== Tool System ==========
 export {
@@ -141,7 +141,7 @@ export {
   createEchoTool,
   createCalculatorTool,
   createTimestampTool
-} from './tools';
+} from './tools/index.js';
 
 // ========== Session Management ==========
 export {
@@ -185,7 +185,7 @@ export {
   // Error Handling
   createSessionError,
   withSessionErrorHandling
-} from './sessions';
+} from './sessions/index.js';
 
 // ========== Artifact Storage ==========
 export {
@@ -207,7 +207,7 @@ export {
   deleteSessionArtifact,
   clearSessionArtifacts,
   listSessionArtifacts
-} from './artifacts';
+} from './artifacts/index.js';
 
 // ========== Runner System ==========
 export {
@@ -225,7 +225,7 @@ export {
   
   // Error Handling
   withRunnerErrorHandling
-} from './runners';
+} from './runners/index.js';
 
 // ========== LLM Provider System ==========
 export {
@@ -317,7 +317,7 @@ export {
   // Error Handling
   createValidationError,
   withSchemaValidation
-} from './schemas';
+} from './schemas/index.js';
 
 // ========== Streaming System ==========
 export {
@@ -385,7 +385,7 @@ export {
   streamToArray,
   takeFromStream,
   skipFromStream
-} from './streaming';
+} from './streaming/index.js';
 
 // ========== Convenience Functions ==========
 
@@ -397,8 +397,8 @@ import {
   runAgent,
   runAgentStream,
   createFunctionTool
-} from './index';
-import { Agent, Tool, RunnerConfig, SessionProvider, Model, ToolParameterType } from './types';
+} from './index.js';
+import { Agent, Tool, RunnerConfig, SessionProvider, Model, ToolParameterType } from './types.js';
 
 /**
  * Quick setup for a simple agent with in-memory session management

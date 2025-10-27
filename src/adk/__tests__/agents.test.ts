@@ -30,10 +30,10 @@ import {
   compareAgents,
   createAgentError,
   withAgentErrorHandling
-} from '../agents';
+} from '../agents/index.js';
 
-import { createFunctionTool } from '../tools';
-import { AgentConfig, Tool, Model } from '../types';
+import { createFunctionTool } from '../tools/index.js';
+import { AgentConfig, Tool, Model } from '../types.js';
 
 describe('Agent System', () => {
   const mockTool: Tool = createFunctionTool({

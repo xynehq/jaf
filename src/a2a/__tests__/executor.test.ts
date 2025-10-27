@@ -12,7 +12,7 @@ import {
   createA2ATextMessage,
   type A2AExecutionContext,
   type A2AStreamEvent
-} from '../index';
+} from '../index.js';
 
 describe('A2A Executor', () => {
   // Mock model provider

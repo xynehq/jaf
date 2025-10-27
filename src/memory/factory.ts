@@ -5,10 +5,10 @@ import {
   RedisConfig, 
   PostgresConfig,
   createMemoryConnectionError
-} from './types';
-import { createInMemoryProvider } from './providers/in-memory';
-import { createRedisProvider } from './providers/redis';
-import { createPostgresProvider } from './providers/postgres';
+} from './types.js';
+import { createInMemoryProvider } from './providers/in-memory.js';
+import { createRedisProvider } from './providers/redis.js';
+import { createPostgresProvider } from './providers/postgres.js';
 
 /**
  * Create a memory provider from configuration
