@@ -374,7 +374,7 @@ async function runInternal<Ctx, Out>(
   });
 
 
-  const model = config.modelOverride ?? currentAgent.modelConfig?.name;
+  const model = currentAgent.modelConfig?.name ?? config.modelOverride;
 
   if (!model && !(config.modelProvider as any).isAiSdkProvider) {
     return {
