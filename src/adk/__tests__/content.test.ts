@@ -35,7 +35,7 @@ import {
   getLastModelMessage,
   getContentStats,
   getConversationStats
-} from '../content';
+} from '../content/index.js';
 
 describe('Content System', () => {
   describe('Content Creation', () => {

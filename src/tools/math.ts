@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { Tool } from '../core/types';
-import { withErrorHandling } from '../core/tool-results';
-import { evaluateMathExpression, safeMath } from '../utils/safe-math';
+import { Tool } from '../core/types.js';
+import { withErrorHandling } from '../core/tool-results.js';
+import { evaluateMathExpression, safeMath } from '../utils/safe-math.js';
 
 // NOTE: Use an OBJECT schema (no unions) so providers like Gemini accept it.
 const MathArgsSchema = z.object({

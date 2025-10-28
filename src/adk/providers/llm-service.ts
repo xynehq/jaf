@@ -596,12 +596,12 @@ const getStreamingClient = async (
         throw new Error('OPENAI_API_KEY is required for OpenAI streaming');
       }
       
-      client = new OpenAI({ 
+      client = new OpenAI({
         apiKey: openaiKey,
-        dangerouslyAllowBrowser: true 
+        dangerouslyAllowBrowser: true
       });
-      
-      model = config?.modelOverride || serviceConfig.defaultModel || (agent ? convertModelToCoreModel(agent.config.model) : 'gpt-4o');
+
+      model = (agent ? convertModelToCoreModel(agent.config.model) : undefined) || config?.modelOverride || serviceConfig.defaultModel || 'gpt-4o';
       break;
     }
       
@@ -609,13 +609,13 @@ const getStreamingClient = async (
       const litellmUrl = serviceConfig.baseUrl || process.env.LITELLM_URL || 'http://localhost:4000';
       const litellmKey = serviceConfig.apiKey || process.env.LITELLM_API_KEY || 'anything';
       
-      client = new OpenAI({ 
+      client = new OpenAI({
         baseURL: litellmUrl,
         apiKey: litellmKey,
-        dangerouslyAllowBrowser: true 
+        dangerouslyAllowBrowser: true
       });
-      
-      model = config?.modelOverride || serviceConfig.defaultModel || (agent ? convertModelToCoreModel(agent.config.model) : 'gpt-4o');
+
+      model = (agent ? convertModelToCoreModel(agent.config.model) : undefined) || config?.modelOverride || serviceConfig.defaultModel || 'gpt-4o';
       break;
     }
       
@@ -624,14 +624,14 @@ const getStreamingClient = async (
       const anthropicUrl = serviceConfig.baseUrl || process.env.LITELLM_URL || 'http://localhost:4000';
       const anthropicKey = serviceConfig.apiKey || process.env.ANTHROPIC_API_KEY || process.env.LITELLM_API_KEY || 'anything';
       
-      client = new OpenAI({ 
+      client = new OpenAI({
         baseURL: anthropicUrl,
         apiKey: anthropicKey,
-        dangerouslyAllowBrowser: true 
+        dangerouslyAllowBrowser: true
       });
-      
+
       // Use claude model for Anthropic
-      model = config?.modelOverride || serviceConfig.defaultModel || 'claude-3-sonnet';
+      model = (agent ? convertModelToCoreModel(agent.config.model) : undefined) || config?.modelOverride || serviceConfig.defaultModel || 'claude-3-sonnet';
       break;
     }
       
@@ -640,14 +640,14 @@ const getStreamingClient = async (
       const googleUrl = serviceConfig.baseUrl || process.env.LITELLM_URL || 'http://localhost:4000';
       const googleKey = serviceConfig.apiKey || process.env.GOOGLE_API_KEY || process.env.LITELLM_API_KEY || 'anything';
       
-      client = new OpenAI({ 
+      client = new OpenAI({
         baseURL: googleUrl,
         apiKey: googleKey,
-        dangerouslyAllowBrowser: true 
+        dangerouslyAllowBrowser: true
       });
-      
+
       // Use gemini model for Google
-      model = config?.modelOverride || serviceConfig.defaultModel || 'gemini-1.5-pro';
+      model = (agent ? convertModelToCoreModel(agent.config.model) : undefined) || config?.modelOverride || serviceConfig.defaultModel || 'gemini-1.5-pro';
       break;
     }
       

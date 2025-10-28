@@ -10,40 +10,40 @@ import {
   validateRunContext,
   getRunnerStats,
   withRunnerErrorHandling
-} from '../runners';
+} from '../runners/index.js';
 
 import {
   createAgent,
   createSimpleAgent,
   createMultiAgent
-} from '../agents';
+} from '../agents/index.js';
 
 import {
   createFunctionTool,
   createEchoTool,
   createCalculatorTool
-} from '../tools';
+} from '../tools/index.js';
 
-import { Model, ToolParameterType } from '../types';
+import { Model, ToolParameterType } from '../types.js';
 
 import {
   createInMemorySessionProvider,
   addMessageToSession
-} from '../sessions';
+} from '../sessions/index.js';
 
 import {
   createUserMessage,
   createModelMessage,
   getFunctionCalls
-} from '../content';
+} from '../content/index.js';
 
 import {
   createSchemaValidator,
   stringSchema,
   isString
-} from '../schemas';
+} from '../schemas/index.js';
 
-import { RunnerConfig, RunContext, AgentConfig, GuardrailFunction, AgentError } from '../types';
+import { RunnerConfig, RunContext, AgentConfig, GuardrailFunction, AgentError } from '../types.js';
 
 // Mock the LLM service to avoid real API calls
 let mockLLMResponses: any[] = [];

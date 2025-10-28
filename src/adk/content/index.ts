@@ -4,7 +4,7 @@
  * Functional content and message handling utilities
  */
 
-import { Content, Part, FunctionCall, FunctionResponse } from '../types';
+import { Content, Part, FunctionCall, FunctionResponse } from '../types.js';
 
 // ========== Content Creation ==========
 
