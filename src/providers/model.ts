@@ -228,7 +228,7 @@ async function buildChatCompletionParams<Ctx>(
   config: Readonly<RunConfig<Ctx>>,
   baseURL: string,
 ): Promise<{ model: string; params: OpenAI.Chat.Completions.ChatCompletionCreateParams }> {
-  const model = config.modelOverride ?? agent.modelConfig?.name;
+  const model = agent.modelConfig?.name ?? config.modelOverride;
 
   if (!model) {
     throw new Error(`Model not specified for agent ${agent.name}`);
