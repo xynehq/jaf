@@ -1186,8 +1186,33 @@ async function executeToolCalls<Ctx>(
           ? { ...state.context, ...additionalContext }
           : state.context;
         
-        const toolResult = await tool.execute(parseResult.data, contextWithAdditional);
+        let toolResult = await tool.execute(parseResult.data, contextWithAdditional);
         
+        // Apply onAfterToolExecution callback if configured
+        if (config.onAfterToolExecution) {
+          try {
+            const toolResultStatus = typeof toolResult === 'string' ? 'success' : (toolResult?.status || 'success');
+            
+            const modifiedResult = await config.onAfterToolExecution(
+              toolCall.function.name,
+              toolResult,
+              {
+                toolCall,
+                args: parseResult.data,
+                state,
+                agentName: agent.name,
+                executionTime: Date.now() - startTime,
+                status: toolResultStatus
+              }
+            );
+            if (modifiedResult !== undefined && modifiedResult !== null) {
+              toolResult = modifiedResult;
+            }
+          } catch (callbackError) {
+            console.error(`[JAF:ENGINE] Error in onAfterToolExecution callback for ${toolCall.function.name}:`, callbackError);
+            // Continue with original result if callback fails
+          }
+        }
         let resultString: string;
         let toolResultObj: any = null;
         

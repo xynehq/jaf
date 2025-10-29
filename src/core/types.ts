@@ -411,6 +411,18 @@ export type RunConfig<Ctx> = {
   readonly initialInputGuardrails?: readonly Guardrail<string>[];
   readonly finalOutputGuardrails?: readonly Guardrail<any>[];
   readonly onEvent?: (event: TraceEvent) => void | any | Promise<void | any>;
+  readonly onAfterToolExecution?: (
+    toolName: string,
+    result: string | import('./tool-results').ToolResult,
+    context: {
+      toolCall: ToolCall;
+      args: any;
+      state: RunState<Ctx>;
+      agentName: string;
+      executionTime: number;
+      status: string | import('./tool-results').ToolResult;
+    }
+  ) => Promise<string|  import('./tool-results').ToolResult | null> ;
   readonly memory?: MemoryConfig;
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;
