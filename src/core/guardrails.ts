@@ -267,7 +267,8 @@ ${sanitizedContent}
         modelOverride: modelToUse,
         initialInputGuardrails: undefined,
         finalOutputGuardrails: undefined,
-        onEvent: undefined
+        onEvent: undefined,
+        preferStreaming: config.preferStreaming
       };
 
       const completionPromise = config.modelProvider.getCompletion(tempState, evalAgent, guardrailConfig);
