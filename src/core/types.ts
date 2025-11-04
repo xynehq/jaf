@@ -427,6 +427,7 @@ export type RunConfig<Ctx> = {
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;
   readonly defaultFastModel?: string;
+  readonly preferStreaming?: boolean;
 };
 
 export const jsonParseLLMOutput = (text: string): any => {

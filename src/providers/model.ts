@@ -74,9 +74,14 @@ export const makeLiteLLMProvider = <Ctx>(
     async getCompletion(state, agent, config) {
       const { model, params } = await buildChatCompletionParams(state, agent, config, baseURL);
 
-      safeConsole.log(`📞 Calling model: ${model} with params: ${JSON.stringify(params, null, 2)}`);
+      const requestParams = {
+        ...params,
+        stream: false,
+      };
+
+      safeConsole.log(`📞 Calling model: ${model} with params: ${JSON.stringify(requestParams, null, 2)}`);
       const resp = await client.chat.completions.create(
-        params as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+        requestParams as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
       );
 
       // Return the choice with usage data attached for tracing

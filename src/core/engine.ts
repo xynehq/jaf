@@ -496,10 +496,12 @@ async function runInternal<Ctx, Out>(
         llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
       }
     } else {
-      if (typeof config.modelProvider.getCompletionStream === 'function') {
+      const getStream = config.modelProvider.getCompletionStream;
+      const useStreaming = config.preferStreaming !== false && typeof getStream === 'function';
+      if (useStreaming) {
         try {
           streamingUsed = true;
-          const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
+          const stream = getStream(state, currentAgent, config);
           let aggregatedText = '';
           const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
 
@@ -569,10 +571,12 @@ async function runInternal<Ctx, Out>(
       }
     }
   } else {
-    if (typeof config.modelProvider.getCompletionStream === 'function') {
+    const getStream = config.modelProvider.getCompletionStream;
+    const useStreaming = config.preferStreaming !== false && typeof getStream === 'function';
+    if (useStreaming) {
       try {
         streamingUsed = true;
-        const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
+        const stream = getStream(state, currentAgent, config);
         let aggregatedText = '';
         const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
 

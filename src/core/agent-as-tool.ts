@@ -86,6 +86,7 @@ export function agentAsTool<Ctx, Out = any>(
         maxTurns,
         // Memory isolation by default
         ...(memoryMode === 'none' ? { memory: undefined, conversationId: undefined } : {}),
+        preferStreaming: parentConfig.preferStreaming,
         onEvent: (event) => {
           if (propagateEvents === 'all') {
             parentConfig.onEvent?.(event);
