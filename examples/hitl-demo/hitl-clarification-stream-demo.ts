@@ -139,7 +139,6 @@ IMPORTANT: When searching for contacts, you MUST follow this workflow:
 
 Remember: MULTIPLE distinct people = MUST use request_user_clarification tool!`,
   tools: [searchContactsTool, getMessagesTool]
-  // Note: outputCodec removed to avoid JSON mode conflicts with tool calling
 };
 
 // Helper function to simulate user input
