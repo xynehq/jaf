@@ -597,12 +597,25 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
               status: result.outcome.status,
               output: result.outcome.status === 'completed' ? String(result.outcome.output) : undefined,
               error: result.outcome.status === 'error' ? result.outcome.error : undefined,
-              interruptions: result.outcome.status === 'interrupted' 
-                ? result.outcome.interruptions.map(interruption => ({
-                    type: interruption.type,
-                    toolCall: interruption.toolCall,
-                    sessionId: interruption.sessionId || result.finalState.runId
-                  }))
+              interruptions: result.outcome.status === 'interrupted'
+                ? result.outcome.interruptions.map(interruption => {
+                    if (interruption.type === 'tool_approval') {
+                      return {
+                        type: interruption.type,
+                        toolCall: interruption.toolCall,
+                        sessionId: interruption.sessionId || result.finalState.runId
+                      };
+                    } else {
+                      // clarification_required
+                      return {
+                        type: interruption.type,
+                        clarificationId: interruption.clarificationId,
+                        question: interruption.question,
+                        options: [...interruption.options],
+                        context: interruption.context
+                      };
+                    }
+                  })
                 : undefined
             },
             turnCount: result.finalState.turnCount,
