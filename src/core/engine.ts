@@ -12,37 +12,52 @@ import {
   Guardrail,
   ClarificationOption,
   Tool,
+  InterruptionStatus,
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
 import { buildEffectiveGuardrails, executeInputGuardrailsParallel, executeInputGuardrailsSequential, executeOutputGuardrails } from './guardrails.js';
 import { safeConsole } from '../utils/logger.js';
+import { DEFAULT_CLARIFICATION_DESCRIPTION } from '../utils/constants.js';
+
+type ClarificationTriggerMarker = {
+  readonly _clarification_trigger: true;
+  readonly question: string;
+  readonly options: readonly ClarificationOption[];
+  readonly context?: Record<string, unknown>;
+};
 
 /**
- * Built-in tool that allows the LLM to request clarification from the user
- * when dealing with ambiguous requests or multiple valid options.
+ * Create the built-in clarification tool
  */
-const requestClarificationTool: Tool<any, any> = {
-  schema: {
-    name: 'request_user_clarification',
-    description: 'Request clarification from the user when the request is ambiguous or there are multiple valid options. Use this when you cannot determine user intent from context alone. The user will be presented with options to choose from, and execution will resume with their selection.',
-    parameters: z.object({
-      question: z.string().describe('The clarifying question to ask the user'),
-      options: z.array(z.object({
-        id: z.string().describe('Unique identifier for this option'),
-        label: z.string().describe('Human-readable label shown to the user')
-      })).min(2).describe('The options for the user to choose from (minimum 2 options)')
-    })
-  },
-  execute: async (args) => {
-    console.log('[JAF:ENGINE] Clarification tool invoked with args:', args);
-    // This tool returns a special marker that triggers clarification interruption
-    return {
-      _clarification_trigger: true,
-      question: args.question,
-      options: args.options
-    } as any;
-  }
-};
+function createClarificationTool<Ctx>(config: RunConfig<Ctx>): Tool<{
+  question: string;
+  options: ClarificationOption[];
+}, Ctx> {
+  const description = config.clarificationDescription || DEFAULT_CLARIFICATION_DESCRIPTION;
+
+  return {
+    schema: {
+      name: 'request_user_clarification',
+      description,
+      parameters: z.object({
+        question: z.string().describe('The clarifying question to ask the user'),
+        options: z.array(z.object({
+          id: z.string().describe('Unique identifier for this option'),
+          label: z.string().describe('Human-readable label shown to the user')
+        })).min(2).describe('The options for the user to choose from (minimum 2 options)')
+      })
+    },
+    execute: async (args, _context): Promise<string> => {
+      console.log('[JAF:ENGINE] Clarification tool invoked with args:', args);
+      const trigger: ClarificationTriggerMarker = {
+        _clarification_trigger: true,
+        question: args.question,
+        options: args.options
+      };
+      return JSON.stringify(trigger);
+    }
+  };
+}
 
 
 export async function run<Ctx, Out>(
@@ -324,7 +339,7 @@ async function runInternal<Ctx, Out>(
     if (lastMessage?.role === 'tool') {
       try {
         const content = JSON.parse(getTextContent(lastMessage.content));
-        if (content.status === 'awaiting_clarification') {
+        if (content.status === InterruptionStatus.AwaitingClarification) {
           const clarificationId = content.clarification_id;
           const selectedId = state.clarifications.get(clarificationId);
 
@@ -336,13 +351,12 @@ async function runInternal<Ctx, Out>(
             updatedMessages[updatedMessages.length - 1] = {
               ...lastMessage,
               content: JSON.stringify({
-                status: 'clarification_provided',
+                status: InterruptionStatus.ClarificationProvided,
                 selected_option_id: selectedId,
                 message: `User selected option: ${selectedId}`
               })
             };
 
-            console.log(updatedMessages, "updated messages after clarification");
             config.onEvent?.({
               type: 'clarification_provided',
               data: {
@@ -431,13 +445,13 @@ async function runInternal<Ctx, Out>(
     hasAdvancedGuardrails
   });
 
-  // Auto-inject clarification tool into agent's tools
   const effectiveTools = [
-    ...(currentAgent.tools || []),
-    requestClarificationTool
+    ...(currentAgent.tools || [])
   ];
 
-  // Create effective agent with clarification tool
+  if(config.allowClarificationRequests){
+    effectiveTools.push(createClarificationTool(config));
+  }
   const effectiveAgent: Agent<Ctx, any> = {
     ...currentAgent,
     tools: effectiveTools
@@ -1306,32 +1320,36 @@ async function executeToolCalls<Ctx>(
         let toolResult = await tool.execute(parseResult.data, contextWithAdditional);
 
         // Check if this is a clarification request
-        if (toolResult && typeof toolResult === 'object' && '_clarification_trigger' in toolResult && toolResult._clarification_trigger === true) {
-          const clarificationId = `clarify_${toolCall.id}`;
-          const clarificationData = toolResult as any;
+        // The clarification tool returns a JSON string containing the trigger marker
+        if (typeof toolResult === 'string') {
+          try {
+            const parsed = JSON.parse(toolResult);
+            if (parsed && typeof parsed === 'object' && '_clarification_trigger' in parsed && parsed._clarification_trigger === true) {
+              const clarificationId = `clarify_${toolCall.id}`;
+              const trigger = parsed as ClarificationTriggerMarker;
 
-          safeConsole.log(`[JAF:ENGINE] Clarification requested by tool ${toolCall.function.name}`);
-          safeConsole.log(`[JAF:ENGINE] Question:`, clarificationData.question);
-          safeConsole.log(`[JAF:ENGINE] Options:`, clarificationData.options);
-
-          return {
-            interruption: {
-              type: 'clarification_required',
-              clarificationId,
-              question: clarificationData.question,
-              options: clarificationData.options,
-              context: clarificationData.context
-            } as any,
-            message: {
-              role: 'tool',
-              content: JSON.stringify({
-                status: 'awaiting_clarification',
-                clarification_id: clarificationId,
-                message: 'Waiting for user to provide clarification'
-              }),
-              tool_call_id: toolCall.id
+              return {
+                interruption: {
+                  type: 'clarification_required',
+                  clarificationId,
+                  question: trigger.question,
+                  options: trigger.options,
+                  context: trigger.context
+                },
+                message: {
+                  role: 'tool',
+                  content: JSON.stringify({
+                    status: InterruptionStatus.AwaitingClarification,
+                    clarification_id: clarificationId,
+                    message: 'Waiting for user to provide clarification'
+                  }),
+                  tool_call_id: toolCall.id
+                }
+              };
             }
-          };
+          } catch {
+            // Not a clarification trigger, continue with normal processing
+          }
         }
         
         // Apply onAfterToolExecution callback if configured

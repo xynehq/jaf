@@ -25,7 +25,7 @@ import {
   generateTraceId,
   makeLiteLLMProvider
 } from '@xynehq/jaf';
-import { ClarificationInterruption } from '../src/core/types';
+import { ClarificationInterruption } from '../../src/core/types';
 
 type DemoCtx = { userId: string };
 
@@ -369,5 +369,4 @@ function handleEvent(event: TraceEvent | any) {
   }
 }
 
-// Run the demo
 streamingDemo().catch(console.error);

@@ -147,6 +147,17 @@ export type ApprovalValue = {
   readonly additionalContext?: Record<string, any>;
 };
 
+/**
+ * Interruption-related status enum for tool results during HITL flows
+ */
+export enum InterruptionStatus {
+  AwaitingClarification = 'awaiting_clarification',
+  ClarificationProvided = 'clarification_provided',
+  Halted = 'halted',
+  ApprovalDenied = 'approval_denied',
+  ApprovedAndExecuted = 'approved_and_executed'
+}
+
 export type RunState<Ctx> = {
   readonly runId: RunId;
   readonly traceId: TraceId;
@@ -187,6 +198,7 @@ export type ClarificationInterruption<Ctx> = {
   readonly question: string;
   readonly options: readonly ClarificationOption[];
   readonly context?: Record<string, any>;
+  readonly sessionId?: string;
 };
 
 export type Interruption<Ctx> = ToolApprovalInterruption<Ctx> | ClarificationInterruption<Ctx>;
@@ -444,6 +456,8 @@ export type RunConfig<Ctx> = {
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;
   readonly defaultFastModel?: string;
+  readonly allowClarificationRequests?: boolean;
+  readonly clarificationDescription?: string;
 };
 
 export const jsonParseLLMOutput = (text: string): any => {
