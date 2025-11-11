@@ -91,18 +91,31 @@ export const chatResponseSchema = z.object({
         status: z.enum(['completed', 'error', 'max_turns', 'interrupted']),
         output: z.string().optional(),
       error: z.any().optional(),
-        interruptions: z.array(z.object({
-          type: z.literal('tool_approval'),
-          toolCall: z.object({
-            id: z.string(),
-            type: z.literal('function'),
-            function: z.object({
-              name: z.string(),
-              arguments: z.string()
-            })
+        interruptions: z.array(z.union([
+          z.object({
+            type: z.literal('tool_approval'),
+            toolCall: z.object({
+              id: z.string(),
+              type: z.literal('function'),
+              function: z.object({
+                name: z.string(),
+                arguments: z.string()
+              })
+            }),
+            sessionId: z.string()
           }),
-          sessionId: z.string()
-        })).optional()
+          z.object({
+            type: z.literal('clarification_required'),
+            clarificationId: z.string(),
+            question: z.string(),
+            options: z.array(z.object({
+              id: z.string(),
+              label: z.string(),
+              value: z.any().optional()
+            })),
+            context: z.record(z.any()).optional()
+          })
+        ])).optional()
       }),
       turnCount: z.number(),
     executionTimeMs: z.number()

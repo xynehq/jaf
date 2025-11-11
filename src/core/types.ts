@@ -147,6 +147,17 @@ export type ApprovalValue = {
   readonly additionalContext?: Record<string, any>;
 };
 
+/**
+ * Interruption-related status enum for tool results during HITL flows
+ */
+export enum InterruptionStatus {
+  AwaitingClarification = 'awaiting_clarification',
+  ClarificationProvided = 'clarification_provided',
+  Halted = 'halted',
+  ApprovalDenied = 'approval_denied',
+  ApprovedAndExecuted = 'approved_and_executed'
+}
+
 export type RunState<Ctx> = {
   readonly runId: RunId;
   readonly traceId: TraceId;
@@ -155,6 +166,7 @@ export type RunState<Ctx> = {
   readonly context: Readonly<Ctx>;
   readonly turnCount: number;
   readonly approvals?: ReadonlyMap<string, ApprovalValue>;
+  readonly clarifications?: ReadonlyMap<string, string>;
 };
 
 export type JAFError =
@@ -167,6 +179,12 @@ export type JAFError =
   | { readonly _tag: "HandoffError"; readonly detail: string }
   | { readonly _tag: "AgentNotFound"; readonly agentName: string };
 
+export type ClarificationOption = {
+  readonly id: string;
+  readonly label: string;
+  readonly value?: any;
+};
+
 export type ToolApprovalInterruption<Ctx> = {
   readonly type: 'tool_approval';
   readonly toolCall: ToolCall;
@@ -174,7 +192,16 @@ export type ToolApprovalInterruption<Ctx> = {
   readonly sessionId?: string;
 };
 
-export type Interruption<Ctx> = ToolApprovalInterruption<Ctx>;
+export type ClarificationInterruption<Ctx> = {
+  readonly type: 'clarification_required';
+  readonly clarificationId: string;
+  readonly question: string;
+  readonly options: readonly ClarificationOption[];
+  readonly context?: Record<string, any>;
+  readonly sessionId?: string;
+};
+
+export type Interruption<Ctx> = ToolApprovalInterruption<Ctx> | ClarificationInterruption<Ctx>;
 
 export type RunResult<Out> = {
   readonly finalState: RunState<any>;
@@ -213,7 +240,9 @@ export type TraceEvent =
   | { type: 'output_parse'; data: { content: string; status: 'start' | 'end' | 'fail'; parsedOutput?: any; error?: string; } }
   | { type: 'decode_error'; data: { errors: z.ZodIssue[] } }
   | { type: 'turn_end'; data: { turn: number; agentName: string } }
-  | { type: 'run_end'; data: { outcome: RunResult<any>['outcome']; traceId: TraceId; runId: RunId; } };
+  | { type: 'run_end'; data: { outcome: RunResult<any>['outcome']; finalState: RunState<any>; traceId: TraceId; runId: RunId; } }
+  | { type: 'clarification_requested'; data: { clarificationId: string; question: string; options: readonly ClarificationOption[]; context?: any; } }
+  | { type: 'clarification_provided'; data: { clarificationId: string; selectedOption: ClarificationOption; selectedId: string; } };
 
 /**
  * Helper type to extract event data by event type
@@ -427,6 +456,8 @@ export type RunConfig<Ctx> = {
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;
   readonly defaultFastModel?: string;
+  readonly allowClarificationRequests?: boolean;
+  readonly clarificationDescription?: string;
 };
 
 export const jsonParseLLMOutput = (text: string): any => {

@@ -10,10 +10,53 @@ import {
   Interruption,
   getTextContent,
   Guardrail,
+  ClarificationOption,
+  Tool,
+  InterruptionStatus,
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
 import { buildEffectiveGuardrails, executeInputGuardrailsParallel, executeInputGuardrailsSequential, executeOutputGuardrails } from './guardrails.js';
 import { safeConsole } from '../utils/logger.js';
+import { DEFAULT_CLARIFICATION_DESCRIPTION } from '../utils/constants.js';
+
+type ClarificationTriggerMarker = {
+  readonly _clarification_trigger: true;
+  readonly question: string;
+  readonly options: readonly ClarificationOption[];
+  readonly context?: Record<string, unknown>;
+};
+
+/**
+ * Create the built-in clarification tool
+ */
+function createClarificationTool<Ctx>(config: RunConfig<Ctx>): Tool<{
+  question: string;
+  options: ClarificationOption[];
+}, Ctx> {
+  const description = config.clarificationDescription || DEFAULT_CLARIFICATION_DESCRIPTION;
+
+  return {
+    schema: {
+      name: 'request_user_clarification',
+      description,
+      parameters: z.object({
+        question: z.string().describe('The clarifying question to ask the user'),
+        options: z.array(z.object({
+          id: z.string().describe('Unique identifier for this option'),
+          label: z.string().describe('Human-readable label shown to the user')
+        })).min(2).describe('clear and meaningful options that user can choose from (minimum 2 options)')
+      })
+    },
+    execute: async (args, _context): Promise<string> => {
+      const trigger: ClarificationTriggerMarker = {
+        _clarification_trigger: true,
+        question: args.question,
+        options: args.options
+      };
+      return JSON.stringify(trigger);
+    }
+  };
+}
 
 
 export async function run<Ctx, Out>(
@@ -60,7 +103,12 @@ export async function run<Ctx, Out>(
 
     config.onEvent?.({
       type: 'run_end',
-      data: { outcome: result.outcome, traceId: initialState.traceId, runId: initialState.runId }
+      data: {
+        outcome: result.outcome,
+        finalState: result.finalState,
+        traceId: initialState.traceId,
+        runId: initialState.runId
+      }
     });
 
     return result;
@@ -78,7 +126,12 @@ export async function run<Ctx, Out>(
 
     config.onEvent?.({
       type: 'run_end',
-      data: { outcome: errorResult.outcome, traceId: initialState.traceId, runId: initialState.runId }
+      data: {
+        outcome: errorResult.outcome,
+        finalState: errorResult.finalState,
+        traceId: initialState.traceId,
+        runId: initialState.runId
+      }
     });
 
     return errorResult;
@@ -277,6 +330,53 @@ async function runInternal<Ctx, Out>(
   const resumed = await tryResumePendingToolCalls<Ctx, Out>(state, config);
   if (resumed) return resumed;
 
+  // Check if we're resuming from a clarification
+  if (state.clarifications && state.clarifications.size > 0) {
+    const lastMessage = state.messages[state.messages.length - 1];
+    if (lastMessage?.role === 'tool') {
+      try {
+        const content = JSON.parse(getTextContent(lastMessage.content));
+        if (content.status === InterruptionStatus.AwaitingClarification) {
+          const clarificationId = content.clarification_id;
+          const selectedId = state.clarifications.get(clarificationId);
+
+          if (selectedId) {
+            safeConsole.log(`[JAF:ENGINE] Resuming with clarification: ${clarificationId}, selected option: ${selectedId}`);
+
+            // Find the selected option to include in the event
+            const updatedMessages = [...state.messages];
+            updatedMessages[updatedMessages.length - 1] = {
+              ...lastMessage,
+              content: JSON.stringify({
+                status: InterruptionStatus.ClarificationProvided,
+                message: `User selected option: ${selectedId}`
+              })
+            };
+
+            config.onEvent?.({
+              type: 'clarification_provided',
+              data: {
+                clarificationId,
+                selectedId,
+                selectedOption: { id: selectedId, label: selectedId }
+              }
+            });
+
+            // Continue execution with updated messages
+            const stateWithClarification: RunState<Ctx> = {
+              ...state,
+              messages: updatedMessages
+            };
+
+            return runInternal(stateWithClarification, config);
+          }
+        }
+      } catch (e) {
+        safeConsole.log(`[JAF:ENGINE] Error checking for clarification resume:`, e);
+      }
+    }
+  }
+
   const maxTurns = config.maxTurns ?? 50;
   if (state.turnCount >= maxTurns) {
     return {
@@ -341,27 +441,38 @@ async function runInternal<Ctx, Out>(
     hasAdvancedGuardrails
   });
 
-  safeConsole.log(`[JAF:ENGINE] Using agent: ${currentAgent.name}`);
-  safeConsole.log(`[JAF:ENGINE] Agent has ${currentAgent.tools?.length || 0} tools available`);
-  if (currentAgent.tools) {
-    safeConsole.log(`[JAF:ENGINE] Available tools:`, currentAgent.tools.map(t => t.schema.name));
+  const effectiveTools = [
+    ...(currentAgent.tools || [])
+  ];
+
+  if(config.allowClarificationRequests){
+    effectiveTools.push(createClarificationTool(config));
+  }
+  const effectiveAgent: Agent<Ctx, any> = {
+    ...currentAgent,
+    tools: effectiveTools
+  };
+
+  safeConsole.log(`[JAF:ENGINE] Using agent: ${effectiveAgent.name}`);
+  if (effectiveTools) {
+    safeConsole.log(`[JAF:ENGINE] Available tools:`, effectiveTools.map(t => t.schema.name));
   }
 
   config.onEvent?.({
     type: 'agent_processing',
     data: {
-      agentName: currentAgent.name,
+      agentName: effectiveAgent.name,
       traceId: state.traceId,
       runId: state.runId,
       turnCount: state.turnCount,
       messageCount: state.messages.length,
-      toolsAvailable: currentAgent.tools?.map(t => ({
+      toolsAvailable: effectiveTools.map(t => ({
         name: t.schema.name,
         description: t.schema.description
-      })) || [],
-      handoffsAvailable: currentAgent.handoffs || [],
-      modelConfig: currentAgent.modelConfig,
-      hasOutputCodec: !!currentAgent.outputCodec,
+      })),
+      handoffsAvailable: effectiveAgent.handoffs || [],
+      modelConfig: effectiveAgent.modelConfig,
+      hasOutputCodec: !!effectiveAgent.outputCodec,
       context: state.context,
       currentState: {
         messages: state.messages.map(m => ({
@@ -393,18 +504,18 @@ async function runInternal<Ctx, Out>(
   config.onEvent?.({ type: 'turn_start', data: { turn: turnNumber, agentName: currentAgent.name } });
 
   const llmCallData = {
-    agentName: currentAgent.name,
+    agentName: effectiveAgent.name,
     model: model || 'unknown',
     traceId: state.traceId,
     runId: state.runId,
     messages: state.messages,
-    tools: currentAgent.tools?.map(tool => ({
+    tools: effectiveTools.map(tool => ({
       name: tool.schema.name,
       description: tool.schema.description,
       parameters: tool.schema.parameters
     })),
     modelConfig: {
-      ...currentAgent.modelConfig,
+      ...effectiveAgent.modelConfig,
       modelOverride: config.modelOverride
     },
     turnCount: state.turnCount,
@@ -442,10 +553,10 @@ async function runInternal<Ctx, Out>(
         }
 
         safeConsole.log(`✅ All input guardrails passed. Starting LLM call.`);
-        llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+        llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
       } else {
         const guardrailPromise = executeInputGuardrailsParallel(inputGuardrailsToRun, firstUserMessage, config);
-        const llmPromise = config.modelProvider.getCompletion(state, currentAgent, config);
+        const llmPromise = config.modelProvider.getCompletion(state, effectiveAgent, config);
         
         const [guardrailResult, llmResult] = await Promise.all([
           guardrailPromise,
@@ -493,13 +604,13 @@ async function runInternal<Ctx, Out>(
             };
           }
         }
-        llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+        llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
       }
     } else {
       if (typeof config.modelProvider.getCompletionStream === 'function') {
         try {
           streamingUsed = true;
-          const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
+          const stream = config.modelProvider.getCompletionStream(state, effectiveAgent, config);
           let aggregatedText = '';
           const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
 
@@ -562,17 +673,17 @@ async function runInternal<Ctx, Out>(
         } catch (e) {
           streamingUsed = false;
           assistantEventStreamed = false;
-          llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+          llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
         }
       } else {
-        llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+        llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
       }
     }
   } else {
     if (typeof config.modelProvider.getCompletionStream === 'function') {
       try {
         streamingUsed = true;
-        const stream = config.modelProvider.getCompletionStream(state, currentAgent, config);
+        const stream = config.modelProvider.getCompletionStream(state, effectiveAgent, config);
         let aggregatedText = '';
         const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
 
@@ -635,10 +746,10 @@ async function runInternal<Ctx, Out>(
       } catch (e) {
         streamingUsed = false;
         assistantEventStreamed = false;
-        llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+        llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
       }
     } else {
-      llmResponse = await config.modelProvider.getCompletion(state, currentAgent, config);
+      llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
     }
   }
   
@@ -723,7 +834,7 @@ async function runInternal<Ctx, Out>(
     
     const toolResults = await executeToolCalls(
       llmResponse.message.tool_calls,
-      currentAgent,
+      effectiveAgent,
       state,
       config,
     );
@@ -734,8 +845,10 @@ async function runInternal<Ctx, Out>(
     if (interruptions.length > 0) {
       const completedToolResults = toolResults.filter(r => !r.interruption);
       const approvalRequiredResults = toolResults.filter(r => r.interruption);
-      
+
       const updatedApprovals = new Map(state.approvals ?? []);
+      const updatedClarifications = new Map(state.clarifications ?? []);
+
       for (const interruption of interruptions) {
         if (interruption.type === 'tool_approval') {
           updatedApprovals.set(interruption.toolCall.id, {
@@ -743,6 +856,18 @@ async function runInternal<Ctx, Out>(
             approved: false,
             additionalContext: { status: 'pending', timestamp: new Date().toISOString() }
           });
+        } else if (interruption.type === 'clarification_required') {
+          // Emit clarification requested event
+          config.onEvent?.({
+            type: 'clarification_requested',
+            data: {
+              clarificationId: interruption.clarificationId,
+              question: interruption.question,
+              options: interruption.options,
+              context: interruption.context
+            }
+          });
+          safeConsole.log(`[JAF:ENGINE] Clarification requested: ${interruption.question}`);
         }
       }
       
@@ -751,6 +876,7 @@ async function runInternal<Ctx, Out>(
         messages: [...newMessages, ...completedToolResults.map(r => r.message)],
         turnCount: updatedTurnCount,
         approvals: updatedApprovals,
+        clarifications: updatedClarifications,
       };
 
       if (config.memory?.autoStore && config.conversationId) {
@@ -1181,12 +1307,45 @@ async function executeToolCalls<Ctx>(
         safeConsole.log(`[JAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
         safeConsole.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
         safeConsole.log(`[JAF:ENGINE] Tool context:`, state.context);
-        
-        const contextWithAdditional = additionalContext 
+
+        const contextWithAdditional = additionalContext
           ? { ...state.context, ...additionalContext }
           : state.context;
-        
+
         let toolResult = await tool.execute(parseResult.data, contextWithAdditional);
+
+        // Check if this is a clarification request
+        // The clarification tool returns a JSON string containing the trigger marker
+        if (typeof toolResult === 'string') {
+          try {
+            const parsed = JSON.parse(toolResult);
+            if (parsed && typeof parsed === 'object' && '_clarification_trigger' in parsed && parsed._clarification_trigger === true) {
+              const clarificationId = `clarify_${toolCall.id}`;
+              const trigger = parsed as ClarificationTriggerMarker;
+
+              return {
+                interruption: {
+                  type: 'clarification_required',
+                  clarificationId,
+                  question: trigger.question,
+                  options: trigger.options,
+                  context: trigger.context
+                },
+                message: {
+                  role: 'tool',
+                  content: JSON.stringify({
+                    status: InterruptionStatus.AwaitingClarification,
+                    clarification_id: clarificationId,
+                    message: 'Waiting for user to provide clarification'
+                  }),
+                  tool_call_id: toolCall.id
+                }
+              };
+            }
+          } catch {
+            // Not a clarification trigger, continue with normal processing
+          }
+        }
         
         // Apply onAfterToolExecution callback if configured
         if (config.onAfterToolExecution) {
@@ -1218,13 +1377,12 @@ async function executeToolCalls<Ctx>(
         
         if (typeof toolResult === 'string') {
           resultString = toolResult;
-          safeConsole.log(`[JAF:ENGINE] Tool ${toolCall.function.name} returned string:`, resultString);
+          safeConsole.log(`[JAF:ENGINE] Tool ${toolCall.function.name}` );
         } else {
           toolResultObj = toolResult;
           const { toolResultToString } = await import('./tool-results');
           resultString = toolResultToString(toolResult);
-          safeConsole.log(`[JAF:ENGINE] Tool ${toolCall.function.name} returned ToolResult:`, toolResult);
-          safeConsole.log(`[JAF:ENGINE] Converted to string:`, resultString);
+          safeConsole.log(`[JAF:ENGINE] Tool ${toolCall.function.name} `);
         }
 
         config.onEvent?.({
