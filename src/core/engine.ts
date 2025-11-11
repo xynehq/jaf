@@ -349,7 +349,6 @@ async function runInternal<Ctx, Out>(
               ...lastMessage,
               content: JSON.stringify({
                 status: InterruptionStatus.ClarificationProvided,
-                selected_option_id: selectedId,
                 message: `User selected option: ${selectedId}`
               })
             };
