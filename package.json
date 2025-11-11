@@ -1,6 +1,6 @@
 {
   "name": "@xynehq/jaf",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Juspay Agent Framework - A purely functional agent framework with immutable state and composable tools",
   "packageManager": "pnpm@9.0.0",
   "main": "dist/index.js",
