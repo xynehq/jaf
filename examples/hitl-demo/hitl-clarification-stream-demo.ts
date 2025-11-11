@@ -164,6 +164,7 @@ async function streamingDemo() {
     agentRegistry,
     modelProvider: modelProvider as any,
     modelOverride: process.env.LITELLM_MODEL || 'gpt-4o-mini',
+    allowClarificationRequests: true,
   };
 
   // Test Case 1: Ambiguous query with streaming
