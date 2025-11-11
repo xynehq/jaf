@@ -44,11 +44,10 @@ function createClarificationTool<Ctx>(config: RunConfig<Ctx>): Tool<{
         options: z.array(z.object({
           id: z.string().describe('Unique identifier for this option'),
           label: z.string().describe('Human-readable label shown to the user')
-        })).min(2).describe('The options for the user to choose from (minimum 2 options)')
+        })).min(2).describe('clear and meaningful options that user can choose from (minimum 2 options)')
       })
     },
     execute: async (args, _context): Promise<string> => {
-      console.log('[JAF:ENGINE] Clarification tool invoked with args:', args);
       const trigger: ClarificationTriggerMarker = {
         _clarification_trigger: true,
         question: args.question,
@@ -331,11 +330,9 @@ async function runInternal<Ctx, Out>(
   const resumed = await tryResumePendingToolCalls<Ctx, Out>(state, config);
   if (resumed) return resumed;
 
-  console.log("clarifications in state:", state.clarifications);
   // Check if we're resuming from a clarification
   if (state.clarifications && state.clarifications.size > 0) {
     const lastMessage = state.messages[state.messages.length - 1];
-    console.log(`[JAF:ENGINE] Checking for clarification resume in last message:`, lastMessage);
     if (lastMessage?.role === 'tool') {
       try {
         const content = JSON.parse(getTextContent(lastMessage.content));
@@ -458,7 +455,6 @@ async function runInternal<Ctx, Out>(
   };
 
   safeConsole.log(`[JAF:ENGINE] Using agent: ${effectiveAgent.name}`);
-  safeConsole.log(`[JAF:ENGINE] Agent has ${effectiveTools.length} tools available (including built-in clarification tool)`);
   if (effectiveTools) {
     safeConsole.log(`[JAF:ENGINE] Available tools:`, effectiveTools.map(t => t.schema.name));
   }
