@@ -184,7 +184,7 @@ async function streamingDemo() {
   };
 
   let clarificationNeeded: ClarificationInterruption<any> | null = null;
-  let interruptedState: any = null;
+
 
   console.log('🌊 Starting event stream...\n');
 
