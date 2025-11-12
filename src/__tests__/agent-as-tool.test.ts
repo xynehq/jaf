@@ -7,7 +7,7 @@ import {
   generateTraceId,
   agentAsTool,
   getTextContent
-} from '../index';
+} from '../index.js';
 
 type Ctx = { userId: string; permissions: string[] };
 

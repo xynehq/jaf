@@ -21,7 +21,7 @@ import {
   FunctionToolConfig,
   ToolSource,
   ToolParameterType
-} from '../types';
+} from '../types.js';
 
 // ========== Tool Creation ==========
 

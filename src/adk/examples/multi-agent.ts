@@ -15,7 +15,7 @@ import {
   AgentConfig,
   Model,
   ToolParameterType
-} from '../index';
+} from '../index.js';
 
 // ========== Specialized Agents ==========
 
