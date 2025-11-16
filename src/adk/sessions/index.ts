@@ -14,7 +14,7 @@ import {
   ValidationResult,
   throwSessionError,
   createSessionError
-} from '../types';
+} from '../types.js';
 import { safeConsole } from '../../utils/logger.js';
 
 // ========== Session Creation ==========

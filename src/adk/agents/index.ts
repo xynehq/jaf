@@ -20,7 +20,7 @@ import {
   throwAgentError,
   createAgentError,
   Model
-} from '../types';
+} from '../types.js';
 
 // ========== ID Generation ==========
 

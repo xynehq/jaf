@@ -13,8 +13,8 @@ import {
   clearSessionArtifacts,
   listSessionArtifacts,
   type ArtifactStorage
-} from '../index';
-import { Session } from '../../types';
+} from '../index.js';
+import { Session } from '../../types.js';
 
 describe('Artifact Storage System', () => {
   const testSessionId = 'test-session-123';
