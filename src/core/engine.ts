@@ -1255,6 +1255,7 @@ async function executeToolCalls<Ctx>(
 
           // If event handler returns a value, use it to override the args
           if (beforeEventResponse !== undefined && beforeEventResponse !== null) {
+            rawArgs = beforeEventResponse;
           }
         } catch (eventError) {
           // Continue with original args if event handler fails
