@@ -173,7 +173,6 @@ const initialState = {
 const result = await run(initialState, config);
 ```
 
-> Want a ready-to-run script that blocks the next turn until reviews finish? See `examples/hooks/turn-end-review.ts`. It expects `LITELLM_URL`, `LITELLM_API_KEY`, and (optionally) `LITELLM_MODEL` to be present in your `.env`.
 
 ## 🔄 Function Composition
 
