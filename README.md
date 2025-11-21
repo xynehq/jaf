@@ -89,6 +89,7 @@ examples/
 │   ├── index.ts    # Demo entry point
 │   ├── rag-agent.ts # RAG agent implementation
 │   └── rag-tool.ts  # RAG tool implementation
+├── hooks/turn-end-review.ts # Demonstrates awaiting onTurnEnd reviews between turns
 └── server-demo/    # Development server demo
     └── index.ts    # Server demo entry point
 docs/               # Documentation
@@ -154,6 +155,10 @@ const config = {
   modelProvider,
   maxTurns: 10,
   onEvent: (event) => console.log(event), // Real-time tracing
+  onTurnEnd: async ({ turn, lastAssistantMessage }) => {
+    console.log(`Turn ${turn} completed:`, lastAssistantMessage?.content);
+    // Run reviews, persist breadcrumbs, throttle next turn, etc.
+  },
 };
 
 const initialState = {
@@ -167,6 +172,7 @@ const initialState = {
 
 const result = await run(initialState, config);
 ```
+
 
 ## 🔄 Function Composition
 

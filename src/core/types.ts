@@ -440,6 +440,12 @@ export type RunConfig<Ctx> = {
   readonly initialInputGuardrails?: readonly Guardrail<string>[];
   readonly finalOutputGuardrails?: readonly Guardrail<any>[];
   readonly onEvent?: (event: TraceEvent) => void | any | Promise<void | any>;
+  readonly onTurnEnd?: (payload: {
+    readonly turn: number;
+    readonly agentName: string;
+    readonly state: RunState<Ctx>;
+    readonly lastAssistantMessage?: Message;
+  }) => void | Promise<void>;
   readonly onAfterToolExecution?: (
     toolName: string,
     result: string | import('./tool-results').ToolResult,
@@ -467,4 +473,3 @@ export const jsonParseLLMOutput = (text: string): any => {
     return null;
   }
 };
-

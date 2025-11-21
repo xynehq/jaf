@@ -111,6 +111,38 @@ const config: RunConfig<MyContext> = {
 };
 ```
 
+## Deterministic Turn-End Hooks
+
+Need to run custom logic between turns (for reviews, metrics, or throttling)? Use the new `onTurnEnd` hook, which is awaited before the next LLM call begins.
+
+```typescript
+const config: RunConfig<MyContext> = {
+  // ...
+  onTurnEnd: async ({ turn, lastAssistantMessage, state }) => {
+    const summary =
+      typeof lastAssistantMessage?.content === 'string'
+        ? lastAssistantMessage.content
+        : Array.isArray(lastAssistantMessage?.content)
+          ? lastAssistantMessage.content
+              .map((part) => ('text' in part ? part.text : ''))
+              .join(' ')
+          : '(no assistant output)';
+
+    console.log(`Reviewing turn ${turn}: ${summary.slice(0, 80)}...`);
+
+    // Persist the review outcome inside your context
+    state.context.reviews = [...(state.context.reviews ?? []), summary];
+
+    // Optional: wait for asynchronous work (LLM calls, DB writes, etc.)
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  },
+};
+```
+
+Need a working script? Run `examples/hooks/turn-end-review.ts` after setting `LITELLM_URL`, `LITELLM_API_KEY`, and `LITELLM_MODEL` in your `.env` to see an awaited review pipeline in action.
+
+Because `onTurnEnd` is awaited, the next turn will not start until your hook resolves, ensuring deterministic sequencing for quality gates or auditing steps.
+
 ## All Event Types
 
 | Event Type | Data Shape | Common Use |
