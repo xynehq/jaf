@@ -41,10 +41,7 @@ function createClarificationTool<Ctx>(config: RunConfig<Ctx>): Tool<{
       description,
       parameters: z.object({
         question: z.string().describe('The clarifying question to ask the user'),
-        options: z.array(z.object({
-          id: z.string().describe('Unique identifier for this option'),
-          label: z.string().describe('Human-readable label shown to the user')
-        })).min(2).describe('clear and meaningful options that user can choose from (minimum 2 options)')
+        options: z.array(z.string()).min(2).describe('clear and meaningful options that user can choose from (minimum 2 options)')
       })
     },
     execute: async (args, _context): Promise<string> => {
@@ -66,8 +63,8 @@ export async function run<Ctx, Out>(
   try {
     config.onEvent?.({
       type: 'run_start',
-      data: { 
-        runId: initialState.runId, 
+      data: {
+        runId: initialState.runId,
         traceId: initialState.traceId,
         context: initialState.context,
         userId: (initialState.context as any)?.userId,
@@ -88,6 +85,12 @@ export async function run<Ctx, Out>(
       safeConsole.log(`[JAF:ENGINE] Loading approvals for runId ${stateWithMemory.runId}`);
       const { loadApprovalsIntoState } = await import('./state');
       stateWithMemory = await loadApprovalsIntoState(stateWithMemory, config);
+    }
+
+    if (config.clarificationStorage) {
+      safeConsole.log(`[JAF:ENGINE] Loading clarifications for runId ${stateWithMemory.runId}`);
+      const { loadClarificationsIntoState } = await import('./state');
+      stateWithMemory = await loadClarificationsIntoState(stateWithMemory, config);
     }
 
     const result = await runInternal<Ctx, Out>(stateWithMemory, config);
@@ -255,7 +258,42 @@ async function tryResumePendingToolCalls<Ctx, Out>(
           }
         }
 
-        const pendingToolCalls = msg.tool_calls.filter(tc => !executed.has(tc.id));
+        let pendingToolCalls = msg.tool_calls.filter(tc => !executed.has(tc.id));
+
+        // Handle clarification tool calls that already have a stored clarification
+        const clarificationResultMessages: Message[] = [];
+        if (state.clarifications && state.clarifications.size > 0) {
+          const clarifications = state.clarifications; // Capture for closure
+          const filteredPending = pendingToolCalls.filter(tc => {
+            // If this is a clarification tool call, check if we have a clarification for it
+            if (tc.function.name === 'request_user_clarification') {
+              const clarificationId = `clarify_${tc.id}`;
+              const selectedOption = clarifications.get(clarificationId);
+              if (selectedOption) {
+                safeConsole.log(`[JAF:ENGINE] Found clarification for tool call ${tc.id} - creating result message`);
+                // Create the clarification_provided tool result message
+                clarificationResultMessages.push({
+                  role: 'tool',
+                  tool_call_id: tc.id,
+                  content: JSON.stringify({
+                    status: InterruptionStatus.ClarificationProvided,
+                    message: `User selected option: ${selectedOption}`
+                  })
+                });
+                return false; // Skip re-executing this tool call
+              }
+            }
+            return true;
+          });
+          pendingToolCalls = filteredPending;
+        }
+
+
+        if (clarificationResultMessages.length > 0 && pendingToolCalls.length === 0) {
+          safeConsole.log(`[JAF:ENGINE] Added ${clarificationResultMessages.length} clarification result message(s) to state`);
+          return null;
+        }
+
         if (pendingToolCalls.length === 0) {
           return null; // Nothing to resume
         }
@@ -273,6 +311,17 @@ async function tryResumePendingToolCalls<Ctx, Out>(
             }
           } as RunResult<Out>;
         }
+        const effectiveTools = [
+          ...(currentAgent.tools || [])
+        ];
+
+        if (config.allowClarificationRequests) {
+          effectiveTools.push(createClarificationTool(config));
+        }
+        const effectiveAgent: Agent<Ctx, any> = {
+          ...currentAgent,
+          tools: effectiveTools
+        };
 
         try {
           const requests = pendingToolCalls.map(tc => ({
@@ -283,7 +332,7 @@ async function tryResumePendingToolCalls<Ctx, Out>(
           config.onEvent?.({ type: 'tool_requests', data: { toolCalls: requests } });
         } catch { /* ignore */ }
 
-        const toolResults = await executeToolCalls(pendingToolCalls, currentAgent, state, config);
+        const toolResults = await executeToolCalls(pendingToolCalls, effectiveAgent, state, config);
 
         const interruptions = toolResults
           .map(r => r.interruption)
@@ -331,49 +380,55 @@ async function runInternal<Ctx, Out>(
   if (resumed) return resumed;
 
   // Check if we're resuming from a clarification
+  // Search through ALL messages for any awaiting_clarification that now have clarifications
   if (state.clarifications && state.clarifications.size > 0) {
-    const lastMessage = state.messages[state.messages.length - 1];
-    if (lastMessage?.role === 'tool') {
-      try {
-        const content = JSON.parse(getTextContent(lastMessage.content));
-        if (content.status === InterruptionStatus.AwaitingClarification) {
-          const clarificationId = content.clarification_id;
-          const selectedId = state.clarifications.get(clarificationId);
+    let hasUpdates = false;
+    const updatedMessages = [...state.messages];
 
-          if (selectedId) {
-            safeConsole.log(`[JAF:ENGINE] Resuming with clarification: ${clarificationId}, selected option: ${selectedId}`);
+    for (let i = 0; i < updatedMessages.length; i++) {
+      const message = updatedMessages[i];
+      if (message?.role === 'tool') {
+        try {
+          const content = JSON.parse(getTextContent(message.content));
+          if (content.status === InterruptionStatus.AwaitingClarification) {
+            const clarificationId = content.clarification_id;
+            const selectedOption = state.clarifications.get(clarificationId);
 
-            // Find the selected option to include in the event
-            const updatedMessages = [...state.messages];
-            updatedMessages[updatedMessages.length - 1] = {
-              ...lastMessage,
-              content: JSON.stringify({
-                status: InterruptionStatus.ClarificationProvided,
-                message: `User selected option: ${selectedId}`
-              })
-            };
+            if (selectedOption) {
+              safeConsole.log(`[JAF:ENGINE] Resuming with clarification: ${clarificationId}, selected option: ${selectedOption}`);
 
-            config.onEvent?.({
-              type: 'clarification_provided',
-              data: {
-                clarificationId,
-                selectedId,
-                selectedOption: { id: selectedId, label: selectedId }
-              }
-            });
+              // Update this message to clarification_provided
+              updatedMessages[i] = {
+                ...message,
+                content: JSON.stringify({
+                  status: InterruptionStatus.ClarificationProvided,
+                  message: `User selected option: ${selectedOption}`
+                })
+              };
 
-            // Continue execution with updated messages
-            const stateWithClarification: RunState<Ctx> = {
-              ...state,
-              messages: updatedMessages
-            };
+              config.onEvent?.({
+                type: 'clarification_provided',
+                data: {
+                  clarificationId,
+                  selectedOption
+                }
+              });
 
-            return runInternal(stateWithClarification, config);
+              hasUpdates = true;
+            }
           }
-        }
-      } catch (e) {
-        safeConsole.log(`[JAF:ENGINE] Error checking for clarification resume:`, e);
+        } catch (e) { }
       }
+    }
+
+    // If we updated any messages, continue with the updated state
+    if (hasUpdates) {
+      const stateWithClarification: RunState<Ctx> = {
+        ...state,
+        messages: updatedMessages
+      };
+
+      return runInternal(stateWithClarification, config);
     }
   }
 
@@ -407,8 +462,8 @@ async function runInternal<Ctx, Out>(
 
   const hasAdvancedGuardrails = !!(currentAgent.advancedConfig?.guardrails &&
     (currentAgent.advancedConfig.guardrails.inputPrompt ||
-     currentAgent.advancedConfig.guardrails.outputPrompt ||
-     currentAgent.advancedConfig.guardrails.requireCitations));
+      currentAgent.advancedConfig.guardrails.outputPrompt ||
+      currentAgent.advancedConfig.guardrails.requireCitations));
 
   safeConsole.log('[JAF:ENGINE] Debug guardrails setup:', {
     agentName: currentAgent.name,
@@ -420,7 +475,7 @@ async function runInternal<Ctx, Out>(
 
   let effectiveInputGuardrails: Guardrail<string>[] = [];
   let effectiveOutputGuardrails: Guardrail<any>[] = [];
-  
+
   if (hasAdvancedGuardrails) {
     const result = await buildEffectiveGuardrails(currentAgent, config);
     effectiveInputGuardrails = result.inputGuardrails;
@@ -445,7 +500,7 @@ async function runInternal<Ctx, Out>(
     ...(currentAgent.tools || [])
   ];
 
-  if(config.allowClarificationRequests){
+  if (config.allowClarificationRequests) {
     effectiveTools.push(createClarificationTool(config));
   }
   const effectiveAgent: Agent<Ctx, any> = {
@@ -499,7 +554,7 @@ async function runInternal<Ctx, Out>(
       }
     };
   }
-  
+
   const turnNumber = state.turnCount + 1;
   config.onEvent?.({ type: 'turn_start', data: { turn: turnNumber, agentName: currentAgent.name } });
 
@@ -530,57 +585,57 @@ async function runInternal<Ctx, Out>(
   let llmResponse: any;
   let streamingUsed = false;
   let assistantEventStreamed = false;
-  
+
   if (inputGuardrailsToRun.length > 0 && state.turnCount === 0) {
     const firstUserMessage = state.messages.find(m => m.role === 'user');
     if (firstUserMessage) {
       if (hasAdvancedGuardrails) {
         const executionMode = currentAgent.advancedConfig?.guardrails?.executionMode || 'parallel';
-      
-      if (executionMode === 'sequential') {
-        const guardrailResult = await executeInputGuardrailsSequential(inputGuardrailsToRun, firstUserMessage, config);
-        if (!guardrailResult.isValid) {
-          return {
-            finalState: state,
-            outcome: {
-              status: 'error',
-              error: {
-                _tag: 'InputGuardrailTripwire',
-                reason: guardrailResult.errorMessage
+
+        if (executionMode === 'sequential') {
+          const guardrailResult = await executeInputGuardrailsSequential(inputGuardrailsToRun, firstUserMessage, config);
+          if (!guardrailResult.isValid) {
+            return {
+              finalState: state,
+              outcome: {
+                status: 'error',
+                error: {
+                  _tag: 'InputGuardrailTripwire',
+                  reason: guardrailResult.errorMessage
+                }
               }
-            }
-          };
-        }
+            };
+          }
 
-        safeConsole.log(`✅ All input guardrails passed. Starting LLM call.`);
-        llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
-      } else {
-        const guardrailPromise = executeInputGuardrailsParallel(inputGuardrailsToRun, firstUserMessage, config);
-        const llmPromise = config.modelProvider.getCompletion(state, effectiveAgent, config);
-        
-        const [guardrailResult, llmResult] = await Promise.all([
-          guardrailPromise,
-          llmPromise
-        ]);
-        
-        llmResponse = llmResult;
+          safeConsole.log(`✅ All input guardrails passed. Starting LLM call.`);
+          llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
+        } else {
+          const guardrailPromise = executeInputGuardrailsParallel(inputGuardrailsToRun, firstUserMessage, config);
+          const llmPromise = config.modelProvider.getCompletion(state, effectiveAgent, config);
 
-        if (!guardrailResult.isValid) {
-          safeConsole.log(`🚨 Input guardrail violation: ${guardrailResult.errorMessage}`);
-          safeConsole.log(`[JAF:GUARDRAILS] Discarding LLM response due to input guardrail violation`);
-          return {
-            finalState: state,
-            outcome: {
-              status: 'error',
-              error: {
-                _tag: 'InputGuardrailTripwire',
-                reason: guardrailResult.errorMessage
+          const [guardrailResult, llmResult] = await Promise.all([
+            guardrailPromise,
+            llmPromise
+          ]);
+
+          llmResponse = llmResult;
+
+          if (!guardrailResult.isValid) {
+            safeConsole.log(`🚨 Input guardrail violation: ${guardrailResult.errorMessage}`);
+            safeConsole.log(`[JAF:GUARDRAILS] Discarding LLM response due to input guardrail violation`);
+            return {
+              finalState: state,
+              outcome: {
+                status: 'error',
+                error: {
+                  _tag: 'InputGuardrailTripwire',
+                  reason: guardrailResult.errorMessage
+                }
               }
-            }
-          };
-        }
+            };
+          }
 
-        safeConsole.log(`✅ All input guardrails passed. Using LLM response.`);
+          safeConsole.log(`✅ All input guardrails passed. Using LLM response.`);
         }
       } else {
         safeConsole.log('[JAF:ENGINE] Using LEGACY guardrails path with', inputGuardrailsToRun.length, 'guardrails');
@@ -638,15 +693,15 @@ async function runInternal<Ctx, Out>(
                 content: aggregatedText,
                 ...(toolCalls.length > 0
                   ? {
-                      tool_calls: toolCalls.map((tc, i) => ({
-                        id: tc.id ?? `call_${i}`,
-                        type: 'function' as const,
-                        function: {
-                          name: tc.function.name ?? '',
-                          arguments: tc.function.arguments
-                        }
-                      }))
-                    }
+                    tool_calls: toolCalls.map((tc, i) => ({
+                      id: tc.id ?? `call_${i}`,
+                      type: 'function' as const,
+                      function: {
+                        name: tc.function.name ?? '',
+                        arguments: tc.function.arguments
+                      }
+                    }))
+                  }
                   : {})
               };
               try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { safeConsole.error('Error in config.onEvent:', err); }
@@ -658,15 +713,15 @@ async function runInternal<Ctx, Out>(
               content: aggregatedText || undefined,
               ...(toolCalls.length > 0
                 ? {
-                    tool_calls: toolCalls.map((tc, i) => ({
-                      id: tc.id ?? `call_${i}`,
-                      type: 'function' as const,
-                      function: {
-                        name: tc.function.name ?? '',
-                        arguments: tc.function.arguments
-                      }
-                    }))
-                  }
+                  tool_calls: toolCalls.map((tc, i) => ({
+                    id: tc.id ?? `call_${i}`,
+                    type: 'function' as const,
+                    function: {
+                      name: tc.function.name ?? '',
+                      arguments: tc.function.arguments
+                    }
+                  }))
+                }
                 : {})
             }
           };
@@ -711,15 +766,15 @@ async function runInternal<Ctx, Out>(
               content: aggregatedText,
               ...(toolCalls.length > 0
                 ? {
-                    tool_calls: toolCalls.map((tc, i) => ({
-                      id: tc.id ?? `call_${i}`,
-                      type: 'function' as const,
-                      function: {
-                        name: tc.function.name ?? '',
-                        arguments: tc.function.arguments
-                      }
-                    }))
-                  }
+                  tool_calls: toolCalls.map((tc, i) => ({
+                    id: tc.id ?? `call_${i}`,
+                    type: 'function' as const,
+                    function: {
+                      name: tc.function.name ?? '',
+                      arguments: tc.function.arguments
+                    }
+                  }))
+                }
                 : {})
             };
             try { config.onEvent?.({ type: 'assistant_message', data: { message: partialMessage } }); } catch (err) { safeConsole.error('Error in config.onEvent:', err); }
@@ -731,15 +786,15 @@ async function runInternal<Ctx, Out>(
             content: aggregatedText || undefined,
             ...(toolCalls.length > 0
               ? {
-                  tool_calls: toolCalls.map((tc, i) => ({
-                    id: tc.id ?? `call_${i}`,
-                    type: 'function' as const,
-                    function: {
-                      name: tc.function.name ?? '',
-                      arguments: tc.function.arguments
-                    }
-                  }))
-                }
+                tool_calls: toolCalls.map((tc, i) => ({
+                  id: tc.id ?? `call_${i}`,
+                  type: 'function' as const,
+                  function: {
+                    name: tc.function.name ?? '',
+                    arguments: tc.function.arguments
+                  }
+                }))
+              }
               : {})
           }
         };
@@ -752,17 +807,17 @@ async function runInternal<Ctx, Out>(
       llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
     }
   }
-  
+
   const usage = (llmResponse as any)?.usage;
   const prompt = (llmResponse as any)?.prompt;
-  
+
   config.onEvent?.({
     type: 'llm_call_end',
-    data: { 
+    data: {
       choice: llmResponse,
       fullResponse: llmResponse, // Include complete response
       prompt: prompt, // Include the prompt that was sent
-      traceId: state.traceId, 
+      traceId: state.traceId,
       runId: state.runId,
       agentName: currentAgent.name,
       model: model || 'unknown',
@@ -822,7 +877,7 @@ async function runInternal<Ctx, Out>(
   if (llmResponse.message.tool_calls && llmResponse.message.tool_calls.length > 0) {
     safeConsole.log(`[JAF:ENGINE] Processing ${llmResponse.message.tool_calls.length} tool calls`);
     safeConsole.log(`[JAF:ENGINE] Tool calls:`, llmResponse.message.tool_calls);
-    
+
     try {
       const requests = llmResponse.message.tool_calls.map((tc: any) => ({
         id: tc.id,
@@ -831,7 +886,7 @@ async function runInternal<Ctx, Out>(
       }));
       config.onEvent?.({ type: 'tool_requests', data: { toolCalls: requests } });
     } catch { /* ignore */ }
-    
+
     const toolResults = await executeToolCalls(
       llmResponse.message.tool_calls,
       effectiveAgent,
@@ -870,10 +925,12 @@ async function runInternal<Ctx, Out>(
           safeConsole.log(`[JAF:ENGINE] Clarification requested: ${interruption.question}`);
         }
       }
-      
+
+      // Add ALL tool result messages, including interrupted ones
+      // This ensures tool_use blocks have corresponding tool_result blocks
       const interruptedState = {
         ...state,
-        messages: [...newMessages, ...completedToolResults.map(r => r.message)],
+        messages: [...newMessages, ...toolResults.map(r => r.message)],
         turnCount: updatedTurnCount,
         approvals: updatedApprovals,
         clarifications: updatedClarifications,
@@ -908,7 +965,7 @@ async function runInternal<Ctx, Out>(
       const handoffResult = toolResults.find(r => r.isHandoff);
       if (handoffResult) {
         const targetAgent = handoffResult.targetAgent!;
-        
+
         if (!currentAgent.handoffs?.includes(targetAgent)) {
           config.onEvent?.({
             type: 'handoff_denied',
@@ -988,7 +1045,7 @@ async function runInternal<Ctx, Out>(
       const parseResult = currentAgent.outputCodec.safeParse(
         tryParseJSON(llmResponse.message.content)
       );
-      
+
       if (!parseResult.success) {
         config.onEvent?.({ type: 'decode_error', data: { errors: parseResult.error.issues } });
         config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
@@ -1127,7 +1184,7 @@ async function executeToolCalls<Ctx>(
     toolCalls.map(async (toolCall): Promise<ToolCallResult> => {
       const tool = agent.tools?.find(t => t.schema.name === toolCall.function.name);
       const startTime = Date.now();
-      
+
       let rawArgs = tryParseJSON(toolCall.function.arguments);
 
       // Emit before_tool_execution event - handler can return modified args
@@ -1226,8 +1283,8 @@ async function executeToolCalls<Ctx>(
 
           config.onEvent?.({
             type: 'tool_call_end',
-            data: { 
-              toolName: toolCall.function.name, 
+            data: {
+              toolName: toolCall.function.name,
               result: errorResult,
               traceId: state.traceId,
               runId: state.runId,
@@ -1346,12 +1403,12 @@ async function executeToolCalls<Ctx>(
             // Not a clarification trigger, continue with normal processing
           }
         }
-        
+
         // Apply onAfterToolExecution callback if configured
         if (config.onAfterToolExecution) {
           try {
             const toolResultStatus = typeof toolResult === 'string' ? 'success' : (toolResult?.status || 'success');
-            
+
             const modifiedResult = await config.onAfterToolExecution(
               toolCall.function.name,
               toolResult,
@@ -1374,10 +1431,10 @@ async function executeToolCalls<Ctx>(
         }
         let resultString: string;
         let toolResultObj: any = null;
-        
+
         if (typeof toolResult === 'string') {
           resultString = toolResult;
-          safeConsole.log(`[JAF:ENGINE] Tool ${toolCall.function.name}` );
+          safeConsole.log(`[JAF:ENGINE] Tool ${toolCall.function.name}`);
         } else {
           toolResultObj = toolResult;
           const { toolResultToString } = await import('./tool-results');
@@ -1387,8 +1444,8 @@ async function executeToolCalls<Ctx>(
 
         config.onEvent?.({
           type: 'tool_call_end',
-          data: { 
-            toolName: toolCall.function.name, 
+          data: {
+            toolName: toolCall.function.name,
             result: resultString,
             traceId: state.traceId,
             runId: state.runId,
@@ -1459,16 +1516,16 @@ async function executeToolCalls<Ctx>(
 
         config.onEvent?.({
           type: 'tool_call_end',
-          data: { 
-            toolName: toolCall.function.name, 
+          data: {
+            toolName: toolCall.function.name,
             result: errorResult,
             traceId: state.traceId,
             runId: state.runId,
             status: 'error',
             toolResult: { error: 'execution_error', detail: error instanceof Error ? error.message : String(error) },
             executionTime: Date.now() - startTime,
-            error: { 
-              type: 'execution_error', 
+            error: {
+              type: 'execution_error',
               message: error instanceof Error ? error.message : String(error),
               stack: error instanceof Error ? error.stack : undefined
             }
@@ -1521,7 +1578,7 @@ async function loadConversationHistory<Ctx>(
 
   const maxMessages = config.memory.maxMessages || result.data.messages.length;
   const allMemoryMessages = result.data.messages.slice(-maxMessages);
-  
+
   const memoryMessages = allMemoryMessages.filter(msg => {
     if (msg.role !== 'tool') return true;
     try {
@@ -1531,19 +1588,19 @@ async function loadConversationHistory<Ctx>(
       return true; // Keep non-JSON tool messages
     }
   });
-  
-  const combinedMessages = memoryMessages.length > 0 
-    ? [...memoryMessages, ...initialState.messages.filter(msg => 
-        !memoryMessages.some(memMsg => 
-          memMsg.role === msg.role && 
-          memMsg.content === msg.content && 
-          JSON.stringify(memMsg.tool_calls) === JSON.stringify(msg.tool_calls)
-        )
-      )]
+
+  const combinedMessages = memoryMessages.length > 0
+    ? [...memoryMessages, ...initialState.messages.filter(msg =>
+      !memoryMessages.some(memMsg =>
+        memMsg.role === msg.role &&
+        memMsg.content === msg.content &&
+        JSON.stringify(memMsg.tool_calls) === JSON.stringify(msg.tool_calls)
+      )
+    )]
     : initialState.messages;
-  
+
   const storedApprovals = result.data.metadata?.approvals;
-  const approvalsMap = storedApprovals 
+  const approvalsMap = storedApprovals
     ? new Map(Object.entries(storedApprovals) as [string, any][])
     : (initialState.approvals ?? new Map());
 
@@ -1554,7 +1611,7 @@ async function loadConversationHistory<Ctx>(
   safeConsole.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
   safeConsole.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
   safeConsole.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
-  
+
   return {
     ...initialState,
     messages: combinedMessages,
@@ -1577,7 +1634,7 @@ async function storeConversationHistory<Ctx>(
   if (config.memory.compressionThreshold && messagesToStore.length > config.memory.compressionThreshold) {
     const keepFirst = Math.floor(config.memory.compressionThreshold * 0.2);
     const keepRecent = config.memory.compressionThreshold - keepFirst;
-    
+
     messagesToStore = [
       ...messagesToStore.slice(0, keepFirst),
       ...messagesToStore.slice(-keepRecent)
