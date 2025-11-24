@@ -185,6 +185,30 @@ function createAsyncEventStream<T>() {
   } as const;
 }
 
+async function runTurnEndHooks<Ctx>(
+  config: RunConfig<Ctx>,
+  payload: {
+    readonly turn: number;
+    readonly agentName: string;
+    readonly state: RunState<Ctx>;
+    readonly lastAssistantMessage?: Message;
+  }
+): Promise<void> {
+  config.onEvent?.({
+    type: 'turn_end',
+    data: { turn: payload.turn, agentName: payload.agentName }
+  });
+
+  if (config.onTurnEnd) {
+    await config.onTurnEnd({
+      turn: payload.turn,
+      agentName: payload.agentName,
+      state: payload.state,
+      lastAssistantMessage: payload.lastAssistantMessage
+    });
+  }
+}
+
 /**
  * Stream run events as they happen via an async generator.
  * Consumers can iterate events to build live UIs or forward via SSE.
@@ -622,6 +646,12 @@ async function runInternal<Ctx, Out>(
         if (executionMode === 'sequential') {
           const guardrailResult = await executeInputGuardrailsSequential(inputGuardrailsToRun, firstUserMessage, config);
           if (!guardrailResult.isValid) {
+            await runTurnEndHooks(config, {
+              turn: turnNumber,
+              agentName: currentAgent.name,
+              state,
+              lastAssistantMessage: undefined
+            });
             return {
               finalState: state,
               outcome: {
@@ -631,15 +661,13 @@ async function runInternal<Ctx, Out>(
                   reason: guardrailResult.errorMessage
                 }
               }
-            };
+            }
           }
-
           safeConsole.log(`✅ All input guardrails passed. Starting LLM call.`);
           llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
         } else {
           const guardrailPromise = executeInputGuardrailsParallel(inputGuardrailsToRun, firstUserMessage, config);
           const llmPromise = config.modelProvider.getCompletion(state, effectiveAgent, config);
-
           const [guardrailResult, llmResult] = await Promise.all([
             guardrailPromise,
             llmPromise
@@ -650,6 +678,12 @@ async function runInternal<Ctx, Out>(
           if (!guardrailResult.isValid) {
             safeConsole.log(`🚨 Input guardrail violation: ${guardrailResult.errorMessage}`);
             safeConsole.log(`[JAF:GUARDRAILS] Discarding LLM response due to input guardrail violation`);
+            await runTurnEndHooks(config, {
+              turn: turnNumber,
+              agentName: currentAgent.name,
+              state,
+              lastAssistantMessage: undefined
+            });
             return {
               finalState: state,
               outcome: {
@@ -659,9 +693,8 @@ async function runInternal<Ctx, Out>(
                   reason: guardrailResult.errorMessage
                 }
               }
-            };
+            }
           }
-
           safeConsole.log(`✅ All input guardrails passed. Using LLM response.`);
         }
       } else {
@@ -673,6 +706,12 @@ async function runInternal<Ctx, Out>(
             config.onEvent?.({
               type: 'guardrail_violation',
               data: { stage: 'input', reason: errorMessage }
+            });
+            await runTurnEndHooks(config, {
+              turn: turnNumber,
+              agentName: currentAgent.name,
+              state,
+              lastAssistantMessage: undefined
             });
             return {
               finalState: state,
@@ -872,7 +911,12 @@ async function runInternal<Ctx, Out>(
   } catch { /* ignore */ }
 
   if (!llmResponse.message) {
-    config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+    await runTurnEndHooks(config, {
+      turn: turnNumber,
+      agentName: currentAgent.name,
+      state,
+      lastAssistantMessage: undefined
+    });
     return {
       finalState: state,
       outcome: {
@@ -972,6 +1016,13 @@ async function runInternal<Ctx, Out>(
         await storeConversationHistory(stateForStorage, config);
       }
 
+      await runTurnEndHooks(config, {
+        turn: turnNumber,
+        agentName: currentAgent.name,
+        state: interruptedState,
+        lastAssistantMessage: assistantMessage
+      });
+
       return {
         finalState: interruptedState,
         outcome: {
@@ -981,7 +1032,7 @@ async function runInternal<Ctx, Out>(
       };
     }
 
-    safeConsole.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
+    // safeConsole.log(`[JAF:ENGINE] Tool execution completed. Results count:`, toolResults.length);
 
     config.onEvent?.({
       type: 'tool_results_to_llm',
@@ -998,8 +1049,15 @@ async function runInternal<Ctx, Out>(
             type: 'handoff_denied',
             data: { from: currentAgent.name, to: targetAgent, reason: `Agent ${currentAgent.name} cannot handoff to ${targetAgent}` }
           });
+          const failureState = { ...state, messages: newMessages, turnCount: updatedTurnCount };
+          await runTurnEndHooks(config, {
+            turn: turnNumber,
+            agentName: currentAgent.name,
+            state: failureState,
+            lastAssistantMessage: assistantMessage
+          });
           return {
-            finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+            finalState: failureState,
             outcome: {
               status: 'error',
               error: {
@@ -1037,7 +1095,12 @@ async function runInternal<Ctx, Out>(
           turnCount: updatedTurnCount,
           approvals: state.approvals ?? new Map(),
         };
-        config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+        await runTurnEndHooks(config, {
+          turn: turnNumber,
+          agentName: currentAgent.name,
+          state: nextState,
+          lastAssistantMessage: assistantMessage
+        });
         return runInternal(nextState, config);
       }
     }
@@ -1063,7 +1126,12 @@ async function runInternal<Ctx, Out>(
       turnCount: updatedTurnCount,
       approvals: state.approvals ?? new Map(),
     };
-    config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+    await runTurnEndHooks(config, {
+      turn: turnNumber,
+      agentName: currentAgent.name,
+      state: nextState,
+      lastAssistantMessage: assistantMessage
+    });
     return runInternal(nextState, config);
   }
 
@@ -1075,7 +1143,12 @@ async function runInternal<Ctx, Out>(
 
       if (!parseResult.success) {
         config.onEvent?.({ type: 'decode_error', data: { errors: parseResult.error.issues } });
-        config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+        await runTurnEndHooks(config, {
+          turn: turnNumber,
+          agentName: currentAgent.name,
+          state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+          lastAssistantMessage: assistantMessage
+        });
         return {
           finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
           outcome: {
@@ -1107,7 +1180,12 @@ async function runInternal<Ctx, Out>(
         }
       }
       if (!outputGuardrailResult.isValid) {
-        config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+        await runTurnEndHooks(config, {
+          turn: turnNumber,
+          agentName: currentAgent.name,
+          state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+          lastAssistantMessage: assistantMessage
+        });
         return {
           finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
           outcome: {
@@ -1122,7 +1200,12 @@ async function runInternal<Ctx, Out>(
 
       config.onEvent?.({ type: 'final_output', data: { output: parseResult.data } });
       // End of turn
-      config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+      await runTurnEndHooks(config, {
+        turn: turnNumber,
+        agentName: currentAgent.name,
+        state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+        lastAssistantMessage: assistantMessage
+      });
 
       return {
         finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
@@ -1151,7 +1234,12 @@ async function runInternal<Ctx, Out>(
         }
       }
       if (!outputGuardrailResult.isValid) {
-        config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+        await runTurnEndHooks(config, {
+          turn: turnNumber,
+          agentName: currentAgent.name,
+          state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+          lastAssistantMessage: assistantMessage
+        });
         return {
           finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
           outcome: {
@@ -1166,7 +1254,12 @@ async function runInternal<Ctx, Out>(
 
       config.onEvent?.({ type: 'final_output', data: { output: llmResponse.message.content } });
       // End of turn
-      config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+      await runTurnEndHooks(config, {
+        turn: turnNumber,
+        agentName: currentAgent.name,
+        state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+        lastAssistantMessage: assistantMessage
+      });
 
       return {
         finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
@@ -1178,7 +1271,12 @@ async function runInternal<Ctx, Out>(
     }
   }
 
-  config.onEvent?.({ type: 'turn_end', data: { turn: turnNumber, agentName: currentAgent.name } });
+  await runTurnEndHooks(config, {
+    turn: turnNumber,
+    agentName: currentAgent.name,
+    state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+    lastAssistantMessage: assistantMessage
+  });
 
   safeConsole.error(`[JAF:ENGINE] No tool calls or content returned by model. LLMResponse: `, llmResponse);
   return {
@@ -1238,13 +1336,9 @@ async function executeToolCalls<Ctx>(
 
           // If event handler returns a value, use it to override the args
           if (beforeEventResponse !== undefined && beforeEventResponse !== null) {
-            console.log(`[JAF:ENGINE] Tool args modified by before_tool_execution event handler for ${toolCall.function.name}`);
-            console.log(`[JAF:ENGINE] Original args:`, rawArgs);
-            console.log(`[JAF:ENGINE] Modified args:`, beforeEventResponse);
             rawArgs = beforeEventResponse;
           }
         } catch (eventError) {
-          console.error(`[JAF:ENGINE] Error in before_tool_execution event handler:`, eventError);
           // Continue with original args if event handler fails
         }
       }
