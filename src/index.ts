@@ -1,5 +1,6 @@
 export * from './core/types';
 export * from './core/engine';
+export * from './core/state';
 export * from './core/tracing';
 export * from './core/errors';
 export * from './core/tool-results';
@@ -22,6 +23,10 @@ export * from './memory/factory';
 export * from './memory/providers/in-memory';
 export * from './memory/providers/redis';
 export * from './memory/providers/postgres';
+
+// HITL Storage
+export * from './memory/approval-storage';
+export * from './memory/clarification-storage';
 
 // A2A Protocol Support
 export * from './a2a';
