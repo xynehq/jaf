@@ -239,6 +239,20 @@ export async function* runStream<Ctx, Out>(
   }
 }
 
+function removeOldInterruptedMessages(messages: readonly Message[], toolCallIds: Set<string>): Message[] {
+  return messages.filter(msg => {
+    if (msg.role === 'tool' && msg.tool_call_id && toolCallIds.has(msg.tool_call_id)) {
+      try {
+        const content = JSON.parse(getTextContent(msg.content));
+        if (content.status === InterruptionStatus.Halted || content.status === InterruptionStatus.AwaitingClarification) {
+          return false; // Remove old halted/awaiting messages
+        }
+      } catch { /* ignore */ }
+    }
+    return true; // Keep all other messages
+  });
+}
+
 async function tryResumePendingToolCalls<Ctx, Out>(
   state: RunState<Ctx>,
   config: RunConfig<Ctx>
@@ -254,6 +268,13 @@ async function tryResumePendingToolCalls<Ctx, Out>(
         for (let j = i + 1; j < messages.length; j++) {
           const m = messages[j];
           if (m.role === 'tool' && m.tool_call_id && ids.has(m.tool_call_id)) {
+            // Don't count "halted" or "awaiting_clarification" as executed - they need to be retried
+            try {
+              const content = JSON.parse(getTextContent(m.content));
+              if (content.status === InterruptionStatus.Halted || content.status === InterruptionStatus.AwaitingClarification) {
+                continue; // Skip this, it's still pending
+              }
+            } catch { /* ignore */ }
             executed.add(m.tool_call_id);
           }
         }
@@ -357,9 +378,13 @@ async function tryResumePendingToolCalls<Ctx, Out>(
           data: { results: toolResults.map(r => r.message) }
         });
 
+        // Remove old halted/awaiting_clarification messages for the tools we just re-executed
+        const pendingToolCallIds = new Set(pendingToolCalls.map(tc => tc.id));
+        const cleanedMessages = removeOldInterruptedMessages(state.messages, pendingToolCallIds);
+
         const nextState: RunState<Ctx> = {
           ...state,
-          messages: [...state.messages, ...toolResults.map(r => r.message)],
+          messages: [...cleanedMessages, ...toolResults.map(r => r.message)],
           turnCount: state.turnCount,
           approvals: state.approvals ?? new Map(),
         };
