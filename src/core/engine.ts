@@ -417,7 +417,9 @@ async function runInternal<Ctx, Out>(
               hasUpdates = true;
             }
           }
-        } catch (e) { }
+        } catch (e) {
+          // Ignore parse errors
+        }
       }
     }
 
