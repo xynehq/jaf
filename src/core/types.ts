@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MemoryConfig } from '../memory/types';
 import type { ApprovalStorage } from '../memory/approval-storage';
+import type { ClarificationStorage } from '../memory/clarification-storage';
 
 export type TraceId = string & { readonly _brand: 'TraceId' };
 export type RunId = string & { readonly _brand: 'RunId' };
@@ -31,7 +32,7 @@ export type Attachment = {
   readonly useLiteLLMFormat?: boolean; // Use LiteLLM native file format instead of text extraction
 };
 
-export type MessageContentPart = 
+export type MessageContentPart =
   | { readonly type: 'text'; readonly text: string }
   | { readonly type: 'image_url'; readonly image_url: { readonly url: string; readonly detail?: 'low' | 'high' | 'auto' } }
   | { readonly type: 'file'; readonly file: { readonly file_id: string; readonly format?: string } };
@@ -48,18 +49,18 @@ export function getTextContent(content: string | readonly MessageContentPart[] |
   if (typeof content === 'string') {
     return content;
   }
-  
+
   if (Array.isArray(content)) {
     return content
       .filter(item => item && typeof item === 'object' && item.type === 'text')
       .map(item => item.text || '')
       .join(' ');
   }
-  
+
   if (content && typeof content === 'object') {
     return content.text || content.content || '';
   }
-  
+
   return String(content || '');
 }
 
@@ -80,11 +81,11 @@ export type Tool<A, Ctx> = {
     context: Readonly<Ctx>,
   ) => Promise<string | import('./tool-results').ToolResult>;
   readonly needsApproval?:
-    | boolean
-    | ((
-        context: Readonly<Ctx>,
-        params: Readonly<A>,
-      ) => Promise<boolean> | boolean);
+  | boolean
+  | ((
+    context: Readonly<Ctx>,
+    params: Readonly<A>,
+  ) => Promise<boolean> | boolean);
 };
 
 export type AdvancedGuardrailsConfig = {
@@ -179,11 +180,7 @@ export type JAFError =
   | { readonly _tag: "HandoffError"; readonly detail: string }
   | { readonly _tag: "AgentNotFound"; readonly agentName: string };
 
-export type ClarificationOption = {
-  readonly id: string;
-  readonly label: string;
-  readonly value?: any;
-};
+export type ClarificationOption = string;
 
 export type ToolApprovalInterruption<Ctx> = {
   readonly type: 'tool_approval';
@@ -206,12 +203,12 @@ export type Interruption<Ctx> = ToolApprovalInterruption<Ctx> | ClarificationInt
 export type RunResult<Out> = {
   readonly finalState: RunState<any>;
   readonly outcome:
-    | { readonly status: 'completed'; readonly output: Out }
-    | { readonly status: 'error'; readonly error: JAFError }
-    | {
-        readonly status: 'interrupted';
-        readonly interruptions: readonly Interruption<any>[];
-      };
+  | { readonly status: 'completed'; readonly output: Out }
+  | { readonly status: 'error'; readonly error: JAFError }
+  | {
+    readonly status: 'interrupted';
+    readonly interruptions: readonly Interruption<any>[];
+  };
 };
 
 /**
@@ -242,7 +239,7 @@ export type TraceEvent =
   | { type: 'turn_end'; data: { turn: number; agentName: string } }
   | { type: 'run_end'; data: { outcome: RunResult<any>['outcome']; finalState: RunState<any>; traceId: TraceId; runId: RunId; } }
   | { type: 'clarification_requested'; data: { clarificationId: string; question: string; options: readonly ClarificationOption[]; context?: any; } }
-  | { type: 'clarification_provided'; data: { clarificationId: string; selectedOption: ClarificationOption; selectedId: string; } };
+  | { type: 'clarification_provided'; data: { clarificationId: string; selectedOption: ClarificationOption; } };
 
 /**
  * Helper type to extract event data by event type
@@ -457,10 +454,11 @@ export type RunConfig<Ctx> = {
       executionTime: number;
       status: string | import('./tool-results').ToolResult;
     }
-  ) => Promise<string|  import('./tool-results').ToolResult | null> ;
+  ) => Promise<string | import('./tool-results').ToolResult | null>;
   readonly memory?: MemoryConfig;
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;
+  readonly clarificationStorage?: ClarificationStorage;
   readonly defaultFastModel?: string;
   readonly allowClarificationRequests?: boolean;
   readonly clarificationDescription?: string;

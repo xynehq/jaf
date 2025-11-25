@@ -108,11 +108,7 @@ export const chatResponseSchema = z.object({
             type: z.literal('clarification_required'),
             clarificationId: z.string(),
             question: z.string(),
-            options: z.array(z.object({
-              id: z.string(),
-              label: z.string(),
-              value: z.any().optional()
-            })),
+            options: z.array(z.string()),
             context: z.record(z.any()).optional()
           })
         ])).optional()
