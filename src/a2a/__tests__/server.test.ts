@@ -10,7 +10,7 @@ import {
   createA2ATool,
   generateAgentCard,
   type A2AServerConfig,
-} from '../index';
+} from '../index.js';
 
 describe('A2A Server', () => {
   // Test agents

@@ -8,7 +8,7 @@ import {
   createMessageRequest,
   createStreamingMessageRequest,
   extractTextResponse,
-} from '../index';
+} from '../index.js';
 
 // Mock fetch for testing
 const mockFetch = jest.fn();

@@ -37,9 +37,9 @@ import {
   weatherResponseValidator,
   createValidationError,
   withSchemaValidation
-} from '../schemas';
+} from '../schemas/index.js';
 
-import { JsonSchema, ValidationResult } from '../types';
+import { JsonSchema, ValidationResult } from '../types.js';
 
 describe('Schema Validation', () => {
   describe('Schema Validator Creation', () => {

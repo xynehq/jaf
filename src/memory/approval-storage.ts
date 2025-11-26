@@ -1,5 +1,5 @@
-import { RunId, TraceId, ApprovalValue } from '../core/types';
-import { Result, createSuccess, createFailure, createMemoryStorageError } from './types';
+import { RunId, TraceId, ApprovalValue } from '../core/types.js';
+import { Result, createSuccess, createFailure, createMemoryStorageError } from './types.js';
 
 /**
  * Approval storage interface for managing tool approval states

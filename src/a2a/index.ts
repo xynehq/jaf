@@ -115,9 +115,9 @@ export {
 } from './agent-card.js';
 
 // Server Functions
-import { 
-  createA2AServer, 
-  startA2AServer 
+import {
+  createA2AServer,
+  startA2AServer
 } from './server.js';
 export {
   createA2AServer,
