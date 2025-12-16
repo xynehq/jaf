@@ -77,7 +77,7 @@ const httpMessageSchema = {
   type: 'object',
   properties: {
     role: { type: 'string', enum: ['user', 'assistant', 'system'] },
-    content: { 
+    content: {
       oneOf: [
         { type: 'string' },
         {
@@ -133,7 +133,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
     safeConsole.warn('[JAF:SERVER] DEPRECATED: agentRegistry should be provided in runConfig.agentRegistry. Using legacy configuration for backwards compatibility.');
     (config.runConfig as any).agentRegistry = config.agentRegistry;
   }
-  
+
   // Ensure agentRegistry exists
   if (!config.runConfig.agentRegistry) {
     throw new Error('agentRegistry must be provided either in config.agentRegistry (deprecated) or config.runConfig.agentRegistry');
@@ -178,8 +178,8 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       sseSend(client.res, 'approval_decision', { ...payload, timestamp: payload.timestamp || new Date().toISOString() });
     }
   };
-  
-  const app = Fastify({ 
+
+  const app = Fastify({
     logger: true,
     bodyLimit: config.maxBodySize ?? 50 * 1024 * 1024, // Configurable body size limit
     ajv: {
@@ -221,7 +221,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         version: '2.0.0',
         uptime: Date.now() - startTime
       };
-      
+
       return reply.code(200).send(response);
     });
 
@@ -230,7 +230,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       try {
         const agents = Array.from(config.runConfig.agentRegistry.entries()).map(([name, agent]) => ({
           name,
-          description: typeof agent.instructions === 'function' 
+          description: typeof agent.instructions === 'function'
             ? 'Agent description' // Safe fallback since we don't have context
             : agent.instructions,
           tools: agent.tools?.map(tool => tool.schema.name) || []
@@ -247,7 +247,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error'
         };
-        
+
         return reply.code(500).send(response);
       }
     });
@@ -259,11 +259,11 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       }
     }, async (request: FastifyRequest<{ Body: ChatRequest }>, reply: FastifyReply): Promise<ChatResponse> => {
       const requestStartTime = Date.now();
-      
+
       try {
         // Validate request body
         const validatedRequest = chatRequestSchema.parse(request.body);
-        
+
         // Check if agent exists
         if (!config.runConfig.agentRegistry.has(validatedRequest.agentName)) {
           const response: ChatResponse = {
@@ -272,7 +272,21 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
           };
           return reply.code(404).send(response);
         }
-        
+
+        // Check message length limit (configurable via JAF_MESSAGE_LIMIT env variable)
+        const messageLimit = process.env.JAF_MESSAGE_LIMIT ? parseInt(process.env.JAF_MESSAGE_LIMIT, 10) : undefined;
+        if (messageLimit && messageLimit > 0) {
+          for (const msg of validatedRequest.messages) {
+            if (msg.content && msg.content.length > messageLimit) {
+              const response: ChatResponse = {
+                success: false,
+                error: `Message content exceeds the maximum allowed length of ${messageLimit} characters. Your message has ${msg.content.length} characters.`
+              };
+              return reply.code(400).send(response);
+            }
+          }
+        }
+
         // Convert HTTP messages to JAF messages
         const jafMessages: Message[] = validatedRequest.messages.map(msg => ({
           role: msg.role === 'system' ? 'user' : msg.role as 'user' | 'assistant',
@@ -283,10 +297,10 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         // Create initial state
         const runId = createRunId(uuidv4());
         const traceId = createTraceId(uuidv4());
-        
+
         // Generate conversationId if not provided
         const conversationId = validatedRequest.conversationId || `conv-${uuidv4()}`;
-        
+
         // Handle approval message(s) if present
         const initialApprovals = new Map();
         const initialStateMessages = jafMessages;
@@ -444,7 +458,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
             app.log.warn({ err: e }, 'Failed to seed approvals from metadata');
           }
         }
-        
+
         const initialState: RunState<Ctx> = {
           runId,
           traceId,
@@ -599,23 +613,23 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
               error: result.outcome.status === 'error' ? result.outcome.error : undefined,
               interruptions: result.outcome.status === 'interrupted'
                 ? result.outcome.interruptions.map(interruption => {
-                    if (interruption.type === 'tool_approval') {
-                      return {
-                        type: interruption.type,
-                        toolCall: interruption.toolCall,
-                        sessionId: interruption.sessionId || result.finalState.runId
-                      };
-                    } else {
-                      // clarification_required
-                      return {
-                        type: interruption.type,
-                        clarificationId: interruption.clarificationId,
-                        question: interruption.question,
-                        options: [...interruption.options],
-                        context: interruption.context
-                      };
-                    }
-                  })
+                  if (interruption.type === 'tool_approval') {
+                    return {
+                      type: interruption.type,
+                      toolCall: interruption.toolCall,
+                      sessionId: interruption.sessionId || result.finalState.runId
+                    };
+                  } else {
+                    // clarification_required
+                    return {
+                      type: interruption.type,
+                      clarificationId: interruption.clarificationId,
+                      question: interruption.question,
+                      options: [...interruption.options],
+                      context: interruption.context
+                    };
+                  }
+                })
                 : undefined
             },
             turnCount: result.finalState.turnCount,
@@ -647,7 +661,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
 
       } catch (error) {
         const executionTime = Date.now() - requestStartTime;
-        
+
         const response: ChatResponse = {
           success: false,
           error: error instanceof Error ? error.message : 'Unknown error occurred'
@@ -676,10 +690,10 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         body: chatRequestBodySchema
       }
     }, async (
-      request: FastifyRequest<{ 
-        Params: { agentName: string }, 
-        Body: Omit<ChatRequest, 'agentName'> 
-      }>, 
+      request: FastifyRequest<{
+        Params: { agentName: string },
+        Body: Omit<ChatRequest, 'agentName'>
+      }>,
       reply: FastifyReply
     ): Promise<ChatResponse> => {
       // Delegate to main chat endpoint
@@ -704,7 +718,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
 
     // Memory management endpoints
     app.get('/conversations/:conversationId', async (
-      request: FastifyRequest<{ Params: { conversationId: string } }>, 
+      request: FastifyRequest<{ Params: { conversationId: string } }>,
       reply: FastifyReply
     ) => {
       if (!config.defaultMemoryProvider) {
@@ -729,7 +743,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
     });
 
     app.delete('/conversations/:conversationId', async (
-      request: FastifyRequest<{ Params: { conversationId: string } }>, 
+      request: FastifyRequest<{ Params: { conversationId: string } }>,
       reply: FastifyReply
     ) => {
       if (!config.defaultMemoryProvider) {
@@ -857,46 +871,46 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
     try {
       await setupMiddleware();
       setupRoutes();
-      
+
       const host = config.host || 'localhost';
       const port = config.port || 3000;
 
-    // Approvals SSE stream
-    app.get('/approvals/stream', async (
-      request: FastifyRequest<{ Querystring: { conversationId?: string } }>,
-      reply: FastifyReply
-    ) => {
-      // SSE headers
-      reply.raw.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no'
+      // Approvals SSE stream
+      app.get('/approvals/stream', async (
+        request: FastifyRequest<{ Querystring: { conversationId?: string } }>,
+        reply: FastifyReply
+      ) => {
+        // SSE headers
+        reply.raw.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache, no-transform',
+          Connection: 'keep-alive',
+          'X-Accel-Buffering': 'no'
+        });
+
+        const filterConversationId = (request.query && (request.query as any).conversationId) || undefined;
+        const client = { res: reply.raw, filterConversationId };
+        approvalSubscribers.add(client);
+
+        // Initial greeting
+        sseSend(reply.raw, 'stream_start', { conversationId: filterConversationId || null });
+
+        // Heartbeat
+        const interval = setInterval(() => {
+          try { sseSend(reply.raw, 'ping', { ts: Date.now() }); } catch { /* ignore */ }
+        }, 15000);
+
+        // Cleanup on close
+        request.raw.on('close', () => {
+          clearInterval(interval);
+          approvalSubscribers.delete(client);
+          try { reply.raw.end(); } catch { /* ignore */ }
+        });
+
+        // Fastify route handled via raw stream
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+        return undefined as any;
       });
-
-      const filterConversationId = (request.query && (request.query as any).conversationId) || undefined;
-      const client = { res: reply.raw, filterConversationId };
-      approvalSubscribers.add(client);
-
-      // Initial greeting
-      sseSend(reply.raw, 'stream_start', { conversationId: filterConversationId || null });
-
-      // Heartbeat
-      const interval = setInterval(() => {
-        try { sseSend(reply.raw, 'ping', { ts: Date.now() }); } catch { /* ignore */ }
-      }, 15000);
-
-      // Cleanup on close
-      request.raw.on('close', () => {
-        clearInterval(interval);
-        approvalSubscribers.delete(client);
-        try { reply.raw.end(); } catch { /* ignore */ }
-      });
-
-      // Fastify route handled via raw stream
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return undefined as any;
-    });
       safeConsole.log(`🔧 Starting Fastify server on ${host}:${port}...`);
       await app.listen({
         port,
@@ -925,7 +939,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
 
   const stop = async (): Promise<void> => {
     await app.close();
-    
+
     // Close memory provider if configured
     if (config.defaultMemoryProvider) {
       await config.defaultMemoryProvider.close();
