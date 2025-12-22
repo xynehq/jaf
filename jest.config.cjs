@@ -30,5 +30,5 @@ module.exports = {
     'src/providers/mcp.ts',
     'src/a2a/examples'
   ],
-  setupFilesAfterEnv: ['<rootDir>/jest.setup.js']
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.cjs']
 };
