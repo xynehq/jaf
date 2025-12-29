@@ -117,7 +117,7 @@ const modelProvider = makeLiteLLMProvider(
 
 The LiteLLM provider automatically handles:
 
-- **Model Selection**: Uses `modelOverride`, agent `modelConfig.name`, or defaults to `gpt-4o`
+- **Model Selection**: Uses agent `modelConfig.name` or `modelOverride` (the built-in provider prefers agent settings)
 - **Message Conversion**: Converts JAF messages to OpenAI-compatible format
 - **Tool Schema Conversion**: Transforms Zod schemas to JSON Schema for function calling
 - **Temperature Control**: Applies temperature settings from agent configuration
@@ -151,7 +151,7 @@ Override model settings globally in the run configuration:
 const config: RunConfig<MyContext> = {
   agentRegistry,
   modelProvider,
-  modelOverride: 'claude-3-sonnet',  // Override all agent model settings
+  modelOverride: 'claude-3-sonnet',  // Fallback if the agent does not specify a model
   maxTurns: 10,
   // ... other config
 };
@@ -159,11 +159,12 @@ const config: RunConfig<MyContext> = {
 
 ### Model Selection Priority
 
-JAF follows this priority order for model selection:
+The provider decides how to choose a model. The built-in LiteLLM provider uses:
 
-1. **Global Override**: `config.modelOverride`
-2. **Agent Config**: `agent.modelConfig.name`
-3. **Default**: `gpt-4o`
+1. **Agent Config**: `agent.modelConfig.name`
+2. **Global Override**: `config.modelOverride`
+
+If neither is set, the provider throws an error.
 
 ## Environment Variables and Setup
 
@@ -478,6 +479,8 @@ class CostTrackingProvider implements ModelProvider<any> {
 ```
 
 ## Custom Model Provider Creation
+
+For a full step-by-step guide with streaming, tools, attachments, and testing, see [Custom Model Providers](./custom-model-providers.md).
 
 ### Basic Custom Provider
 

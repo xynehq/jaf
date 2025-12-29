@@ -20,6 +20,7 @@ New to JAF? Start here:
 ### System Components
 - **[Memory System](./memory-system.md)** - Conversation persistence with in-memory, Redis, and PostgreSQL providers
 - **[Model Providers](./model-providers.md)** - LLM integration, configuration, and custom providers
+- **[Custom Model Providers](./custom-model-providers.md)** - Step-by-step guide for building your own model provider
 - **[Server & API](./server-api.md)** - HTTP server setup and REST API documentation
 
 ### Development & Deployment

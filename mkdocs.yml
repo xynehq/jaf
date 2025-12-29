@@ -141,6 +141,7 @@ nav:
     - Agents as Tools: agents-as-tools.md
     - Memory System: memory-system.md
     - Model Providers: model-providers.md
+    - Custom Model Providers: custom-model-providers.md
   - A2A Protocol:
     - Overview: a2a-protocol.md
     - Integration Guide: a2a-integration.md
