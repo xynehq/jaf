@@ -24,18 +24,18 @@ const createStreamEvent = (
 ): StreamEvent => {
   // Determine event type (use mapping if provided)
   const eventType = config.eventMapping?.[event.type] ?? event.type;
-  
+
   // Transform data if transformer provided
   const eventData = event.data as Record<string, unknown>;
-  const data = config.eventTransformer 
+  const data = config.eventTransformer
     ? config.eventTransformer(event)
     : eventData;
-  
+
   // Extract traceId and runId from data (JAF stores them inside data)
   const traceId = eventData?.traceId as string | undefined;
   const runId = eventData?.runId as string | undefined;
   const agentName = eventData?.agentName as string | undefined;
-  
+
   return {
     eventType,
     data,
@@ -59,11 +59,11 @@ const extractSessionId = <Ctx>(
   if (typeof config.sessionId === 'string') {
     return config.sessionId;
   }
-  
+
   if (typeof config.sessionId === 'function') {
     return config.sessionId(context, event);
   }
-  
+
   return undefined;
 };
 
@@ -92,13 +92,13 @@ export function withStreamOutput<Ctx = unknown>(
     ...DEFAULT_STREAM_OUTPUT_CONFIG,
     ...config
   };
-  
+
   return (event: TraceEvent, context?: Ctx): void => {
     // Apply event filter if provided
     if (mergedConfig.eventFilter && !mergedConfig.eventFilter(event)) {
       return;
     }
-    
+
     // Extract session ID
     const sessionId = extractSessionId(mergedConfig, context as Ctx, event);
     if (!sessionId) {
@@ -108,13 +108,13 @@ export function withStreamOutput<Ctx = unknown>(
       );
       return;
     }
-    
+
     // Create stream event
     const streamEvent = createStreamEvent(event, mergedConfig as StreamOutputConfig<unknown>);
-    
+
     // Push to stream (fire and forget by default)
     const pushPromise = provider.push(sessionId, streamEvent);
-    
+
     if (mergedConfig.blocking) {
       // Blocking mode - wait for push to complete
       pushPromise.then(result => {
@@ -212,16 +212,16 @@ export function createConsoleEventHandler(options?: {
   prefix?: string;
 }): (event: TraceEvent) => void {
   const { eventFilter, pretty = true, prefix = '[JAF:EVENT]' } = options ?? {};
-  
+
   return (event: TraceEvent): void => {
     if (eventFilter && !eventFilter(event)) {
       return;
     }
-    
+
     const output = pretty
       ? JSON.stringify(event, null, 2)
       : JSON.stringify(event);
-    
+
     safeConsole.log(`${prefix} ${event.type}:`, output);
   };
 }
@@ -252,12 +252,12 @@ export const EventFilters = {
     'tool_call_end',
     'before_tool_execution'
   ]),
-  
+
   /** All message events */
   messageEvents: filterEventsByType([
     'assistant_message'
   ]),
-  
+
   /** All control flow events */
   controlEvents: filterEventsByType([
     'run_start',
@@ -266,7 +266,7 @@ export const EventFilters = {
     'turn_end',
     'handoff'
   ]),
-  
+
   /** Events typically pushed to external streams (like your Python implementation) */
   externalStreamEvents: filterEventsByType([
     'tool_call_start',
