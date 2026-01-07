@@ -100,6 +100,13 @@ export interface StreamProvider {
   pushBatch?(sessionId: string, events: readonly StreamEvent[]): Promise<StreamResult<void>>;
   
   /**
+   * Subscribe to events for a session (for real-time streaming)
+   * Returns an async iterator that yields events as they are pushed
+   * @param sessionId - Unique identifier for the session/conversation
+   */
+  subscribe?(sessionId: string): AsyncGenerator<StreamEvent, void, unknown>;
+  
+  /**
    * Check if the provider is healthy and connected
    */
   healthCheck(): Promise<HealthCheckResult>;

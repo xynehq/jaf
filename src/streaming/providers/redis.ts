@@ -28,7 +28,21 @@ interface RedisClient {
   xadd(key: string, id: string, ...fieldsAndValues: string[]): Promise<string>;
   ping(): Promise<string>;
   quit(): Promise<string>;
+  publish?(channel: string, message: string): Promise<number>;
+  subscribe?(channel: string): Promise<void>;
+  on?(event: string, callback: (...args: any[]) => void): void;
+  duplicate?(): RedisClient;
 }
+
+/**
+ * Subscriber callback type
+ */
+type EventSubscriber = (event: StreamEvent) => void;
+
+/**
+ * Subscriber store by session
+ */
+type SubscriberStore = Map<string, Set<EventSubscriber>>;
 
 /**
  * Create a Redis stream provider
@@ -59,6 +73,9 @@ export async function createRedisStreamProvider(
   const retryConfig = config.retry ?? { maxRetries: 3, retryDelayMs: 50 };
 
   let client: RedisClient;
+  // Declare subClient but don't initialize to avoid type issues
+  let subClient: RedisClient | undefined;
+  const subscribers: SubscriberStore = new Map();
   let closed = false;
 
   // Dynamically import ioredis (peer dependency - must be installed separately)
@@ -151,6 +168,18 @@ export async function createRedisStreamProvider(
 
       if (result.success) {
         safeConsole.log(`[JAF:STREAM:REDIS] Pushed event to ${streamKey}: ${event.eventType}`);
+        
+        // Notify local subscribers
+        const sessionSubscribers = subscribers.get(sessionId);
+        if (sessionSubscribers) {
+          for (const subscriber of sessionSubscribers) {
+            try {
+              subscriber(event);
+            } catch (e) {
+              safeConsole.error(`[JAF:STREAM:REDIS] Subscriber error:`, e);
+            }
+          }
+        }
       }
 
       return result;
@@ -232,8 +261,12 @@ export async function createRedisStreamProvider(
       }
 
       closed = true;
+      subscribers.clear();
 
       try {
+        if (subClient !== undefined) {
+          try { await subClient.quit(); } catch { /* ignore */ }
+        }
         await client.quit();
         safeConsole.log(`[JAF:STREAM:REDIS] Connection closed`);
         return createStreamSuccess(undefined);
@@ -248,6 +281,63 @@ export async function createRedisStreamProvider(
           )
         );
       }
+    },
+
+    /**
+     * Subscribe to events for a session (real-time streaming)
+     * Returns an async generator that yields events as they are pushed
+     */
+    subscribe(sessionId: string): AsyncGenerator<StreamEvent, void, unknown> {
+      // Create a queue for this subscription
+      const eventQueue: StreamEvent[] = [];
+      let resolveNext: ((value: IteratorResult<StreamEvent>) => void) | null = null;
+      let subscriptionDone = false;
+      
+      // Subscriber callback
+      const subscriber: EventSubscriber = (event: StreamEvent) => {
+        if (subscriptionDone) return;
+        if (resolveNext) {
+          const r = resolveNext;
+          resolveNext = null;
+          r({ value: event, done: false });
+        } else {
+          eventQueue.push(event);
+        }
+      };
+      
+      // Register subscriber
+      if (!subscribers.has(sessionId)) {
+        subscribers.set(sessionId, new Set());
+      }
+      subscribers.get(sessionId)!.add(subscriber);
+      
+      // Return async generator
+      const asyncGen: AsyncGenerator<StreamEvent, void, unknown> = {
+        [Symbol.asyncIterator]() { return this; },
+        async next(): Promise<IteratorResult<StreamEvent>> {
+          if (eventQueue.length > 0) {
+            return { value: eventQueue.shift()!, done: false };
+          }
+          if (subscriptionDone || closed) {
+            return { value: undefined as any, done: true };
+          }
+          return new Promise<IteratorResult<StreamEvent>>((resolve) => {
+            resolveNext = resolve;
+          });
+        },
+        async return(): Promise<IteratorResult<StreamEvent>> {
+          subscriptionDone = true;
+          subscribers.get(sessionId)?.delete(subscriber);
+          return { value: undefined as any, done: true };
+        },
+        async throw(e: any): Promise<IteratorResult<StreamEvent>> {
+          subscriptionDone = true;
+          subscribers.get(sessionId)?.delete(subscriber);
+          throw e;
+        }
+      };
+      
+      return asyncGen;
     }
   };
 }
