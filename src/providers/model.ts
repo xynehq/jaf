@@ -152,6 +152,9 @@ export const makeLiteLLMProvider = <Ctx>(
 const VISION_MODEL_CACHE_TTL = 5 * 60 * 1000;
 const VISION_API_TIMEOUT = 3000;
 const visionModelCache = new Map<string, { supports: boolean; timestamp: number }>();
+const RESPONSE_SCHEMA_FALLBACK_NAME = 'jaf_output';
+const RESPONSE_SCHEMA_NAME_MAX_LENGTH = 64;
+const UNSUPPORTED_SCHEMA_DESCRIPTION = 'Unsupported schema type';
 
 async function isVisionModel(model: string, baseURL: string): Promise<boolean> {
   const cacheKey = `${baseURL}:${model}`;
@@ -218,6 +221,43 @@ async function isVisionModel(model: string, baseURL: string): Promise<boolean> {
   return isKnownVisionModel;
 }
 
+function normalizeResponseSchemaName(name: string): string {
+  const cleaned = name.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const collapsed = cleaned.replace(/_+/g, '_').replace(/^_+|_+$/g, '');
+  const safeName = collapsed.length > 0 ? collapsed : RESPONSE_SCHEMA_FALLBACK_NAME;
+  return safeName.slice(0, RESPONSE_SCHEMA_NAME_MAX_LENGTH);
+}
+
+function shouldFallbackToJsonObject(schema: any): boolean {
+  return !!schema &&
+    typeof schema === 'object' &&
+    schema.type === 'string' &&
+    schema.description === UNSUPPORTED_SCHEMA_DESCRIPTION;
+}
+
+function buildResponseFormat(
+  outputCodec: Readonly<Agent<any, any>>['outputCodec'],
+  agentName: string
+): OpenAI.Chat.Completions.ChatCompletionCreateParams['response_format'] | undefined {
+  if (!outputCodec) {
+    return undefined;
+  }
+
+  const schema = zodSchemaToJsonSchema(outputCodec);
+  if (shouldFallbackToJsonObject(schema)) {
+    return { type: 'json_object' };
+  }
+
+  return {
+    type: 'json_schema',
+    json_schema: {
+      name: normalizeResponseSchemaName(agentName),
+      strict: true,
+      schema: schema as Record<string, unknown>
+    }
+  };
+}
+
 /**
  * Build common Chat Completions request parameters shared by both
  * getCompletion and getCompletionStream to avoid logic duplication.
@@ -270,6 +310,7 @@ async function buildChatCompletionParams<Ctx>(
 
   const lastMessage = state.messages[state.messages.length - 1];
   const isAfterToolCall = lastMessage?.role === 'tool';
+  const responseFormat = buildResponseFormat(agent.outputCodec, agent.name);
 
   const params: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
     model,
@@ -278,7 +319,7 @@ async function buildChatCompletionParams<Ctx>(
     max_tokens: agent.modelConfig?.maxTokens,
     tools: tools && tools.length > 0 ? tools : undefined,
     tool_choice: tools && tools.length > 0 ? (isAfterToolCall ? 'auto' : undefined) : undefined,
-    response_format: agent.outputCodec ? { type: 'json_object' } : undefined,
+    response_format: responseFormat,
   };
 
   return { model, params };
@@ -479,6 +520,14 @@ function zodSchemaToJsonSchema(zodSchema: any): any {
     return {
       type: 'string',
       enum: zodSchema._def.values
+    };
+  }
+
+  if (zodSchema._def?.typeName === 'ZodRecord') {
+    const valueSchema = zodSchemaToJsonSchema(zodSchema._def.valueType);
+    return {
+      type: 'object',
+      additionalProperties: valueSchema
     };
   }
   
