@@ -72,7 +72,7 @@ export const makeLiteLLMProvider = <Ctx>(
 
   return {
     async getCompletion(state, agent, config) {
-      const { model, params } = await buildChatCompletionParams(state, agent, config, baseURL);
+      const { model, params } = await buildChatCompletionParams(state, agent, config, baseURL, apiKey);
 
       safeConsole.log(`📞 Calling model: ${model} with params: ${JSON.stringify(params, null, 2)}`);
       const resp = await client.chat.completions.create(
@@ -90,7 +90,7 @@ export const makeLiteLLMProvider = <Ctx>(
     },
 
     async *getCompletionStream(state, agent, config) {
-      const { model, params: baseParams } = await buildChatCompletionParams(state, agent, config, baseURL);
+      const { model, params: baseParams } = await buildChatCompletionParams(state, agent, config, baseURL, apiKey);
 
       safeConsole.log(`📡 Streaming model: ${model} with params: ${JSON.stringify(baseParams, null, 2)}`);
 
@@ -156,24 +156,32 @@ const RESPONSE_SCHEMA_FALLBACK_NAME = 'jaf_output';
 const RESPONSE_SCHEMA_NAME_MAX_LENGTH = 64;
 const UNSUPPORTED_SCHEMA_DESCRIPTION = 'Unsupported schema type';
 
-async function isVisionModel(model: string, baseURL: string): Promise<boolean> {
-  const cacheKey = `${baseURL}:${model}`;
+async function isVisionModel(model: string, baseURL: string, apiKey?: string): Promise<boolean> {
+  // Include auth status in cache key to handle authenticated vs unauthenticated requests separately
+  const cacheKey = `${baseURL}:${model}:${apiKey ? 'authed' : 'unauthed'}`;
   const cached = visionModelCache.get(cacheKey);
-  
+
   if (cached && Date.now() - cached.timestamp < VISION_MODEL_CACHE_TTL) {
     return cached.supports;
   }
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), VISION_API_TIMEOUT);
-    
+
+    // Build headers with optional Authorization for authenticated endpoints
+    const headers: Record<string, string> = {
+      'accept': 'application/json'
+    };
+
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
     const response = await fetch(`${baseURL}/model_group/info`, {
-      headers: {
-        'accept': 'application/json'
-      },
+      headers,
       signal: controller.signal
     });
-    
+
     clearTimeout(timeoutId);
     
     if (response.ok) {
@@ -267,6 +275,7 @@ async function buildChatCompletionParams<Ctx>(
   agent: Readonly<Agent<Ctx, any>>,
   config: Readonly<RunConfig<Ctx>>,
   baseURL: string,
+  apiKey: string
 ): Promise<{ model: string; params: OpenAI.Chat.Completions.ChatCompletionCreateParams }> {
   const model = agent.modelConfig?.name ?? config.modelOverride;
 
@@ -280,7 +289,7 @@ async function buildChatCompletionParams<Ctx>(
     (!!msg.attachments && msg.attachments.some(att => att.kind === 'image'))
   );
   if (hasImageContent) {
-    const supportsVision = await isVisionModel(model, baseURL);
+    const supportsVision = await isVisionModel(model, baseURL, apiKey);
     if (!supportsVision) {
       throw new Error(
         `Model ${model} does not support vision capabilities. Please use a vision-capable model like gpt-4o, claude-3-5-sonnet, or gemini-1.5-pro.`
