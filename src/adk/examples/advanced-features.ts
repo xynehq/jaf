@@ -31,7 +31,7 @@ import {
   SessionProvider,
   Model,
   ToolParameterType
-} from '../index';
+} from '../index.js';
 
 // ========== Schema Validation Example ==========
 

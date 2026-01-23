@@ -1,4 +1,4 @@
-import { run, RunConfig, RunState, generateTraceId, generateRunId } from '../index';
+import { run, RunConfig, RunState, generateTraceId, generateRunId } from '../index.js';
 
 describe('JAF Engine', () => {
   const mockContext = { userId: 'test' };

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { run, RunConfig, RunState, generateTraceId, generateRunId, Agent, Tool, getTextContent } from '../index';
+import { run, RunConfig, RunState, generateTraceId, generateRunId, Agent, Tool, getTextContent } from '../index.js';
 
 describe('HITL approvals', () => {
   const sensitiveTool: Tool<{ x: number }, any> = {

@@ -11,7 +11,7 @@ import {
   CLAUDE_3_OPUS,
   CLAUDE_3_SONNET,
   CLAUDE_3_HAIKU
-} from '../models';
+} from '../models.js';
 
 describe('Model Enum', () => {
   it('should have all major model categories', () => {

@@ -28,7 +28,7 @@ import {
   throwAgentError,
   throwToolError,
   throwSessionError
-} from '../types';
+} from '../types.js';
 
 import {
   generateRunnerGraph,
@@ -36,11 +36,11 @@ import {
   generateToolGraph,
   GraphOptions,
   GraphResult
-} from '../../visualization/graphviz';
+} from '../../visualization/graphviz.js';
 
-import { getOrCreateSession, addMessageToSession, addArtifactToSession } from '../sessions';
-import { executeTool } from '../tools';
-import { createModelMessage, getFunctionCalls, createUserMessage } from '../content';
+import { getOrCreateSession, addMessageToSession, addArtifactToSession } from '../sessions/index.js';
+import { executeTool } from '../tools/index.js';
+import { createModelMessage, getFunctionCalls, createUserMessage } from '../content/index.js';
 import { createAdkLLMService } from '../providers/llm-service.js';
 import { createAdkLLMConfigFromEnvironment } from '../config/llm-config.js';
 import { safeConsole } from '../../utils/logger.js';

@@ -1,4 +1,4 @@
-import { Message, TraceId } from '../../core/types';
+import { Message, TraceId } from '../../core/types.js';
 import {
   MemoryProvider,
   ConversationMemory,
@@ -10,7 +10,7 @@ import {
   createMemoryConnectionError,
   createMemoryNotFoundError,
   createMemoryStorageError
-} from '../types';
+} from '../types.js';
 import { safeConsole } from '../../utils/logger.js';
 
 // Redis client interface - compatible with ioredis, node-redis, etc.

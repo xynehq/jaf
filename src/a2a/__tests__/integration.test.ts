@@ -19,7 +19,7 @@ import {
   type SendMessageRequest,
   type JSONRPCRequest,
   type A2ATaskProvider
-} from '../index';
+} from '../index.js';
 
 describe('A2A Integration', () => {
   // Mock model provider for integration tests
