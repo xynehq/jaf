@@ -3,7 +3,7 @@ import {
   createPathValidator, 
   createContentFilter,
   createRateLimiter 
-} from '../policies/validation';
+} from '../policies/validation.js';
 
 describe('Validation Policies', () => {
   describe('composeValidations', () => {

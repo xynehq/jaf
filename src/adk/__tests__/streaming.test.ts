@@ -45,10 +45,10 @@ import {
   streamToArray,
   takeFromStream,
   skipFromStream
-} from '../streaming';
+} from '../streaming/index.js';
 
-import { createUserMessage, createFunctionCall, createFunctionResponse } from '../content';
-import { AgentEvent, AgentEventType } from '../types';
+import { createUserMessage, createFunctionCall, createFunctionResponse } from '../content/index.js';
+import { AgentEvent, AgentEventType } from '../types.js';
 
 describe('Streaming System', () => {
   describe('Live Request Queue', () => {

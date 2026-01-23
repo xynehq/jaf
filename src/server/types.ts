@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { Agent, RunConfig } from '../core/types';
-import { MemoryProvider } from '../memory/types';
+import { Agent, RunConfig } from '../core/types.js';
+import { MemoryProvider } from '../memory/types.js';
 
 export interface ServerConfig<Ctx> {
   port?: number;

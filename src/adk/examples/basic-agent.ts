@@ -15,7 +15,7 @@ import {
   quickSetup,
   Model,
   ToolParameterType
-} from '../index';
+} from '../index.js';
 
 // ========== Example 1: Simple Chat Agent ==========
 

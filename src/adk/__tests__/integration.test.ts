@@ -27,9 +27,9 @@ import {
   Model,
   ToolParameterType,
   AgentEvent
-} from '../index';
+} from '../index.js';
 
-import { streamToArray } from '../streaming';
+import { streamToArray } from '../streaming/index.js';
 
 // Mock the Core ModelProvider to avoid real API calls in tests
 let mockCallCount = 0;

@@ -15,7 +15,7 @@ import {
   A2AErrorCodes,
   a2aMessageSchema,
   sendMessageRequestSchema
-} from '../types';
+} from '../types.js';
 
 describe('A2A Types', () => {
   describe('A2AMessage', () => {

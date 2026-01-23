@@ -28,10 +28,10 @@ import {
   createMemoryProviderBridge,
   createSessionError,
   withSessionErrorHandling
-} from '../sessions';
+} from '../sessions/index.js';
 
-import { createUserMessage, createModelMessage, createSystemMessage } from '../content';
-import { Session, SessionProvider } from '../types';
+import { createUserMessage, createModelMessage, createSystemMessage } from '../content/index.js';
+import { Session, SessionProvider } from '../types.js';
 
 describe('Session Management', () => {
   describe('Session Creation', () => {

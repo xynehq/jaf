@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { MemoryConfig } from '../memory/types';
-import type { ApprovalStorage } from '../memory/approval-storage';
+import { MemoryConfig } from '../memory/types.js';
+import type { ApprovalStorage } from '../memory/approval-storage.js';
 
 export type TraceId = string & { readonly _brand: 'TraceId' };
 export type RunId = string & { readonly _brand: 'RunId' };
