@@ -424,49 +424,40 @@ async function buildChatMessageWithAttachments(
         parts.push({ type: 'image_url', image_url: { url } });
       }
     } else if (att.kind === 'document' || att.kind === 'file') {
-      // Check if attachment has useLiteLLMFormat flag or is a large document
-      const useLiteLLMFormat = att.useLiteLLMFormat === true;
-      
-      if (useLiteLLMFormat && (att.url || att.data)) {
-        // Use LiteLLM native file format for better handling of large documents
-        const file_id = att.url || (att.data && att.mimeType ? `data:${att.mimeType};base64,${att.data}` : '');
-        if (file_id) {
+      // The useLiteLLMFormat flag is ignored because most LLM providers don't support
+      // native file format (type: 'file' causes "Unknown part type" errors)
+      // Instead, we extract text and send as type: 'text' which all models support
+
+      if (att.useLiteLLMFormat === true) {
+        safeConsole.log(`[JAF:ATTACHMENT] useLiteLLMFormat requested for ${att.name || 'document'}, falling back to text extraction `);
+      }
+
+      // Extract document content if supported and we have data or URL
+      if (isDocumentSupported(att.mimeType) && (att.data || att.url)) {
+        try {
+          const processed = await extractDocumentContent(att);
+          const fileName = att.name || 'document';
+          const description = getDocumentDescription(att.mimeType);
+
           parts.push({
-            type: 'file',
-            file: {
-              file_id,
-              format: att.mimeType || att.format
-            }
+            type: 'text',
+            text: `DOCUMENT: ${fileName} (${description}):\n\n${processed.content}`
           });
-        }
-      } else {
-        // Extract document content if supported and we have data or URL
-        if (isDocumentSupported(att.mimeType) && (att.data || att.url)) {
-          try {
-            const processed = await extractDocumentContent(att);
-            const fileName = att.name || 'document';
-            const description = getDocumentDescription(att.mimeType);
-            
-            parts.push({
-              type: 'text',
-              text: `DOCUMENT: ${fileName} (${description}):\n\n${processed.content}`
-            });
-          } catch (error) {
-            // Fallback to filename if extraction fails
-            const label = att.name || att.format || att.mimeType || 'attachment';
-            parts.push({
-              type: 'text',
-              text: `ERROR: Failed to process ${att.kind}: ${label} (${error instanceof Error ? error.message : 'Unknown error'})`
-            });
-          }
-        } else {
-          // Unsupported document type - show placeholder
+        } catch (error) {
+          // Fallback to filename if extraction fails
           const label = att.name || att.format || att.mimeType || 'attachment';
           parts.push({
             type: 'text',
-            text: `ATTACHMENT: ${att.kind}: ${label}${att.url ? ` (${att.url})` : ''}`
+            text: `ERROR: Failed to process ${att.kind}: ${label} (${error instanceof Error ? error.message : 'Unknown error'})`
           });
         }
+      } else {
+        // Unsupported document type - show placeholder
+        const label = att.name || att.format || att.mimeType || 'attachment';
+        parts.push({
+          type: 'text',
+          text: `ATTACHMENT: ${att.kind}: ${label}${att.url ? ` (${att.url})` : ''}`
+        });
       }
     }
   }
