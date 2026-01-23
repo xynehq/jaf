@@ -3,10 +3,7 @@ import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
 import Papa from 'papaparse';
 import yauzl from 'yauzl';
-import * as pdfParseModule from 'pdf-parse';
-
-// pdf-parse has a non-standard export pattern
-const pdfParse = (pdfParseModule as any).default || pdfParseModule;
+import { PDFParse } from 'pdf-parse';
 
 const FETCH_TIMEOUT = 30000;
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
@@ -221,19 +218,19 @@ function extractJsonContent(buffer: Buffer): ProcessedDocument {
 }
 
 /**
- * Extract text content from PDF files using pdf-parse
+ * Extract text content from PDF files using pdf-parse v2
  * Matches Python JAF behavior of extracting text and sending as text content
  */
 async function extractPdfContent(buffer: Buffer): Promise<ProcessedDocument> {
   try {
-    const data = await pdfParse(buffer);
+    // pdf-parse v2 API: pass buffer as data parameter
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
 
     return {
-      content: data.text.trim(),
+      content: result.text.trim(),
       metadata: {
-        pages: data.numpages,
-        info: data.info,
-        version: data.version
+        pages: result.pages.length
       }
     };
   } catch (error) {
