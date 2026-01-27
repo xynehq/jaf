@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import mammoth from 'mammoth';
 import Papa from 'papaparse';
 import yauzl from 'yauzl';
+import { PDFParse } from 'pdf-parse';
 
 const FETCH_TIMEOUT = 30000;
 const MAX_DOCUMENT_SIZE = 25 * 1024 * 1024;
@@ -98,25 +99,25 @@ export async function extractDocumentContent(attachment: Attachment): Promise<Pr
 
   switch (mimeType) {
     case 'application/pdf':
-      throw new DocumentProcessingError('PDF processing is not supported');
-    
+      return await extractPdfContent(buffer);
+
     case 'text/plain':
     case 'text/csv':
       return extractTextContent(buffer, mimeType);
-    
+
     case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
     case 'application/vnd.ms-excel':
       return extractExcelContent(buffer);
-    
+
     case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
       return await extractDocxContent(buffer);
-    
+
     case 'application/json':
       return extractJsonContent(buffer);
-    
+
     case 'application/zip':
       return await extractZipContent(buffer);
-    
+
     default:
       // Fallback: try to extract as text
       return extractTextContent(buffer, 'text/plain');
@@ -199,10 +200,10 @@ function extractJsonContent(buffer: Buffer): ProcessedDocument {
   try {
     const jsonStr = buffer.toString('utf-8');
     const jsonObj = JSON.parse(jsonStr);
-    
+
     // Pretty print JSON with some metadata
     const content = `JSON File Content:\n${JSON.stringify(jsonObj, null, 2)}`;
-    
+
     return {
       content,
       metadata: {
@@ -213,6 +214,30 @@ function extractJsonContent(buffer: Buffer): ProcessedDocument {
   } catch (error) {
     // Fallback to raw text if JSON parsing fails
     return { content: buffer.toString('utf-8').trim() };
+  }
+}
+
+/**
+ * Extract text content from PDF files using pdf-parse v2
+ * Matches Python JAF behavior of extracting text and sending as text content
+ */
+async function extractPdfContent(buffer: Buffer): Promise<ProcessedDocument> {
+  try {
+    // pdf-parse v2 API: pass buffer as data parameter
+    const parser = new PDFParse({ data: buffer });
+    const result = await parser.getText();
+
+    return {
+      content: result.text.trim(),
+      metadata: {
+        pages: result.pages.length
+      }
+    };
+  } catch (error) {
+    throw new DocumentProcessingError(
+      `Failed to extract PDF content: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error
+    );
   }
 }
 
@@ -269,8 +294,10 @@ async function extractZipContent(buffer: Buffer): Promise<ProcessedDocument> {
  */
 export function isDocumentSupported(mimeType?: string): boolean {
   if (!mimeType) return false;
-  
+
+  // Matches Python JAF supported types exactly
   const supportedTypes = [
+    'application/pdf',
     'text/plain',
     'text/csv',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -279,7 +306,7 @@ export function isDocumentSupported(mimeType?: string): boolean {
     'application/json',
     'application/zip'
   ];
-  
+
   return supportedTypes.includes(mimeType.toLowerCase());
 }
 
@@ -289,7 +316,7 @@ export function isDocumentSupported(mimeType?: string): boolean {
 export function getDocumentDescription(mimeType?: string): string {
   switch (mimeType?.toLowerCase()) {
     case 'application/pdf':
-      return 'PDF processing not supported';
+      return 'PDF text content';
     case 'text/plain':
       return 'plain text content';
     case 'text/csv':

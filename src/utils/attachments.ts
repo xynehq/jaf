@@ -12,12 +12,21 @@ class AttachmentValidationError extends Error {
   }
 }
 const ALLOWED_IMAGE_MIME_TYPES = [
-  'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml'
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/svg+xml",
 ];
 const ALLOWED_DOCUMENT_MIME_TYPES = [
-  'text/plain', 'text/csv', 'application/json',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    "application/pdf",
+    "text/plain",
+    "text/csv",
+    "application/json",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ];
 
 // Validation helpers
@@ -164,8 +173,8 @@ export function makeFileAttachment(params: {
   }
   
   // Validate format if provided
-  if (params.format && params.format.length > 10) {
-    throw new AttachmentValidationError('File format must be 10 characters or less');
+  if (params.format && params.format.length > MAX_FORMAT_LENGTH) {
+    throw new AttachmentValidationError(`File format must be ${MAX_FORMAT_LENGTH} characters or less`);
   }
 
   return {
@@ -223,8 +232,8 @@ export function validateAttachment(att: Attachment): void {
       break;
     case 'file':
       // Files can have any MIME type, but still validate format
-      if (att.format && att.format.length > 10) {
-        throw new AttachmentValidationError('File format must be 10 characters or less');
+      if (att.format && att.format.length > MAX_FORMAT_LENGTH) {
+        throw new AttachmentValidationError(`File format must be ${MAX_FORMAT_LENGTH} characters or less`);
       }
       break;
   }
