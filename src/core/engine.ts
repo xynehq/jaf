@@ -655,8 +655,13 @@ async function runInternal<Ctx, Out>(
           const stream = config.modelProvider.getCompletionStream(state, effectiveAgent, config);
           let aggregatedText = '';
           const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
+          let streamUsage: any = null;
 
           for await (const chunk of stream) {
+            // Capture usage from stream chunks (sent at end with stream_options.include_usage)
+            if ((chunk as any)?.usage) {
+              streamUsage = (chunk as any).usage;
+            }
             if (chunk?.delta) {
               aggregatedText += chunk.delta;
             }
@@ -710,7 +715,9 @@ async function runInternal<Ctx, Out>(
                     }))
                   }
                 : {})
-            }
+            },
+            // Include usage from streaming
+            usage: streamUsage
           };
         } catch (e) {
           streamingUsed = false;
@@ -728,8 +735,13 @@ async function runInternal<Ctx, Out>(
         const stream = config.modelProvider.getCompletionStream(state, effectiveAgent, config);
         let aggregatedText = '';
         const toolCalls: Array<{ id?: string; type: 'function'; function: { name?: string; arguments: string } }> = [];
+        let streamUsage: any = null;
 
         for await (const chunk of stream) {
+          // Capture usage from stream chunks (sent at end with stream_options.include_usage)
+          if ((chunk as any)?.usage) {
+            streamUsage = (chunk as any).usage;
+          }
           if (chunk?.delta) {
             aggregatedText += chunk.delta;
           }
@@ -783,7 +795,9 @@ async function runInternal<Ctx, Out>(
                   }))
                 }
               : {})
-          }
+          },
+          // Include usage from streaming
+          usage: streamUsage
         };
       } catch (e) {
         streamingUsed = false;
@@ -808,23 +822,28 @@ async function runInternal<Ctx, Out>(
       runId: state.runId,
       agentName: currentAgent.name,
       model: model || 'unknown',
+      // Handle both snake_case and camelCase from different providers
       usage: usage ? {
-        prompt_tokens: usage.prompt_tokens,
-        completion_tokens: usage.completion_tokens,
-        total_tokens: usage.total_tokens
+        prompt_tokens: usage.prompt_tokens ?? usage.promptTokens,
+        completion_tokens: usage.completion_tokens ?? usage.completionTokens,
+        total_tokens: usage.total_tokens ?? usage.totalTokens
       } : undefined
     }
   });
 
   try {
     const usage = (llmResponse as any)?.usage;
-    if (usage && (usage.prompt_tokens || usage.completion_tokens || usage.total_tokens)) {
+    // Handle both snake_case and camelCase from different providers
+    const promptTokens = usage?.prompt_tokens ?? usage?.promptTokens;
+    const completionTokens = usage?.completion_tokens ?? usage?.completionTokens;
+    const totalTokens = usage?.total_tokens ?? usage?.totalTokens;
+    if (usage && (promptTokens || completionTokens || totalTokens)) {
       config.onEvent?.({
         type: 'token_usage',
         data: {
-          prompt: usage.prompt_tokens,
-          completion: usage.completion_tokens,
-          total: usage.total_tokens,
+          prompt: promptTokens,
+          completion: completionTokens,
+          total: totalTokens,
           model: model || 'unknown'
         }
       });
@@ -1700,3 +1719,4 @@ async function storeConversationHistory<Ctx>(
 
   safeConsole.log(`[JAF:MEMORY] Stored ${messagesToStore.length} messages for conversation ${config.conversationId}`);
 }
+

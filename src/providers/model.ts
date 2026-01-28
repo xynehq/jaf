@@ -94,15 +94,23 @@ export const makeLiteLLMProvider = <Ctx>(
 
       safeConsole.log(`📡 Streaming model: ${model} with params: ${JSON.stringify(baseParams, null, 2)}`);
 
-      // Enable streaming on request
+      // Enable streaming on request with usage reporting
       const streamParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
         ...baseParams,
         stream: true,
+        stream_options: { include_usage: true },
       };
       const stream = await client.chat.completions.create(streamParams);
 
+      let streamUsage: any = null;
+
       // Iterate OpenAI streaming chunks (choices[].delta.*)
       for await (const chunk of stream) {
+        // Capture usage from the final chunk (OpenAI sends it with stream_options.include_usage)
+        if ((chunk as any)?.usage) {
+          streamUsage = (chunk as any).usage;
+        }
+
         const choice = chunk?.choices?.[0];
         const delta = choice?.delta;
 
@@ -110,7 +118,7 @@ export const makeLiteLLMProvider = <Ctx>(
           // Some keep-alive frames may not contain deltas
           const finish = choice?.finish_reason;
           if (finish) {
-            yield { isDone: true, finishReason: finish, raw: chunk };
+            yield { isDone: true, finishReason: finish, usage: streamUsage, raw: chunk };
           }
           continue;
         }
@@ -142,8 +150,13 @@ export const makeLiteLLMProvider = <Ctx>(
         // Completion ended
         const finish = choice?.finish_reason;
         if (finish) {
-          yield { isDone: true, finishReason: finish, raw: chunk };
+          yield { isDone: true, finishReason: finish, usage: streamUsage, raw: chunk };
         }
+      }
+
+      // If we captured usage but never yielded it (edge case), yield it now
+      if (streamUsage) {
+        yield { isDone: true, usage: streamUsage };
       }
     },
   };
