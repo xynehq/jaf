@@ -3,39 +3,51 @@ import http from 'http';
 import https from 'https';
 import { TraceEvent, TraceId, createTraceId } from './types.js';
 
-// Optional imports for tracing (these might not be available)
+// Optional OpenTelemetry imports - use dynamic imports for ESM compatibility
 let trace: any;
 let context: any;
 let Resource: any; 
 let NodeSDK: any;
 let OTLPTraceExporter: any;
 let SemanticResourceAttributes: any;
-let Langfuse: any;
 
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const otelApi = require('@opentelemetry/api');
-  trace = otelApi.trace;
-  context = otelApi.context;
+// Flag to track if OTEL is available
+let otelAvailable = false;
+
+// Initialize OTEL modules asynchronously
+async function initOtelModules(): Promise<void> {
+  if (otelAvailable) return;
   
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const otelResources = require('@opentelemetry/resources');
-  Resource = otelResources.Resource;
-  
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const otelSdkNode = require('@opentelemetry/sdk-node');
-  NodeSDK = otelSdkNode.NodeSDK;
-  
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const otelExporter = require('@opentelemetry/exporter-trace-otlp-http');
-  OTLPTraceExporter = otelExporter.OTLPTraceExporter;
-  
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const otelSemantic = require('@opentelemetry/semantic-conventions');
-  SemanticResourceAttributes = otelSemantic.SemanticResourceAttributes;
-} catch (e) {
-  // OpenTelemetry not available
+  try {
+    const otelApi = await import('@opentelemetry/api');
+    trace = otelApi.trace;
+    context = otelApi.context;
+    
+    const otelResources = await import('@opentelemetry/resources');
+    Resource = (otelResources as any).Resource || (otelResources as any).default?.Resource;
+    
+    const otelSdkNode = await import('@opentelemetry/sdk-node');
+    NodeSDK = otelSdkNode.NodeSDK;
+    
+    const otelExporter = await import('@opentelemetry/exporter-trace-otlp-http');
+    OTLPTraceExporter = otelExporter.OTLPTraceExporter;
+    
+    const otelSemantic: any = await import('@opentelemetry/semantic-conventions').catch(() => ({}));
+    // Handle both old and new semantic-conventions versions
+    SemanticResourceAttributes = otelSemantic.ATTR_SERVICE_NAME 
+      ? { SERVICE_NAME: otelSemantic.ATTR_SERVICE_NAME }
+      : otelSemantic.SemanticResourceAttributes || { SERVICE_NAME: 'service.name' };
+    
+    otelAvailable = true;
+    console.log('[JAF:OTEL] OpenTelemetry modules loaded successfully');
+  } catch (e) {
+    console.log('[JAF:OTEL] OpenTelemetry dependencies not available - tracing disabled');
+    otelAvailable = false;
+  }
 }
+
+// Initialize OTEL modules on module load
+initOtelModules().catch(() => {});
 
 
 // Default sensitive fields that should be redacted from logs
@@ -848,6 +860,13 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
           
           console.log(`[OTEL DEBUG] Final extracted:`, sanitizeObject({ user_query: userQuery, user_id: userId }));
           
+          // Get userInfo from context if provided
+          const userInfo = context?.userInfo || {
+            userId: userId || (data as any).userId || 'unknown',
+            userName: null,
+            userEmail: userId || (data as any).userId || null
+          };
+          
           // Create comprehensive input data for the trace (sanitized)
           const traceInput = {
             user_query: userQuery,
@@ -859,7 +878,7 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
             }
           };
 
-          const rootSpan = this.tracer.startSpan(`jaf-run-${traceId}`, {
+          const rootSpan = this.tracer.startSpan((data as any).agentName || `jaf-run-${traceId}`, {
             attributes: {
               'framework': 'jaf',
               'event.type': 'run_start',
@@ -869,7 +888,11 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
               'agent.name': (data as any).agentName || 'analytics_agent_jaf',
               'session.id': (data as any).sessionId || 'unknown',
               'input': JSON.stringify(sanitizeObject(traceInput)),
-              'gen_ai.request.model': (data as any).model || 'unknown'
+              'gen_ai.request.model': (data as any).model || 'unknown',
+              // Add userInfo as separate metadata fields for Langfuse
+              'userInfo.userId': userInfo.userId || 'unknown',
+              'userInfo.userName': userInfo.userName || 'unknown',
+              'userInfo.userEmail': userInfo.userEmail || 'unknown'
             }
           });
           
