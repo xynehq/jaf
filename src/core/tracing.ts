@@ -717,6 +717,18 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
   }
 }
 
+// Map to store JAF traceId -> OTEL traceId
+const otelTraceIdMapping = new Map<string, string>();
+
+/**
+ * Get the OTEL trace ID from a JAF trace ID
+ * @param jafTraceId - The JAF trace ID (UUID format)
+ * @returns 
+ */
+export function getOtelTraceId(jafTraceId: string): string | undefined {
+  return otelTraceIdMapping.get(jafTraceId);
+}
+
 export class OpenTelemetryTraceCollector implements TraceCollector {
   private inMemory = new InMemoryTraceCollector();
   private activeSpans: Map<string, any> = new Map();
@@ -900,6 +912,15 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
           // Store user_id and user_query for later use in generations
           (rootSpan as any)._user_id = userId || (data as any).userId;
           (rootSpan as any)._user_query = userQuery;
+          
+          // Extract and store the actual OTEL trace ID
+          const spanContext = rootSpan.spanContext?.();
+          const otelTraceId = spanContext?.traceId;
+          if (otelTraceId) {
+            otelTraceIdMapping.set(String(traceId), otelTraceId);
+            console.log(`[OTEL] Stored OTEL trace ID mapping: JAF ${traceId} -> OTEL ${otelTraceId}`);
+          }
+          
           console.log(`[OTEL] Created trace with user query:`, sanitizeObject({ query: userQuery ? userQuery.substring(0, 100) + '...' : 'None' }));
           break;
         }
