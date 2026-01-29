@@ -61,8 +61,6 @@ const DEFAULT_SENSITIVE_FIELDS = [
   'auth',
   'credential',
   'credentials',
-  'sessionId',
-  'session_id',
   'accessToken',
   'access_token',
   'refreshToken',
@@ -558,30 +556,71 @@ function getProxyConfiguration(collectorUrl: string) {
   }
 }
 
+/**
+ * Get Langfuse configuration from environment variables
+ * Automatically builds OTLP endpoint and auth header from LANGFUSE_* vars
+ */
+function getLangfuseOTLPConfig(): { collectorUrl: string; headers: Record<string, string> } | null {
+  const secretKey = process.env.LANGFUSE_SECRET_KEY;
+  const publicKey = process.env.LANGFUSE_PUBLIC_KEY;
+  const baseUrl = process.env.LANGFUSE_BASE_URL;
+  
+  if (!secretKey || !publicKey || !baseUrl) {
+    return null;
+  }
+  
+  // Build OTLP endpoint URL
+  const collectorUrl = `${baseUrl.replace(/\/$/, '')}/api/public/otel/v1/traces`;
+  const authCredentials = Buffer.from(`${publicKey}:${secretKey}`).toString('base64');
+  const headers: Record<string, string> = {
+    'Authorization': `Basic ${authCredentials}`
+  };
+  
+  return { collectorUrl, headers };
+}
+
 function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: string): void {
-  if (!NodeSDK || !OTLPTraceExporter || !Resource || !SemanticResourceAttributes || !collectorUrl) {
+  if (!NodeSDK || !OTLPTraceExporter || !Resource || !SemanticResourceAttributes) {
     return;
   }
 
   try {
-    // Parse headers from environment variable
-    const headersEnv = process.env.OTEL_EXPORTER_OTLP_HEADERS;
-    const headers: Record<string, string> = {};
-
-    if (headersEnv) {
-      console.log(`[JAF:OTEL] Parsing headers: ${headersEnv}`);
-      // Parse comma-separated key=value pairs
-      headersEnv.split(',').forEach(header => {
-        const [key, value] = header.trim().split('=');
-        if (key && value) {
-          headers[key] = value;
-        }
-      });
-      console.log(`[JAF:OTEL] Parsed headers:`, Object.keys(headers));
+    let finalCollectorUrl = collectorUrl;
+    let headers: Record<string, string> = {};
+    
+    // Priority 1: Check for Langfuse env vars and build config automatically
+    const langfuseConfig = getLangfuseOTLPConfig();
+    if (langfuseConfig) {
+      finalCollectorUrl = langfuseConfig.collectorUrl;
+      headers = langfuseConfig.headers;
+      console.log(`[JAF:OTEL] Using Langfuse configuration`);
+    } else if (finalCollectorUrl) {
+      // Priority 2: Use TRACE_COLLECTOR_URL with OTEL_EXPORTER_OTLP_HEADERS
+      const headersEnv = process.env.OTEL_EXPORTER_OTLP_HEADERS;
+      if (headersEnv) {
+        console.log(`[JAF:OTEL] Parsing headers from OTEL_EXPORTER_OTLP_HEADERS`);
+        // Parse comma-separated key=value pairs
+        headersEnv.split(',').forEach(header => {
+          const eqIndex = header.indexOf('=');
+          if (eqIndex > 0) {
+            const key = header.substring(0, eqIndex).trim();
+            const value = header.substring(eqIndex + 1).trim();
+            if (key && value) {
+              headers[key] = value;
+            }
+          }
+        });
+        console.log(`[JAF:OTEL] Parsed headers:`, Object.keys(headers));
+      }
+    }
+    
+    if (!finalCollectorUrl) {
+      console.log(`[JAF:OTEL] No collector URL configured - skipping OTEL setup`);
+      return;
     }
 
     // Configure proxy settings
-    const proxyConfig = getProxyConfiguration(collectorUrl);
+    const proxyConfig = getProxyConfiguration(finalCollectorUrl);
 
     const resource = new Resource({
       [SemanticResourceAttributes.SERVICE_NAME]: serviceName,
@@ -589,7 +628,7 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
 
     // Create exporter configuration with proxy support
     const exporterConfig: any = {
-      url: collectorUrl,
+      url: finalCollectorUrl,
       headers: headers,
     };
 
@@ -738,8 +777,9 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
   private tracer: any;
 
   constructor(serviceName: string = 'jaf-agent') {
-    // Initialize OpenTelemetry SDK if URL is configured and not already initialized
-    const collectorUrl = process.env.TRACE_COLLECTOR_URL;
+    // Initialize OpenTelemetry SDK if Langfuse or TRACE_COLLECTOR_URL is configured
+    const langfuseConfig = getLangfuseOTLPConfig();
+    const collectorUrl = langfuseConfig?.collectorUrl || process.env.TRACE_COLLECTOR_URL;
 
     console.log(`[OTEL] Constructor called with serviceName: ${serviceName}`);
     console.log(`[OTEL] TRACE_COLLECTOR_URL: ${collectorUrl}`);
@@ -1303,8 +1343,10 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
 export function createCompositeTraceCollector(...collectors: TraceCollector[]): TraceCollector {
   const collectorList = [...collectors];
   
-  // Automatically add OpenTelemetry collector if URL is configured
-  const collectorUrl = process.env.TRACE_COLLECTOR_URL;
+  // Automatically add OpenTelemetry collector if Langfuse or TRACE_COLLECTOR_URL is configured
+  const langfuseConfig = getLangfuseOTLPConfig();
+  const collectorUrl = langfuseConfig?.collectorUrl || process.env.TRACE_COLLECTOR_URL;
+  
   if (collectorUrl && OTLPTraceExporter) {
     setupOpenTelemetry('jaf-agent', collectorUrl);
     const otelCollector = new OpenTelemetryTraceCollector();
