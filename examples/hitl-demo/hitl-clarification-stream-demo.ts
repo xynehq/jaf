@@ -23,7 +23,9 @@ import {
   RunConfig,
   generateRunId,
   generateTraceId,
-  makeLiteLLMProvider
+  makeLiteLLMProvider,
+  createInMemoryClarificationStorage,
+  provideClarification
 } from '@xynehq/jaf';
 import { ClarificationInterruption } from '../../src/core/types';
 
@@ -142,11 +144,11 @@ Remember: MULTIPLE distinct people = MUST use request_user_clarification tool!`,
 };
 
 // Helper function to simulate user input
-function simulateUserSelection(options: readonly { id: string; label: string }[], preferredIndex: number = 0): string {
+function simulateUserSelection(options: readonly string[], preferredIndex: number = 0): string {
   console.log('\n🤔 Simulating user selection...');
   const selected = options[preferredIndex];
-  console.log(`👤 User selects: ${selected.label} (ID: ${selected.id})\n`);
-  return selected.id;
+  console.log(`👤 User selects: ${selected}\n`);
+  return selected;
 }
 
 // Main demo function using runStream
@@ -160,11 +162,15 @@ async function streamingDemo() {
   const litellmApiKey = process.env.LITELLM_API_KEY;
   const modelProvider = makeLiteLLMProvider(litellmUrl, litellmApiKey);
 
+  // Create clarification storage
+  const clarificationStorage = createInMemoryClarificationStorage();
+
   const config: RunConfig<DemoCtx> = {
     agentRegistry,
     modelProvider: modelProvider as any,
     modelOverride: process.env.LITELLM_MODEL || 'gpt-4o-mini',
     allowClarificationRequests: true,
+    clarificationStorage,
   };
 
   // Test Case 1: Ambiguous query with streaming
@@ -184,12 +190,12 @@ async function streamingDemo() {
   };
 
   let clarificationNeeded: ClarificationInterruption<any> | null = null;
-
+  let currentState = state1;
 
   console.log('🌊 Starting event stream...\n');
 
   // Stream events in real-time
-  for await (const event of runStream(state1, config)) {
+  for await (const event of runStream(currentState, config)) {
     handleEvent(event);
 
     // Check if this is a run_end event
@@ -205,17 +211,13 @@ async function streamingDemo() {
         if (clarification) {
           clarificationNeeded = clarification;
 
-          // The stream is complete, we can access the final state
-          // by creating a new run that will immediately detect and handle the clarification
           console.log('\n⏸️  Stream paused - clarification required');
           console.log(`Question: ${clarification.question}`);
           console.log('Options:');
           clarification.options.forEach((opt, idx) => {
-            console.log(`  ${idx + 1}. ${opt.label} (ID: ${opt.id})`);
+            console.log(`  ${idx + 1}. ${opt}`);
           });
 
-          // We need to get the final state from the outcome
-          // For now, we'll simulate getting it from the event data
           break;
         }
       } else if (outcome.status === 'completed') {
@@ -229,18 +231,16 @@ async function streamingDemo() {
 
   // If clarification was needed, resume with user selection
   if (clarificationNeeded) {
-    const selectedId = simulateUserSelection(clarificationNeeded.options, 0);
+    const selectedOption = simulateUserSelection(clarificationNeeded.options, 0);
 
     console.log('🔄 Resuming stream with user selection...\n');
 
-    // Create a new state with the clarification response
-    const stateWithClarification = {
-      ...state1,
-      clarifications: new Map([[clarificationNeeded.clarificationId, selectedId]])
-    };
+    // Use provideClarification helper to store the selection
+    // This stores it in clarificationStorage AND updates the state
+    currentState = await provideClarification(currentState, clarificationNeeded, selectedOption, undefined, config);
 
-    // Resume streaming with the clarification
-    for await (const event of runStream(stateWithClarification, config)) {
+    // Resume streaming - engine will auto-load clarifications from storage
+    for await (const event of runStream(currentState, config)) {
       handleEvent(event);
 
       if (event.type === 'run_end') {
@@ -348,13 +348,13 @@ function handleEvent(event: TraceEvent | any) {
       console.log('\n🔔 Clarification Requested!');
       console.log(`   Question: ${event.data.question}`);
       console.log('   Options:');
-      event.data.options.forEach((opt: any, idx: number) => {
-        console.log(`     ${idx + 1}. ${opt.label} (ID: ${opt.id})`);
+      event.data.options.forEach((opt: string, idx: number) => {
+        console.log(`     ${idx + 1}. ${opt}`);
       });
       break;
 
     case 'clarification_provided':
-      console.log(`✅ Clarification provided: ${event.data.selectedId}`);
+      console.log(`✅ Clarification provided: ${event.data.selectedOption}`);
       break;
 
     case 'turn_end':
