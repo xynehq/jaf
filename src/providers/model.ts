@@ -334,6 +334,13 @@ async function buildChatCompletionParams<Ctx>(
   const isAfterToolCall = lastMessage?.role === 'tool';
   const responseFormat = buildResponseFormat(agent.outputCodec, agent.name);
 
+
+  const reasoning = agent.modelConfig?.reasoning;
+  const reasoningParams: Record<string, any> = {};
+  if (reasoning?.effort) {
+    reasoningParams.reasoning_effort = reasoning.effort;
+  }
+
   const params: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
     model,
     messages,
@@ -342,6 +349,7 @@ async function buildChatCompletionParams<Ctx>(
     tools: tools && tools.length > 0 ? tools : undefined,
     tool_choice: tools && tools.length > 0 ? (isAfterToolCall ? 'auto' : undefined) : undefined,
     response_format: responseFormat,
+    ...reasoningParams,
   };
 
   return { model, params };

@@ -63,10 +63,16 @@ export function getTextContent(content: string | readonly MessageContentPart[] |
   return String(content || '');
 }
 
+export type ReasoningConfig = {
+
+  readonly effort?: 'none' | 'low' | 'medium' | 'high';
+};
+
 export type ModelConfig = {
   readonly name?: string;
   readonly temperature?: number;
   readonly maxTokens?: number;
+  readonly reasoning?: ReasoningConfig;
 };
 
 export type Tool<A, Ctx> = {
