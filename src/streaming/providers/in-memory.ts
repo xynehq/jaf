@@ -23,6 +23,16 @@ import { safeConsole } from '../../utils/logger.js';
 type EventStore = Map<string, StreamEvent[]>;
 
 /**
+ * Subscriber callback type
+ */
+type EventSubscriber = (event: StreamEvent) => void;
+
+/**
+ * Subscriber store by session
+ */
+type SubscriberStore = Map<string, Set<EventSubscriber>>;
+
+/**
  * Create an in-memory stream provider
  * 
  * @example
@@ -63,6 +73,7 @@ export function createInMemoryStreamProvider(
   const providerName = config.name ?? 'in-memory-stream';
   
   const store: EventStore = new Map();
+  const subscribers: SubscriberStore = new Map();
   let closed = false;
   
   /**
@@ -126,6 +137,18 @@ export function createInMemoryStreamProvider(
         
         // Add event
         events.push(event);
+        
+        // Notify subscribers for this session
+        const sessionSubscribers = subscribers.get(key);
+        if (sessionSubscribers) {
+          for (const subscriber of sessionSubscribers) {
+            try {
+              subscriber(event);
+            } catch (e) {
+              safeConsole.error(`[JAF:STREAM:MEMORY] Subscriber error:`, e);
+            }
+          }
+        }
         
         // Trim if needed
         trimEventsIfNeeded(key);
@@ -208,8 +231,68 @@ export function createInMemoryStreamProvider(
     async close(): Promise<StreamResult<void>> {
       closed = true;
       store.clear();
+      subscribers.clear();
       safeConsole.log(`[JAF:STREAM:MEMORY] Provider closed`);
       return createStreamSuccess(undefined);
+    },
+    
+    /**
+     * Subscribe to events for a session (real-time streaming)
+     * Returns an async generator that yields events as they are pushed
+     */
+    subscribe(sessionId: string): AsyncGenerator<StreamEvent, void, unknown> {
+      const key = getKey(sessionId);
+      
+      // Create a queue for this subscription
+      const eventQueue: StreamEvent[] = [];
+      let resolveNext: ((value: IteratorResult<StreamEvent>) => void) | null = null;
+      let subscriptionDone = false;
+      
+      // Subscriber callback that adds events to queue or resolves waiting promise
+      const subscriber: EventSubscriber = (event: StreamEvent) => {
+        if (subscriptionDone) return;
+        if (resolveNext) {
+          const r = resolveNext;
+          resolveNext = null;
+          r({ value: event, done: false });
+        } else {
+          eventQueue.push(event);
+        }
+      };
+      
+      // Register subscriber
+      if (!subscribers.has(key)) {
+        subscribers.set(key, new Set());
+      }
+      subscribers.get(key)!.add(subscriber);
+      
+      // Return async generator object
+      const asyncGen: AsyncGenerator<StreamEvent, void, unknown> = {
+        [Symbol.asyncIterator]() { return this; },
+        async next(): Promise<IteratorResult<StreamEvent>> {
+          if (eventQueue.length > 0) {
+            return { value: eventQueue.shift()!, done: false };
+          }
+          if (subscriptionDone || closed) {
+            return { value: undefined as any, done: true };
+          }
+          return new Promise<IteratorResult<StreamEvent>>((resolve) => {
+            resolveNext = resolve;
+          });
+        },
+        async return(): Promise<IteratorResult<StreamEvent>> {
+          subscriptionDone = true;
+          subscribers.get(key)?.delete(subscriber);
+          return { value: undefined as any, done: true };
+        },
+        async throw(e: any): Promise<IteratorResult<StreamEvent>> {
+          subscriptionDone = true;
+          subscribers.get(key)?.delete(subscriber);
+          throw e;
+        }
+      };
+      
+      return asyncGen;
     },
     
     // Test utilities

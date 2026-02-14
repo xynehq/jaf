@@ -221,6 +221,31 @@ export async function* runStream<Ctx, Out>(
 ): AsyncGenerator<TraceEvent, void, unknown> {
   const stream = createAsyncEventStream<TraceEvent>();
 
+  // Check if context has streamProvider for tool event streaming
+  const context = initialState.context as any;
+  const streamProvider = context?.streamProvider;
+  const sessionId = context?.sessionId;
+  let toolEventSubscription: AsyncGenerator<any, void, unknown> | null = null;
+
+  // Subscribe to tool events if streamProvider available
+  if (streamProvider?.subscribe && sessionId) {
+    toolEventSubscription = streamProvider.subscribe(sessionId);
+    
+    // Start async task to forward tool events to the stream
+    (async () => {
+      try {
+        for await (const toolEvent of toolEventSubscription!) {
+          // Convert StreamEvent to TraceEvent format
+          const traceEvent: TraceEvent = {
+            type: toolEvent.eventType as any,
+            data: toolEvent.data
+          };
+          try { stream.push(traceEvent); } catch { /* ignore */ }
+        }
+      } catch { /* ignore subscription errors */ }
+    })();
+  }
+
   const onEvent = async (event: TraceEvent) => {
     // First, let the stream consumer handle it (can modify before events)
     let eventResult: any;
@@ -248,6 +273,10 @@ export async function* runStream<Ctx, Out>(
 
   const runPromise = run<Ctx, Out>(initialState, { ...config, onEvent });
   void runPromise.finally(() => {
+    // Clean up tool event subscription
+    if (toolEventSubscription) {
+      toolEventSubscription.return?.();
+    }
     stream.end();
   });
 
@@ -256,6 +285,9 @@ export async function* runStream<Ctx, Out>(
       yield event;
     }
   } finally {
+    if (toolEventSubscription) {
+      toolEventSubscription.return?.();
+    }
     await runPromise.catch(() => undefined);
   }
 }
