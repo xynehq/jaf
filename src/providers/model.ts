@@ -75,18 +75,29 @@ export const makeLiteLLMProvider = <Ctx>(
       const { model, params } = await buildChatCompletionParams(state, agent, config, baseURL, apiKey);
 
       safeConsole.log(`📞 Calling model: ${model} with params: ${JSON.stringify(params, null, 2)}`);
-      const resp = await client.chat.completions.create(
-        params as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
-      );
+      try {
+        const resp = await client.chat.completions.create(
+          params as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+        );
 
-      // Return the choice with usage data attached for tracing
-      return {
-        ...resp.choices[0],
-        usage: resp.usage,
-        model: resp.model,
-        id: resp.id,
-        created: resp.created
-      };
+        // Return the choice with usage data attached for tracing
+        return {
+          ...resp.choices[0],
+          usage: resp.usage,
+          model: resp.model,
+          id: resp.id,
+          created: resp.created
+        };
+      } catch (error) {
+        const status = (error as any)?.status;
+        const body = (error as any)?.error;
+        safeConsole.error(`[JAF:MODEL] getCompletion failed for model=${model} baseURL=${baseURL}`, {
+          message: error instanceof Error ? error.message : String(error),
+          status,
+          responseBody: body,
+        });
+        throw error;
+      }
     },
 
     async *getCompletionStream(state, agent, config) {
@@ -100,7 +111,19 @@ export const makeLiteLLMProvider = <Ctx>(
         stream: true,
         stream_options: { include_usage: true },
       };
-      const stream = await client.chat.completions.create(streamParams);
+      let stream;
+      try {
+        stream = await client.chat.completions.create(streamParams);
+      } catch (error) {
+        const status = (error as any)?.status;
+        const body = (error as any)?.error;
+        safeConsole.error(`[JAF:MODEL] getCompletionStream failed for model=${model} baseURL=${baseURL}`, {
+          message: error instanceof Error ? error.message : String(error),
+          status,
+          responseBody: body,
+        });
+        throw error;
+      }
 
       let streamUsage: any = null;
 

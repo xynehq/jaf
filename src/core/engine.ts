@@ -113,13 +113,27 @@ export async function run<Ctx, Out>(
 
     return result;
   } catch (error) {
+    // Extract rich error details from API errors (e.g. OpenAI SDK APIError)
+    let detail: string;
+    if (error instanceof Error) {
+      const status = (error as any).status;
+      const body = (error as any).error;
+      detail = status
+        ? `[${status}] ${error.message}${body ? ' | ' + JSON.stringify(body) : ''}`
+        : error.message;
+    } else {
+      detail = String(error);
+    }
+
+    safeConsole.error(`[JAF:ENGINE] Run failed with error:`, detail);
+
     const errorResult: RunResult<Out> = {
       finalState: initialState,
       outcome: {
         status: 'error',
         error: {
           _tag: 'ModelBehaviorError',
-          detail: error instanceof Error ? error.message : String(error)
+          detail
         }
       }
     } as RunResult<Out>;
@@ -720,6 +734,7 @@ async function runInternal<Ctx, Out>(
             usage: streamUsage
           };
         } catch (e) {
+          safeConsole.warn(`[JAF:ENGINE] Streaming failed, falling back to non-streaming:`, e instanceof Error ? e.message : String(e));
           streamingUsed = false;
           assistantEventStreamed = false;
           llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
@@ -800,6 +815,7 @@ async function runInternal<Ctx, Out>(
           usage: streamUsage
         };
       } catch (e) {
+        safeConsole.warn(`[JAF:ENGINE] Streaming failed, falling back to non-streaming:`, e instanceof Error ? e.message : String(e));
         streamingUsed = false;
         assistantEventStreamed = false;
         llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
