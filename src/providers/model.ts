@@ -49,12 +49,14 @@ const createTunnelAgent = (proxyUrl: string) => {
 export const makeLiteLLMProvider = <Ctx>(
   baseURL: string,
   apiKey = "anything",
-  proxyConfig?: ProxyConfig
+  proxyConfig?: ProxyConfig,
+  defaultHeaders?: Record<string, string>
 ): ModelProvider<Ctx> => {
   const clientConfig: any = { 
     baseURL, 
     apiKey, 
-    dangerouslyAllowBrowser: true
+    dangerouslyAllowBrowser: true,
+    ...(defaultHeaders && { defaultHeaders })
   };
 
   const hostname = new URL(baseURL).hostname;
