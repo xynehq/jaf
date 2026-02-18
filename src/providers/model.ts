@@ -74,7 +74,7 @@ export const makeLiteLLMProvider = <Ctx>(
 
   return {
     async getCompletion(state, agent, config) {
-      const { model, params } = await buildChatCompletionParams(state, agent, config, baseURL, apiKey);
+      const { model, params } = await buildChatCompletionParams(state, agent, config);
 
       safeConsole.log(`📞 Calling model: ${model} with params: ${JSON.stringify(params, null, 2)}`);
       try {
@@ -103,7 +103,7 @@ export const makeLiteLLMProvider = <Ctx>(
     },
 
     async *getCompletionStream(state, agent, config) {
-      const { model, params: baseParams } = await buildChatCompletionParams(state, agent, config, baseURL, apiKey);
+      const { model, params: baseParams } = await buildChatCompletionParams(state, agent, config);
 
       safeConsole.log(`📡 Streaming model: ${model} with params: ${JSON.stringify(baseParams, null, 2)}`);
 
@@ -187,85 +187,9 @@ export const makeLiteLLMProvider = <Ctx>(
   };
 };
 
-const VISION_MODEL_CACHE_TTL = 5 * 60 * 1000;
-const VISION_API_TIMEOUT = 3000;
-const visionModelCache = new Map<string, { supports: boolean; timestamp: number }>();
 const RESPONSE_SCHEMA_FALLBACK_NAME = 'jaf_output';
 const RESPONSE_SCHEMA_NAME_MAX_LENGTH = 64;
 const UNSUPPORTED_SCHEMA_DESCRIPTION = 'Unsupported schema type';
-
-async function isVisionModel(model: string, baseURL: string, apiKey?: string): Promise<boolean> {
-  // Include auth status in cache key to handle authenticated vs unauthenticated requests separately
-  const cacheKey = `${baseURL}:${model}:${apiKey ? 'authed' : 'unauthed'}`;
-  const cached = visionModelCache.get(cacheKey);
-
-  if (cached && Date.now() - cached.timestamp < VISION_MODEL_CACHE_TTL) {
-    return cached.supports;
-  }
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), VISION_API_TIMEOUT);
-
-    // Build headers with optional Authorization for authenticated endpoints
-    const headers: Record<string, string> = {
-      'accept': 'application/json'
-    };
-
-    if (apiKey) {
-      headers['Authorization'] = `Bearer ${apiKey}`;
-    }
-
-    const response = await fetch(`${baseURL}/model_group/info`, {
-      headers,
-      signal: controller.signal
-    });
-
-    clearTimeout(timeoutId);
-    
-    if (response.ok) {
-      const data: any = await response.json();
-      const modelInfo = data.data?.find((m: any) => 
-        m.model_group === model || model.includes(m.model_group)
-      );
-      
-      if (modelInfo?.supports_vision !== undefined) {
-        const result = modelInfo.supports_vision;
-        visionModelCache.set(cacheKey, { supports: result, timestamp: Date.now() });
-        return result;
-      }
-    } else {
-      safeConsole.warn(`Vision API returned status ${response.status} for model ${model}`);
-    }
-  } catch (error) {
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        safeConsole.warn(`Vision API timeout for model ${model}`);
-      } else {
-        safeConsole.warn(`Vision API error for model ${model}: ${error.message}`);
-      }
-    } else {
-      safeConsole.warn(`Unknown error checking vision support for model ${model}`);
-    }
-  }
-
-  const knownVisionModels = [
-    'gpt-4-vision-preview',
-    'gpt-4o',
-    'gpt-4o-mini', 
-    'claude-sonnet-4',
-    'claude-sonnet-4-20250514', 
-    'gemini-2.5-flash',
-    'gemini-2.5-pro'
-  ];
-  
-  const isKnownVisionModel = knownVisionModels.some(visionModel => 
-    model.toLowerCase().includes(visionModel.toLowerCase())
-  );
-  
-  visionModelCache.set(cacheKey, { supports: isKnownVisionModel, timestamp: Date.now() });
-  
-  return isKnownVisionModel;
-}
 
 function normalizeResponseSchemaName(name: string): string {
   const cleaned = name.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -311,28 +235,12 @@ function buildResponseFormat(
 async function buildChatCompletionParams<Ctx>(
   state: Readonly<RunState<Ctx>>,
   agent: Readonly<Agent<Ctx, any>>,
-  config: Readonly<RunConfig<Ctx>>,
-  baseURL: string,
-  apiKey: string
+  config: Readonly<RunConfig<Ctx>>
 ): Promise<{ model: string; params: OpenAI.Chat.Completions.ChatCompletionCreateParams }> {
   const model = agent.modelConfig?.name ?? config.modelOverride;
 
   if (!model) {
     throw new Error(`Model not specified for agent ${agent.name}`);
-  }
-
-  // Vision capability check if any image payload present
-  const hasImageContent = state.messages.some(msg =>
-    (Array.isArray(msg.content) && msg.content.some(part => (part as any).type === 'image_url')) ||
-    (!!msg.attachments && msg.attachments.some(att => att.kind === 'image'))
-  );
-  if (hasImageContent) {
-    const supportsVision = await isVisionModel(model, baseURL, apiKey);
-    if (!supportsVision) {
-      throw new Error(
-        `Model ${model} does not support vision capabilities. Please use a vision-capable model like gpt-4o, claude-3-5-sonnet, or gemini-1.5-pro.`
-      );
-    }
   }
 
   const systemMessage: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
