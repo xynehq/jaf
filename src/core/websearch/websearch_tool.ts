@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Tool } from '../types.js';
 import { withErrorHandling } from '../tool-results.js';
+import { mask_PII } from './pii-masking.js';
 
 /**
  * Zod schema for validating individual search results
@@ -138,10 +139,16 @@ export const webSearchTool: Tool<WebSearchArgs, any> = {
   execute: withErrorHandling<WebSearchArgs, { results: SearchResult[] }, any>('websearch', async args => {
     const { hostedWebServerUrl, apiKey, query } = args;
     
+    console.log(`[Websearch] Raw Query is: ${query}`);
+
+    // Mask PII in the query before logging or processing
+    const maskedQuery = mask_PII(query);
+    console.log(`[Websearch] Masked Query is: ${maskedQuery}`);
+
     // Construct the search URL
     const baseUrl = hostedWebServerUrl.replace(/\/$/, ''); // Remove trailing slash if present
     const searchUrl = new URL(`${baseUrl}/search`);
-    searchUrl.searchParams.append('q', query);
+    searchUrl.searchParams.append('q', maskedQuery);
     searchUrl.searchParams.append('format', 'json');
     
     console.log(`[WebSearch] Making request to: ${searchUrl.toString()}`);
