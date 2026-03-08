@@ -1,0 +1,20 @@
+model_list:
+  - model_name: gpt-3.5-turbo
+    litellm_params:
+      model: openai/gpt-3.5-turbo
+      api_key: "sk-tFU2TNZFdZpESB3-qDmFRg"
+  
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: "sk-tFU2TNZFdZpESB3-qDmFRg"
+      
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: "sk-tFU2TNZFdZpESB3-qDmFRg"
+
+  - model_name: gemini-2.5-pro
+    litellm_params:
+      model: gemini/gemini-2.5-pro
+      api_key: "sk-tFU2TNZFdZpESB3-qDmFRg"
