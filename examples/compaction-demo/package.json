@@ -1,0 +1,20 @@
+{
+  "name": "jaf-compaction-demo",
+  "version": "1.0.0",
+  "description": "Core compaction demo for JAF",
+  "main": "index.ts",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@xynehq/jaf": "workspace:*",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

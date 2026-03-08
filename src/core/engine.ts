@@ -16,6 +16,7 @@ import {
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
 import { buildEffectiveGuardrails, executeInputGuardrailsParallel, executeInputGuardrailsSequential, executeOutputGuardrails } from './guardrails.js';
+import { appendMessagesWithLedger, maybeCompactStateBeforeTurn, rebuildStateWithLedger, shouldTrackTokens } from './compaction.js';
 import { safeConsole } from '../utils/logger.js';
 import { DEFAULT_CLARIFICATION_DESCRIPTION } from '../utils/constants.js';
 
@@ -328,10 +329,16 @@ async function tryResumePendingToolCalls<Ctx, Out>(
           .filter((it): it is Interruption<Ctx> => it !== undefined);
         if (interruptions.length > 0) {
           const nonInterruptedResults = toolResults.filter(r => !r.interruption);
+          const stateWithToolResults = appendMessagesWithLedger(
+            state,
+            nonInterruptedResults.map(result => result.message),
+            {
+              trackTokens: shouldTrackTokens(state, currentAgent),
+            }
+          );
           return {
             finalState: {
-              ...state,
-              messages: [...state.messages, ...nonInterruptedResults.map(r => r.message)],
+              ...stateWithToolResults,
               turnCount: state.turnCount,
             },
             outcome: {
@@ -346,12 +353,17 @@ async function tryResumePendingToolCalls<Ctx, Out>(
           data: { results: toolResults.map(r => r.message) }
         });
 
-        const nextState: RunState<Ctx> = {
-          ...state,
-          messages: [...state.messages, ...toolResults.map(r => r.message)],
-          turnCount: state.turnCount,
-          approvals: state.approvals ?? new Map(),
-        };
+        const nextState = appendMessagesWithLedger(
+          {
+            ...state,
+            turnCount: state.turnCount,
+            approvals: state.approvals ?? new Map(),
+          },
+          toolResults.map(result => result.message),
+          {
+            trackTokens: shouldTrackTokens(state, currentAgent),
+          }
+        );
         return await runInternal<Ctx, Out>(nextState, config);
       }
     }
@@ -491,6 +503,13 @@ async function runInternal<Ctx, Out>(
     tools: effectiveTools
   };
 
+  const turnNumber = state.turnCount + 1;
+  const compactionResult = await maybeCompactStateBeforeTurn(state, effectiveAgent, config, turnNumber);
+  if (!compactionResult.success) {
+    safeConsole.warn(`[JAF:COMPACTION] ${compactionResult.error}. Continuing without aborting the run.`);
+  }
+  state = compactionResult.state;
+
   safeConsole.log(`[JAF:ENGINE] Using agent: ${effectiveAgent.name}`);
   if (effectiveTools) {
     safeConsole.log(`[JAF:ENGINE] Available tools:`, effectiveTools.map(t => t.schema.name));
@@ -537,8 +556,7 @@ async function runInternal<Ctx, Out>(
       }
     };
   }
-  
-  const turnNumber = state.turnCount + 1;
+
   config.onEvent?.({ type: 'turn_start', data: { turn: turnNumber, agentName: currentAgent.name } });
 
   const llmCallData = {
@@ -898,7 +916,16 @@ async function runInternal<Ctx, Out>(
     });
   }
 
-  const newMessages = [...state.messages, assistantMessage];
+  const assistantMessageTokenEstimate = getCompletionTokenEstimate((llmResponse as any)?.usage);
+  const stateWithAssistantMessage = appendMessagesWithLedger(
+    state,
+    [assistantMessage],
+    {
+      trackTokens: shouldTrackTokens(state, effectiveAgent),
+      overrides: [assistantMessageTokenEstimate]
+    }
+  );
+  const newMessages = stateWithAssistantMessage.messages;
   const updatedTurnCount = state.turnCount + 1;
 
   if (llmResponse.message.tool_calls && llmResponse.message.tool_calls.length > 0) {
@@ -953,19 +980,28 @@ async function runInternal<Ctx, Out>(
         }
       }
       
-      const interruptedState = {
-        ...state,
-        messages: [...newMessages, ...completedToolResults.map(r => r.message)],
+      const interruptedState = appendMessagesWithLedger(
+        {
+          ...stateWithAssistantMessage,
+          turnCount: updatedTurnCount,
+          approvals: updatedApprovals,
+          clarifications: updatedClarifications,
+        },
+        completedToolResults.map(result => result.message),
+        {
+          trackTokens: shouldTrackTokens(stateWithAssistantMessage, effectiveAgent),
+        }
+      );
+      const interruptedStateWithTurn = {
+        ...interruptedState,
         turnCount: updatedTurnCount,
-        approvals: updatedApprovals,
-        clarifications: updatedClarifications,
       };
 
       if (config.memory?.autoStore && config.conversationId) {
         safeConsole.log(`[JAF:ENGINE] Storing conversation state due to interruption for ${config.conversationId}`);
         const stateForStorage = {
-          ...interruptedState,
-          messages: [...interruptedState.messages, ...approvalRequiredResults.map(r => r.message)]
+          ...interruptedStateWithTurn,
+          messages: [...interruptedStateWithTurn.messages, ...approvalRequiredResults.map(r => r.message)]
         };
         await storeConversationHistory(stateForStorage, config);
       }
@@ -973,12 +1009,12 @@ async function runInternal<Ctx, Out>(
       await runTurnEndHooks(config, {
         turn: turnNumber,
         agentName: currentAgent.name,
-        state: interruptedState,
+        state: interruptedStateWithTurn,
         lastAssistantMessage: assistantMessage
       });
 
       return {
-        finalState: interruptedState,
+        finalState: interruptedStateWithTurn,
         outcome: {
           status: 'interrupted',
           interruptions,
@@ -1003,7 +1039,10 @@ async function runInternal<Ctx, Out>(
             type: 'handoff_denied',
             data: { from: currentAgent.name, to: targetAgent, reason: `Agent ${currentAgent.name} cannot handoff to ${targetAgent}` }
           });
-          const failureState = { ...state, messages: newMessages, turnCount: updatedTurnCount };
+          const failureState = {
+            ...stateWithAssistantMessage,
+            turnCount: updatedTurnCount,
+          };
           await runTurnEndHooks(config, {
             turn: turnNumber,
             agentName: currentAgent.name,
@@ -1042,13 +1081,18 @@ async function runInternal<Ctx, Out>(
           }
         });
 
-        const nextState: RunState<Ctx> = {
-          ...state,
-          messages: [...cleanedNewMessages, ...toolResults.map(r => r.message)],
-          currentAgentName: targetAgent,
-          turnCount: updatedTurnCount,
-          approvals: state.approvals ?? new Map(),
-        };
+        const nextState = rebuildStateWithLedger(
+          {
+            ...stateWithAssistantMessage,
+            currentAgentName: targetAgent,
+            turnCount: updatedTurnCount,
+            approvals: state.approvals ?? new Map(),
+          },
+          [...cleanedNewMessages, ...toolResults.map(r => r.message)],
+          {
+            trackTokens: shouldTrackTokens(stateWithAssistantMessage, effectiveAgent),
+          }
+        );
         await runTurnEndHooks(config, {
           turn: turnNumber,
           agentName: currentAgent.name,
@@ -1074,12 +1118,17 @@ async function runInternal<Ctx, Out>(
       }
     });
 
-    const nextState: RunState<Ctx> = {
-      ...state,
-      messages: [...cleanedNewMessages, ...toolResults.map(r => r.message)],
-      turnCount: updatedTurnCount,
-      approvals: state.approvals ?? new Map(),
-    };
+    const nextState = rebuildStateWithLedger(
+      {
+        ...stateWithAssistantMessage,
+        turnCount: updatedTurnCount,
+        approvals: state.approvals ?? new Map(),
+      },
+      [...cleanedNewMessages, ...toolResults.map(r => r.message)],
+      {
+        trackTokens: shouldTrackTokens(stateWithAssistantMessage, effectiveAgent),
+      }
+    );
     await runTurnEndHooks(config, {
       turn: turnNumber,
       agentName: currentAgent.name,
@@ -1097,14 +1146,18 @@ async function runInternal<Ctx, Out>(
       
       if (!parseResult.success) {
         config.onEvent?.({ type: 'decode_error', data: { errors: parseResult.error.issues } });
+        const stateAfterAssistant = {
+          ...stateWithAssistantMessage,
+          turnCount: updatedTurnCount,
+        };
         await runTurnEndHooks(config, {
           turn: turnNumber,
           agentName: currentAgent.name,
-          state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+          state: stateAfterAssistant,
           lastAssistantMessage: assistantMessage
         });
         return {
-          finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+          finalState: stateAfterAssistant,
           outcome: {
             status: 'error',
             error: {
@@ -1134,14 +1187,18 @@ async function runInternal<Ctx, Out>(
         }
       }
       if (!outputGuardrailResult.isValid) {
+        const stateAfterAssistant = {
+          ...stateWithAssistantMessage,
+          turnCount: updatedTurnCount,
+        };
         await runTurnEndHooks(config, {
           turn: turnNumber,
           agentName: currentAgent.name,
-          state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+          state: stateAfterAssistant,
           lastAssistantMessage: assistantMessage
         });
         return {
-          finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+          finalState: stateAfterAssistant,
           outcome: {
             status: 'error',
             error: {
@@ -1154,15 +1211,19 @@ async function runInternal<Ctx, Out>(
 
       config.onEvent?.({ type: 'final_output', data: { output: parseResult.data } });
       // End of turn
+      const completedState = {
+        ...stateWithAssistantMessage,
+        turnCount: updatedTurnCount,
+      };
       await runTurnEndHooks(config, {
         turn: turnNumber,
         agentName: currentAgent.name,
-        state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+        state: completedState,
         lastAssistantMessage: assistantMessage
       });
 
       return {
-        finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+        finalState: completedState,
         outcome: {
           status: 'completed',
           output: parseResult.data as Out
@@ -1188,14 +1249,18 @@ async function runInternal<Ctx, Out>(
         }
       }
       if (!outputGuardrailResult.isValid) {
+        const stateAfterAssistant = {
+          ...stateWithAssistantMessage,
+          turnCount: updatedTurnCount,
+        };
         await runTurnEndHooks(config, {
           turn: turnNumber,
           agentName: currentAgent.name,
-          state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+          state: stateAfterAssistant,
           lastAssistantMessage: assistantMessage
         });
         return {
-          finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+          finalState: stateAfterAssistant,
           outcome: {
             status: 'error',
             error: {
@@ -1208,15 +1273,19 @@ async function runInternal<Ctx, Out>(
 
       config.onEvent?.({ type: 'final_output', data: { output: llmResponse.message.content } });
       // End of turn
+      const completedState = {
+        ...stateWithAssistantMessage,
+        turnCount: updatedTurnCount,
+      };
       await runTurnEndHooks(config, {
         turn: turnNumber,
         agentName: currentAgent.name,
-        state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+        state: completedState,
         lastAssistantMessage: assistantMessage
       });
 
       return {
-        finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+        finalState: completedState,
         outcome: {
           status: 'completed',
           output: llmResponse.message.content as Out
@@ -1228,13 +1297,13 @@ async function runInternal<Ctx, Out>(
   await runTurnEndHooks(config, {
     turn: turnNumber,
     agentName: currentAgent.name,
-    state: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+    state: { ...stateWithAssistantMessage, turnCount: updatedTurnCount },
     lastAssistantMessage: assistantMessage
   });
 
   safeConsole.error(`[JAF:ENGINE] No tool calls or content returned by model. LLMResponse: `, llmResponse);
   return {
-    finalState: { ...state, messages: newMessages, turnCount: updatedTurnCount },
+    finalState: { ...stateWithAssistantMessage, turnCount: updatedTurnCount },
     outcome: {
       status: 'error',
       error: {
@@ -1243,6 +1312,15 @@ async function runInternal<Ctx, Out>(
       }
     }
   };
+}
+
+function getCompletionTokenEstimate(usage: any): number | undefined {
+  const completionTokens = usage?.completion_tokens ?? usage?.completionTokens;
+  if (typeof completionTokens !== 'number' || !Number.isFinite(completionTokens) || completionTokens <= 0) {
+    return undefined;
+  }
+
+  return Math.ceil(completionTokens);
 }
 
 type ToolCallResult = {
@@ -1735,4 +1813,3 @@ async function storeConversationHistory<Ctx>(
 
   safeConsole.log(`[JAF:MEMORY] Stored ${messagesToStore.length} messages for conversation ${config.conversationId}`);
 }
-
