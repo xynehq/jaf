@@ -75,6 +75,15 @@ export type ModelConfig = {
   readonly reasoning?: ReasoningConfig;
 };
 
+export type CompactionConfig = {
+  readonly enabled: boolean;
+  readonly triggerPercentage?: number;
+  readonly doNotCompactSystemPrompt?: boolean;
+  readonly preserveLastAssistantMessage?: boolean;
+  readonly rules?: string;
+  readonly minCandidateMessages?: number;
+};
+
 export type Tool<A, Ctx> = {
   readonly schema: {
     readonly name: string;
@@ -139,6 +148,7 @@ export type Agent<Ctx, Out> = {
   readonly handoffs?: readonly string[];
   readonly modelConfig?: ModelConfig;
   readonly advancedConfig?: AdvancedConfig;
+  readonly compaction?: boolean | CompactionConfig;
 };
 
 export type Guardrail<I> = (
@@ -164,6 +174,13 @@ export enum InterruptionStatus {
   ApprovedAndExecuted = 'approved_and_executed'
 }
 
+export type TokenLedger = {
+  readonly messageTokenEstimates: readonly number[];
+  readonly totalMessageTokens: number;
+  readonly lastSystemPromptText?: string;
+  readonly lastSystemPromptTokens: number;
+};
+
 export type RunState<Ctx> = {
   readonly runId: RunId;
   readonly traceId: TraceId;
@@ -173,6 +190,7 @@ export type RunState<Ctx> = {
   readonly turnCount: number;
   readonly approvals?: ReadonlyMap<string, ApprovalValue>;
   readonly clarifications?: ReadonlyMap<string, string>;
+  readonly tokenLedger?: TokenLedger;
 };
 
 export type JAFError =
@@ -248,7 +266,9 @@ export type TraceEvent =
   | { type: 'turn_end'; data: { turn: number; agentName: string } }
   | { type: 'run_end'; data: { outcome: RunResult<any>['outcome']; finalState: RunState<any>; traceId: TraceId; runId: RunId; } }
   | { type: 'clarification_requested'; data: { clarificationId: string; question: string; options: readonly ClarificationOption[]; context?: any; } }
-  | { type: 'clarification_provided'; data: { clarificationId: string; selectedOption: ClarificationOption; selectedId: string; } };
+  | { type: 'clarification_provided'; data: { clarificationId: string; selectedOption: ClarificationOption; selectedId: string; } }
+  | { type: 'compaction_start'; data: { turn: number; agentName: string; thresholdTokens: number; currentInputTokens: number; compactableMessageCount: number; preservedMessageCount: number; usingOverrideProvider: boolean; model: string; } }
+  | { type: 'compaction_end'; data: { turn: number; agentName: string; status: 'success' | 'skipped' | 'failed'; thresholdTokens: number; beforeInputTokens: number; afterInputTokens?: number; compactedMessageCount: number; preservedMessageCount: number; summaryMessageTokens?: number; reason?: string; error?: string; model: string; } };
 
 /**
  * Helper type to extract event data by event type
@@ -419,6 +439,11 @@ export type CompletionStreamChunk = {
   readonly raw?: any;
 };
 
+export type ModelTokenLimits = {
+  readonly maxInputTokens: number;
+  readonly maxOutputTokens?: number;
+};
+
 export interface ModelProvider<Ctx> {
   isAiSdkProvider?: boolean;
   getCompletion: (
@@ -436,7 +461,17 @@ export interface ModelProvider<Ctx> {
     agent: Readonly<Agent<Ctx, any>>,
     config: Readonly<RunConfig<Ctx>>
   ) => AsyncGenerator<CompletionStreamChunk, void, unknown>;
+  getTokenLimits?: (
+    state: Readonly<RunState<Ctx>>,
+    agent: Readonly<Agent<Ctx, any>>,
+    config: Readonly<RunConfig<Ctx>>
+  ) => Promise<ModelTokenLimits | undefined> | ModelTokenLimits | undefined;
 }
+
+export type CompactionRuntimeConfig<Ctx> = {
+  readonly modelProvider?: ModelProvider<Ctx>;
+  readonly modelOverride?: string;
+};
 
 export type RunConfig<Ctx> = {
   readonly agentRegistry: ReadonlyMap<string, Agent<Ctx, any>>;
@@ -467,6 +502,7 @@ export type RunConfig<Ctx> = {
   readonly memory?: MemoryConfig;
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;
+  readonly compaction?: CompactionRuntimeConfig<Ctx>;
   readonly defaultFastModel?: string;
   readonly allowClarificationRequests?: boolean;
   readonly clarificationDescription?: string;
