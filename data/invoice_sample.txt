@@ -1,0 +1,68 @@
+ACME Corporation
+123 Business Ave, Suite 500
+New York, NY 10001
+Tel: +1-212-555-0100
+Email: billing@acmecorp.com
+Website: https://www.acmecorp.com
+
+INVOICE
+
+Invoice Number: INV-2024-10234
+Invoice Date: 01/15/2024
+Due Date: 02/14/2024
+
+Bill To:
+Global Tech Solutions
+456 Innovation Drive
+San Francisco, CA 94105
+Contact: purchasing@globaltechsolutions.com
+Phone: 415-555-0200
+
+Order Reference: ORD-GT-78901
+
+Line Items:
+1. Enterprise Software License (12 months)
+   SKU: SW-ENT-001
+   Quantity: 50
+   Unit Price: $299.00
+   Total: $14,950.00
+
+2. Professional Services - Implementation
+   SKU: PS-IMP-002
+   Hours: 40
+   Rate: $175.00/hour
+   Total: $7,000.00
+
+3. Training Package - Advanced
+   SKU: TR-ADV-003
+   Sessions: 5
+   Price per session: $1,200.00
+   Total: $6,000.00
+
+Subtotal: $27,950.00
+Tax (8.5%): $2,375.75
+Shipping: $0.00
+Total Due: $30,325.75
+
+Payment Terms: Net 30
+Late Payment Fee: 2% per month
+
+Payment Methods Accepted:
+- Wire Transfer to Account: 123-456-7890
+- Check payable to: ACME Corporation
+- Credit Card: Visit https://pay.acmecorp.com/invoice/INV-2024-10234
+
+For questions regarding this invoice, please contact:
+Email: ar@acmecorp.com
+Phone: +1-212-555-0101
+
+Additional Order IDs referenced:
+- Related maintenance contract: ORD-MC-45612
+- Previous invoice: INV-2024-09987
+- Credit memo applied: CM-2024-00234 (-$500.00)
+
+Tracking Information:
+Software delivery via email to: admin@globaltechsolutions.com
+Physical materials tracking: 1Z12345E0291980793
+
+Thank you for your business!
