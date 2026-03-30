@@ -1,6 +1,6 @@
 import type { Attachment } from '../core/types.js';
 
-const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024;
 const MAX_FILENAME_LENGTH = 255;
 const BASE64_SIZE_RATIO = 3 / 4;
 const MAX_FORMAT_LENGTH = 10;
