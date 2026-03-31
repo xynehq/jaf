@@ -27,6 +27,8 @@ const ALLOWED_DOCUMENT_MIME_TYPES = [
     "application/json",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.ms-powerpoint",
 ];
 
 // Validation helpers
