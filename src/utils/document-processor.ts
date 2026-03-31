@@ -1,5 +1,6 @@
 import type { Attachment } from '../core/types.js';
 import * as XLSX from 'xlsx';
+import * as CFB from 'cfb';
 import mammoth from 'mammoth';
 import Papa from 'papaparse';
 import yauzl from 'yauzl';
@@ -114,6 +115,12 @@ export async function extractDocumentContent(attachment: Attachment): Promise<Pr
 
     case 'application/json':
       return extractJsonContent(buffer);
+
+    case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+      return await extractPptxContent(buffer);
+
+    case 'application/vnd.ms-powerpoint':
+      return await extractPptContent(buffer);
 
     case 'application/zip':
       return await extractZipContent(buffer);
@@ -241,6 +248,152 @@ async function extractPdfContent(buffer: Buffer): Promise<ProcessedDocument> {
   }
 }
 
+
+async function extractPptxContent(buffer: Buffer): Promise<ProcessedDocument> {
+  return new Promise((resolve, reject) => {
+    yauzl.fromBuffer(buffer, { lazyEntries: true }, (err, zipfile) => {
+      if (err || !zipfile) {
+        reject(new DocumentProcessingError(`Failed to read PPTX file: ${err?.message || 'No zipfile'}`));
+        return;
+      }
+
+      const slides = new Map<number, string>();
+      let pendingStreams = 0;
+      let allEntriesRead = false;
+
+      function tryResolve() {
+        if (!allEntriesRead || pendingStreams > 0) return;
+        const sortedSlides = Array.from(slides.entries()).sort((a, b) => a[0] - b[0]);
+        let content = `PowerPoint Presentation:\nSlides: ${sortedSlides.length}\n\n`;
+        for (const [index, slideText] of sortedSlides) {
+          if (slideText.trim()) {
+            content += `Slide ${index}:\n${slideText}\n\n`;
+          }
+        }
+        resolve({
+          content: content.trim(),
+          metadata: { slides: sortedSlides.length }
+        });
+      }
+
+      zipfile.readEntry();
+
+      zipfile.on('entry', (entry) => {
+        const slideMatch = entry.fileName.match(/^ppt\/slides\/slide(\d+)\.xml$/);
+        if (slideMatch) {
+          const slideIndex = parseInt(slideMatch[1], 10);
+          pendingStreams++;
+          zipfile.openReadStream(entry, (streamErr, stream) => {
+            if (streamErr || !stream) {
+              pendingStreams--;
+              tryResolve();
+              zipfile.readEntry();
+              return;
+            }
+            const chunks: Buffer[] = [];
+            stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+            stream.on('end', () => {
+              const xml = Buffer.concat(chunks).toString('utf-8');
+              // Extract text from <a:t> elements (DrawingML text runs)
+              const textMatches = xml.match(/<a:t(?:\s[^>]*)?>([^<]*)<\/a:t>/g) || [];
+              const text = textMatches
+                .map(m => m.replace(/<[^>]+>/g, '').trim())
+                .filter(t => t.length > 0)
+                .join(' ');
+              slides.set(slideIndex, text);
+              pendingStreams--;
+              tryResolve();
+            });
+            stream.on('error', () => {
+              pendingStreams--;
+              tryResolve();
+            });
+            zipfile.readEntry();
+          });
+        } else {
+          zipfile.readEntry();
+        }
+      });
+
+      zipfile.on('end', () => {
+        allEntriesRead = true;
+        tryResolve();
+      });
+
+      zipfile.on('error', (error) => {
+        reject(new DocumentProcessingError(`Failed to process PPTX file: ${error.message}`, error));
+      });
+    });
+  });
+}
+
+
+async function extractPptContent(buffer: Buffer): Promise<ProcessedDocument> {
+  try {
+    const cfbData = CFB.read(new Uint8Array(buffer), { type: 'array' });
+
+    const pptStream = CFB.find(cfbData, 'PowerPoint Document');
+    if (!pptStream || !pptStream.content) {
+      throw new DocumentProcessingError('PowerPoint Document stream not found in PPT file');
+    }
+
+    const data = Buffer.from(pptStream.content as Uint8Array);
+    const texts: string[] = [];
+
+    // PPT records are hierarchical: version nibble 0xF marks a container whose
+    // data payload contains more records. We must recurse to find text atoms
+    // (TextCharsAtom 0x0FA0 / TextBytesAtom 0x0FA8) at any nesting depth.
+    // MAX_PPT_DEPTH guards against malformed/malicious files with arbitrarily
+    // deep nesting that would otherwise cause a stack overflow. Real PPT files
+    // never exceed ~15 levels; 64 is a safe ceiling.
+    const MAX_PPT_DEPTH = 64;
+
+    const parseRecords = (buf: Buffer, start: number, end: number, depth: number): void => {
+      if (depth > MAX_PPT_DEPTH) return;
+
+      let offset = start;
+      while (offset + 8 <= end) {
+        const verAndInstance = buf.readUInt16LE(offset);
+        const recVer = verAndInstance & 0x0f;
+        const recType = buf.readUInt16LE(offset + 2);
+        const recLen = buf.readUInt32LE(offset + 4);
+        const dataStart = offset + 8;
+        const dataEnd = dataStart + recLen;
+
+        if (dataEnd > end) break;
+
+        if (recType === 0x0fa0) {
+          // TextCharsAtom: UTF-16LE
+          const text = buf.subarray(dataStart, dataEnd).toString('utf16le').trim();
+          if (text) texts.push(text);
+        } else if (recType === 0x0fa8) {
+          // TextBytesAtom: Latin-1
+          const text = buf.subarray(dataStart, dataEnd).toString('latin1').trim();
+          if (text) texts.push(text);
+        } else if (recVer === 0xf) {
+          // Container record — recurse into its children
+          parseRecords(buf, dataStart, dataEnd, depth + 1);
+        }
+
+        offset = dataEnd;
+      }
+    }
+
+    parseRecords(data, 0, data.length, 0);
+
+    const content = texts.length > 0
+      ? `PowerPoint Presentation:\n\n${texts.join('\n')}`
+      : 'No text content found in PPT file';
+
+    return { content, metadata: { slides: texts.length } };
+  } catch (error) {
+    throw new DocumentProcessingError(
+      `Failed to extract PPT content: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      error
+    );
+  }
+}
+
 async function extractZipContent(buffer: Buffer): Promise<ProcessedDocument> {
   return new Promise((resolve, reject) => {
     yauzl.fromBuffer(buffer, { lazyEntries: true }, (err, zipfile) => {
@@ -295,7 +448,6 @@ async function extractZipContent(buffer: Buffer): Promise<ProcessedDocument> {
 export function isDocumentSupported(mimeType?: string): boolean {
   if (!mimeType) return false;
 
-  // Matches Python JAF supported types exactly
   const supportedTypes = [
     'application/pdf',
     'text/plain',
@@ -304,7 +456,9 @@ export function isDocumentSupported(mimeType?: string): boolean {
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/json',
-    'application/zip'
+    'application/zip',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-powerpoint'
   ];
 
   return supportedTypes.includes(mimeType.toLowerCase());
@@ -330,6 +484,10 @@ export function getDocumentDescription(mimeType?: string): string {
       return 'JSON data structure';
     case 'application/zip':
       return 'ZIP file listing';
+    case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+      return 'PowerPoint presentation slide text';
+    case 'application/vnd.ms-powerpoint':
+      return 'PowerPoint presentation text (legacy .ppt format)';
     default:
       return 'document content';
   }
