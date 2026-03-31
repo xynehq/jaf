@@ -348,7 +348,7 @@ async function extractPptContent(buffer: Buffer): Promise<ProcessedDocument> {
     // never exceed ~15 levels; 64 is a safe ceiling.
     const MAX_PPT_DEPTH = 64;
 
-    function parseRecords(buf: Buffer, start: number, end: number, depth: number): void {
+    const parseRecords = (buf: Buffer, start: number, end: number, depth: number): void => {
       if (depth > MAX_PPT_DEPTH) return;
 
       let offset = start;
