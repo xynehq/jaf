@@ -44,6 +44,22 @@ type CompactStateFailure<Ctx> = {
 
 export type CompactStateResult<Ctx> = CompactStateSuccess<Ctx> | CompactStateFailure<Ctx>;
 
+function logCompaction(message: string, metadata?: Record<string, unknown>) {
+  safeConsole.log(`[JAF:COMPACTION] ${message}`, metadata ?? {});
+}
+
+function warnCompaction(message: string, metadata?: Record<string, unknown>) {
+  safeConsole.warn(`[JAF:COMPACTION] ${message}`, metadata ?? {});
+}
+
+function countMessagesByRole(messages: readonly Message[]) {
+  return messages.reduce<Record<string, number>>((counts, message) => {
+    counts[message.role] = (counts[message.role] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+// Normalizes the agent compaction setting into a fully-populated runtime config.
 export function normalizeCompactionConfig(
   config?: boolean | CompactionConfig
 ): ResolvedCompactionConfig | null {
@@ -75,10 +91,12 @@ export function normalizeCompactionConfig(
   };
 }
 
+// Decides whether this run should maintain token estimates for compaction-aware state updates.
 export function shouldTrackTokens<Ctx>(state: Readonly<RunState<Ctx>>, agent: Readonly<Agent<Ctx, any>>): boolean {
   return Boolean(state.tokenLedger) || Boolean(normalizeCompactionConfig(agent.compaction));
 }
 
+// Approximates text token usage with a lightweight characters-to-tokens heuristic.
 export function estimateTextTokens(text: string): number {
   if (!text) {
     return 0;
@@ -86,10 +104,20 @@ export function estimateTextTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+// Ensures the state has a token ledger aligned with the current message list.
 export function ensureTokenLedger<Ctx>(state: Readonly<RunState<Ctx>>): RunState<Ctx> {
   if (state.tokenLedger && state.tokenLedger.messageTokenEstimates.length === state.messages.length) {
+    logCompaction('Reusing existing token ledger.', {
+      messageCount: state.messages.length,
+      totalMessageTokens: state.tokenLedger.totalMessageTokens,
+    });
     return state as RunState<Ctx>;
   }
+
+  logCompaction('Rebuilding token ledger to match messages.', {
+    messageCount: state.messages.length,
+    existingLedgerMessageCount: state.tokenLedger?.messageTokenEstimates.length ?? 0,
+  });
 
   return {
     ...state,
@@ -97,6 +125,7 @@ export function ensureTokenLedger<Ctx>(state: Readonly<RunState<Ctx>>): RunState
   };
 }
 
+// Appends messages and updates the token ledger when token tracking is active.
 export function appendMessagesWithLedger<Ctx>(
   state: Readonly<RunState<Ctx>>,
   messagesToAppend: readonly Message[],
@@ -107,6 +136,11 @@ export function appendMessagesWithLedger<Ctx>(
 ): RunState<Ctx> {
   const nextMessages = [...state.messages, ...messagesToAppend];
   if (!(options?.trackTokens || state.tokenLedger)) {
+    logCompaction('Appending messages without token tracking.', {
+      previousMessageCount: state.messages.length,
+      appendedMessageCount: messagesToAppend.length,
+      nextMessageCount: nextMessages.length,
+    });
     return {
       ...state,
       messages: nextMessages,
@@ -118,6 +152,14 @@ export function appendMessagesWithLedger<Ctx>(
   const appendedEstimates = messagesToAppend.map((message, index) =>
     options?.overrides?.[index] ?? estimateMessageTokens(message)
   );
+  logCompaction('Appending messages with token tracking.', {
+    previousMessageCount: state.messages.length,
+    appendedMessageCount: messagesToAppend.length,
+    nextMessageCount: nextMessages.length,
+    appendedTokenEstimates: appendedEstimates,
+    appendedTokenTotal: sum(appendedEstimates),
+    previousTotalMessageTokens: baseLedger.totalMessageTokens,
+  });
 
   return {
     ...stateWithLedger,
@@ -130,6 +172,7 @@ export function appendMessagesWithLedger<Ctx>(
   };
 }
 
+// Replaces the message list and rebuilds the ledger so token estimates stay consistent.
 export function rebuildStateWithLedger<Ctx>(
   state: Readonly<RunState<Ctx>>,
   messages: readonly Message[],
@@ -139,11 +182,21 @@ export function rebuildStateWithLedger<Ctx>(
   }
 ): RunState<Ctx> {
   if (!(options?.trackTokens || state.tokenLedger)) {
+    logCompaction('Rebuilding state without token tracking.', {
+      previousMessageCount: state.messages.length,
+      nextMessageCount: messages.length,
+    });
     return {
       ...state,
       messages,
     };
   }
+
+  logCompaction('Rebuilding state with token tracking.', {
+    previousMessageCount: state.messages.length,
+    nextMessageCount: messages.length,
+    overrideCount: options?.overrides?.length ?? 0,
+  });
 
   return {
     ...state,
@@ -152,6 +205,7 @@ export function rebuildStateWithLedger<Ctx>(
   };
 }
 
+// Refreshes cached system prompt token estimates and returns the current total input size.
 export function syncSystemPromptLedger<Ctx>(
   state: Readonly<RunState<Ctx>>,
   agent: Readonly<Agent<Ctx, any>>
@@ -165,6 +219,12 @@ export function syncSystemPromptLedger<Ctx>(
   const systemPromptText = agent.instructions(stateWithLedger);
 
   if (currentLedger.lastSystemPromptText === systemPromptText) {
+    logCompaction('System prompt ledger is already in sync.', {
+      messageCount: stateWithLedger.messages.length,
+      totalMessageTokens: currentLedger.totalMessageTokens,
+      systemPromptTokens: currentLedger.lastSystemPromptTokens,
+      inputTokens: currentLedger.totalMessageTokens + currentLedger.lastSystemPromptTokens,
+    });
     return {
       state: stateWithLedger,
       systemPromptText,
@@ -173,6 +233,12 @@ export function syncSystemPromptLedger<Ctx>(
   }
 
   const systemPromptTokens = estimateTextTokens(systemPromptText);
+  logCompaction('System prompt changed. Refreshing system prompt token estimate.', {
+    messageCount: stateWithLedger.messages.length,
+    previousSystemPromptTokens: currentLedger.lastSystemPromptTokens,
+    nextSystemPromptTokens: systemPromptTokens,
+    totalMessageTokens: currentLedger.totalMessageTokens,
+  });
   const nextState: RunState<Ctx> = {
     ...stateWithLedger,
     tokenLedger: {
@@ -189,6 +255,7 @@ export function syncSystemPromptLedger<Ctx>(
   };
 }
 
+// Compacts older transcript history before a turn when the estimated input exceeds the configured threshold.
 export async function maybeCompactStateBeforeTurn<Ctx>(
   state: Readonly<RunState<Ctx>>,
   agent: Readonly<Agent<Ctx, any>>,
@@ -196,7 +263,19 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
   turnNumber: number
 ): Promise<CompactStateResult<Ctx>> {
   const compactionConfig = normalizeCompactionConfig(agent.compaction);
+  logCompaction('Checking whether compaction should run at turn start.', {
+    turnNumber,
+    agentName: agent.name,
+    messageCount: state.messages.length,
+    messageRoles: countMessagesByRole(state.messages),
+    hasTokenLedger: Boolean(state.tokenLedger),
+    compactionEnabled: Boolean(compactionConfig),
+  });
   if (!compactionConfig) {
+    logCompaction('Compaction is disabled for this agent. Skipping check.', {
+      turnNumber,
+      agentName: agent.name,
+    });
     return {
       success: true,
       state: state as RunState<Ctx>,
@@ -206,10 +285,23 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
   const synced = syncSystemPromptLedger(state, agent);
   const stateWithLedger = synced.state;
   const currentInputTokens = synced.inputTokens;
+  logCompaction('Token counts computed for compaction check.', {
+    turnNumber,
+    agentName: agent.name,
+    messageCount: stateWithLedger.messages.length,
+    totalMessageTokens: stateWithLedger.tokenLedger?.totalMessageTokens ?? 0,
+    systemPromptTokens: stateWithLedger.tokenLedger?.lastSystemPromptTokens ?? 0,
+    currentInputTokens,
+  });
 
   const limits = await config.modelProvider.getTokenLimits?.(stateWithLedger, agent, config);
   const maxInputTokens = limits?.maxInputTokens;
   if (!Number.isFinite(maxInputTokens) || (maxInputTokens ?? 0) <= 0) {
+    warnCompaction('Main model provider did not return a valid maxInputTokens limit.', {
+      turnNumber,
+      agentName: agent.name,
+      reportedLimits: limits,
+    });
     return {
       success: false,
       state: stateWithLedger,
@@ -218,7 +310,22 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
   }
 
   const thresholdTokens = Math.floor((maxInputTokens as number) * compactionConfig.triggerPercentage);
+  logCompaction('Computed compaction threshold.', {
+    turnNumber,
+    agentName: agent.name,
+    maxInputTokens,
+    triggerPercentage: compactionConfig.triggerPercentage,
+    thresholdTokens,
+    currentInputTokens,
+  });
   if (currentInputTokens <= thresholdTokens) {
+    logCompaction('Current input is below compaction threshold. Skipping compaction.', {
+      turnNumber,
+      agentName: agent.name,
+      currentInputTokens,
+      thresholdTokens,
+      remainingHeadroom: thresholdTokens - currentInputTokens,
+    });
     return {
       success: true,
       state: stateWithLedger,
@@ -229,6 +336,25 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
   const compactedMessageCount = segments.compactableMessages.length;
   const preservedMessageCount = segments.preservedMessages.length;
   const { provider, model, usingOverrideProvider, error: compactionProviderError } = resolveCompactionRuntime(agent, config);
+  logCompaction('Compaction threshold exceeded. Prepared transcript segments.', {
+    turnNumber,
+    agentName: agent.name,
+    currentInputTokens,
+    thresholdTokens,
+    compactedMessageCount,
+    preservedMessageCount,
+    compactedRoles: countMessagesByRole(segments.compactableMessages),
+    preservedRoles: countMessagesByRole(segments.preservedMessages),
+    boundaryIndex: segments.boundaryIndex,
+  });
+  logCompaction('Resolved compaction runtime.', {
+    turnNumber,
+    agentName: agent.name,
+    model,
+    usingOverrideProvider,
+    providerResolved: Boolean(provider),
+    providerError: compactionProviderError,
+  });
 
   config.onEvent?.({
     type: 'compaction_start',
@@ -245,6 +371,15 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
   });
 
   if (compactedMessageCount < compactionConfig.minCandidateMessages) {
+    warnCompaction('Compaction threshold was exceeded, but too few messages were eligible.', {
+      turnNumber,
+      agentName: agent.name,
+      compactedMessageCount,
+      minCandidateMessages: compactionConfig.minCandidateMessages,
+      preservedMessageCount,
+      currentInputTokens,
+      thresholdTokens,
+    });
     config.onEvent?.({
       type: 'compaction_end',
       data: {
@@ -268,6 +403,13 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
   }
 
   if (compactionProviderError || !provider) {
+    warnCompaction('Compaction provider resolution failed.', {
+      turnNumber,
+      agentName: agent.name,
+      model,
+      usingOverrideProvider,
+      error: compactionProviderError || 'Compaction provider resolution failed.',
+    });
     config.onEvent?.({
       type: 'compaction_end',
       data: {
@@ -291,6 +433,13 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
   }
 
   try {
+    logCompaction('Invoking compaction provider.', {
+      turnNumber,
+      agentName: agent.name,
+      model,
+      compactedMessageCount,
+      preservedMessageCount,
+    });
     const compactionResponse = await provider.getCompletion(
       createCompactionState(stateWithLedger, segments, compactionConfig, synced.systemPromptText),
       createCompactionAgent(agent, model, compactionConfig.rules),
@@ -298,7 +447,19 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
     );
 
     const summaryText = getTextContent(compactionResponse.message?.content || '').trim();
+    logCompaction('Compaction provider returned a response.', {
+      turnNumber,
+      agentName: agent.name,
+      model,
+      summaryLength: summaryText.length,
+      usage: (compactionResponse as any)?.usage,
+    });
     if (!summaryText) {
+      warnCompaction('Compaction provider returned an empty summary.', {
+        turnNumber,
+        agentName: agent.name,
+        model,
+      });
       config.onEvent?.({
         type: 'compaction_end',
         data: {
@@ -328,6 +489,14 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
     const summaryMessageTokens = normalizeUsageTokens((compactionResponse as any)?.usage?.completion_tokens ?? (compactionResponse as any)?.usage?.completionTokens)
       ?? estimateMessageTokens(summaryMessage);
     const preservedOverrides = stateWithLedger.tokenLedger!.messageTokenEstimates.slice(segments.boundaryIndex);
+    logCompaction('Rebuilding transcript with compaction summary.', {
+      turnNumber,
+      agentName: agent.name,
+      summaryMessageTokens,
+      preservedOverrideCount: preservedOverrides.length,
+      previousMessageCount: stateWithLedger.messages.length,
+      nextMessageCount: 1 + segments.preservedMessages.length,
+    });
     const rebuiltState = rebuildStateWithLedger(
       stateWithLedger,
       [summaryMessage, ...segments.preservedMessages],
@@ -337,8 +506,24 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
       }
     );
     const syncedRebuiltState = syncSystemPromptLedger(rebuiltState, agent);
+    logCompaction('Recomputed token counts after rebuilding compacted transcript.', {
+      turnNumber,
+      agentName: agent.name,
+      rebuiltMessageCount: syncedRebuiltState.state.messages.length,
+      rebuiltTotalMessageTokens: syncedRebuiltState.state.tokenLedger?.totalMessageTokens ?? 0,
+      rebuiltInputTokens: syncedRebuiltState.inputTokens,
+      thresholdTokens,
+    });
 
     if (syncedRebuiltState.inputTokens > thresholdTokens) {
+      warnCompaction('Compaction completed, but rebuilt transcript still exceeds threshold.', {
+        turnNumber,
+        agentName: agent.name,
+        beforeInputTokens: currentInputTokens,
+        afterInputTokens: syncedRebuiltState.inputTokens,
+        thresholdTokens,
+        summaryMessageTokens,
+      });
       config.onEvent?.({
         type: 'compaction_end',
         data: {
@@ -379,9 +564,16 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
       },
     });
 
-    safeConsole.log(
-      `[JAF:COMPACTION] Compacted ${compactedMessageCount} messages into a summary for agent ${agent.name}. Input tokens ${currentInputTokens} -> ${syncedRebuiltState.inputTokens}.`
-    );
+    logCompaction('Compaction succeeded.', {
+      turnNumber,
+      agentName: agent.name,
+      compactedMessageCount,
+      preservedMessageCount,
+      beforeInputTokens: currentInputTokens,
+      afterInputTokens: syncedRebuiltState.inputTokens,
+      summaryMessageTokens,
+      model,
+    });
 
     return {
       success: true,
@@ -389,6 +581,14 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
     };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
+    warnCompaction('Compaction provider threw an error.', {
+      turnNumber,
+      agentName: agent.name,
+      model,
+      error: detail,
+      compactedMessageCount,
+      preservedMessageCount,
+    });
     config.onEvent?.({
       type: 'compaction_end',
       data: {
@@ -412,6 +612,7 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
   }
 }
 
+// Converts trigger percentages like 80 or 0.8 into a validated fraction with defaults.
 function normalizeTriggerPercentage(value?: number): number {
   if (value === undefined || !Number.isFinite(value)) {
     return DEFAULT_TRIGGER_PERCENTAGE;
@@ -428,6 +629,7 @@ function normalizeTriggerPercentage(value?: number): number {
   return value;
 }
 
+// Normalizes the minimum message count required before compaction can run.
 function normalizeMinCandidateMessages(value?: number): number {
   if (value === undefined || !Number.isFinite(value)) {
     return DEFAULT_MIN_CANDIDATE_MESSAGES;
@@ -436,25 +638,35 @@ function normalizeMinCandidateMessages(value?: number): number {
   return Math.max(1, Math.floor(value));
 }
 
+// Sums numeric token estimates into a single total.
 function sum(values: readonly number[]): number {
   return values.reduce((total, value) => total + value, 0);
 }
 
+// Builds a fresh token ledger for a message list, optionally reusing known estimates.
 function createTokenLedger(
   messages: readonly Message[],
   overrides?: readonly (number | undefined)[],
   seed?: Readonly<TokenLedger>
 ): TokenLedger {
   const messageTokenEstimates = messages.map((message, index) => overrides?.[index] ?? estimateMessageTokens(message));
+  const totalMessageTokens = sum(messageTokenEstimates);
+  logCompaction('Created token ledger snapshot.', {
+    messageCount: messages.length,
+    totalMessageTokens,
+    overrideCount: overrides?.filter(value => value !== undefined).length ?? 0,
+    messageRoles: countMessagesByRole(messages),
+  });
 
   return {
     messageTokenEstimates,
-    totalMessageTokens: sum(messageTokenEstimates),
+    totalMessageTokens,
     lastSystemPromptText: seed?.lastSystemPromptText,
     lastSystemPromptTokens: seed?.lastSystemPromptTokens ?? 0,
   };
 }
 
+// Estimates total tokens for a message, including content, tool metadata, and attachments.
 function estimateMessageTokens(message: Readonly<Message>): number {
   let total = estimateContentTokens(message.content);
 
@@ -473,6 +685,7 @@ function estimateMessageTokens(message: Readonly<Message>): number {
   return total;
 }
 
+// Estimates token usage for message content across plain text and structured content parts.
 function estimateContentTokens(content: Message['content']): number {
   if (typeof content === 'string') {
     return estimateTextTokens(content);
@@ -499,6 +712,8 @@ function estimateContentTokens(content: Message['content']): number {
   return estimateTextTokens(getTextContent(content));
 }
 
+// Estimates attachment token cost using fixed image cost, encoded payload size, or a placeholder fallback.
+// Note: estimates non-image attachment tokens from base64 size, but src/providers/model.ts does not send most documents as base64 to the model. It extracts text or falls back to a short placeholder. So compaction thresholds can be materially wrong for document-heavy chats.
 function estimateAttachmentTokens(attachment: NonNullable<Message['attachments']>[number]): number {
   if (attachment.kind === 'image') {
     return FIXED_IMAGE_TOKENS;
@@ -517,6 +732,7 @@ function estimateAttachmentTokens(attachment: NonNullable<Message['attachments']
   return estimateTextTokens(placeholder);
 }
 
+// Assigns the current fixed token estimate for image URLs and inline image data.
 function estimateImageUrlTokens(url: string): number {
   if (url.startsWith('data:')) {
     return FIXED_IMAGE_TOKENS;
@@ -524,11 +740,13 @@ function estimateImageUrlTokens(url: string): number {
   return FIXED_IMAGE_TOKENS;
 }
 
+// Converts a base64 payload length into an approximate token count after decoding overhead.
 function estimateEncodedTokens(encodedLength: number): number {
   const estimatedBytes = Math.max(0, Math.floor((encodedLength * 3) / 4 - BASE64_DECODE_OVERHEAD_BYTES));
   return Math.ceil(estimatedBytes / 4);
 }
 
+// Validates provider-reported usage values before reusing them as ledger entries.
 function normalizeUsageTokens(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
     return undefined;
@@ -537,19 +755,29 @@ function normalizeUsageTokens(value: unknown): number | undefined {
   return Math.ceil(value);
 }
 
+// Splits the transcript into the compactable prefix and the live suffix that must be preserved.
 function splitMessagesForCompaction(
   messages: readonly Message[],
   compactionConfig: ResolvedCompactionConfig
 ): CompactionSegments {
   const boundaryIndex = resolveCompactionBoundary(messages, compactionConfig);
-
-  return {
+  const segments = {
     boundaryIndex,
     compactableMessages: messages.slice(0, boundaryIndex),
     preservedMessages: messages.slice(boundaryIndex),
   };
+  logCompaction('Split transcript for compaction.', {
+    totalMessageCount: messages.length,
+    boundaryIndex,
+    compactableMessageCount: segments.compactableMessages.length,
+    preservedMessageCount: segments.preservedMessages.length,
+    preserveLastAssistantMessage: compactionConfig.preserveLastAssistantMessage,
+  });
+
+  return segments;
 }
 
+// Chooses the compaction cut-off so the recent conversational suffix remains intact.
 function resolveCompactionBoundary(
   messages: readonly Message[],
   compactionConfig: ResolvedCompactionConfig
@@ -577,9 +805,18 @@ function resolveCompactionBoundary(
     return 0;
   }
 
-  return Math.max(0, Math.min(boundaryIndex, messages.length));
+  const resolvedBoundary = Math.max(0, Math.min(boundaryIndex, messages.length));
+  logCompaction('Resolved compaction boundary.', {
+    totalMessageCount: messages.length,
+    lastUserIndex,
+    preserveLastAssistantMessage: compactionConfig.preserveLastAssistantMessage,
+    liveSuffixBoundary: liveBoundary,
+    resolvedBoundary,
+  });
+  return resolvedBoundary;
 }
 
+// Finds the earliest message that must remain because the tail contains live tool or clarification state.
 function findLiveSuffixBoundary(messages: readonly Message[]): number {
   const pendingToolCallBoundary = findPendingToolCallBoundary(messages);
   if (pendingToolCallBoundary >= 0) {
@@ -611,6 +848,7 @@ function findLiveSuffixBoundary(messages: readonly Message[]): number {
   return -1;
 }
 
+// Finds the assistant message where an unresolved tool call sequence begins.
 function findPendingToolCallBoundary(messages: readonly Message[]): number {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index];
@@ -627,6 +865,7 @@ function findPendingToolCallBoundary(messages: readonly Message[]): number {
   return -1;
 }
 
+// Checks whether a tool call already has a matching tool-result message later in the transcript.
 function hasMatchingToolResultAfter(messages: readonly Message[], assistantIndex: number, toolCallId: string): boolean {
   for (let index = assistantIndex + 1; index < messages.length; index++) {
     const message = messages[index];
@@ -638,6 +877,7 @@ function hasMatchingToolResultAfter(messages: readonly Message[], assistantIndex
   return false;
 }
 
+// Reads a serialized tool status from a tool message when the content is JSON-shaped.
 function tryReadToolStatus(message: Readonly<Message>): string | undefined {
   if (message.role !== 'tool') {
     return undefined;
@@ -651,6 +891,7 @@ function tryReadToolStatus(message: Readonly<Message>): string | undefined {
   }
 }
 
+// Returns the last index matching a predicate without relying on newer runtime helpers.
 function findLastIndex<T>(
   values: readonly T[],
   predicate: (value: T, index: number) => boolean
@@ -664,6 +905,7 @@ function findLastIndex<T>(
   return -1;
 }
 
+// Builds the one-message state sent to the compaction model.
 function createCompactionState<Ctx>(
   state: Readonly<RunState<Ctx>>,
   segments: Readonly<CompactionSegments>,
@@ -683,6 +925,7 @@ function createCompactionState<Ctx>(
   };
 }
 
+// Renders the compactable transcript into a plain-text prompt for the compaction model.
 function buildCompactionTranscript(
   messages: readonly Message[],
   systemPromptText: string,
@@ -705,6 +948,7 @@ function buildCompactionTranscript(
   return sections.join('\n\n');
 }
 
+// Serializes a single message into a compact, role-labelled text block.
 function formatMessageForCompaction(message: Readonly<Message>): string {
   const lines: string[] = [`[${message.role.toUpperCase()}]`];
   const body = describeMessageBody(message);
@@ -723,6 +967,7 @@ function formatMessageForCompaction(message: Readonly<Message>): string {
   return lines.join('\n');
 }
 
+// Extracts human-readable content from a message, including placeholders for non-text parts.
 function describeMessageBody(message: Readonly<Message>): string {
   const fragments: string[] = [];
 
@@ -758,6 +1003,7 @@ function describeMessageBody(message: Readonly<Message>): string {
   return fragments.join('\n');
 }
 
+// Creates the minimal agent definition used exclusively for the compaction LLM call.
 function createCompactionAgent<Ctx>(
   agent: Readonly<Agent<Ctx, any>>,
   model: string,
@@ -785,6 +1031,7 @@ function createCompactionAgent<Ctx>(
   };
 }
 
+// Derives the run config used for the compaction call, including any provider override.
 function createCompactionRunConfig<Ctx>(
   config: Readonly<RunConfig<Ctx>>,
   provider: ModelProvider<Ctx>,
@@ -797,6 +1044,7 @@ function createCompactionRunConfig<Ctx>(
   };
 }
 
+// Resolves which provider and model should execute the compaction request.
 function resolveCompactionRuntime<Ctx>(
   agent: Readonly<Agent<Ctx, any>>,
   config: Readonly<RunConfig<Ctx>>
@@ -811,6 +1059,10 @@ function resolveCompactionRuntime<Ctx>(
   const usingOverrideProvider = Boolean(config.compaction?.modelProvider && config.compaction.modelProvider !== config.modelProvider);
 
   if (!provider?.getCompletion) {
+    warnCompaction('Resolved compaction runtime without a usable provider.', {
+      model,
+      usingOverrideProvider,
+    });
     return {
       model,
       usingOverrideProvider,
@@ -819,6 +1071,10 @@ function resolveCompactionRuntime<Ctx>(
   }
 
   if (!model && !provider.isAiSdkProvider) {
+    warnCompaction('Resolved compaction runtime without a model.', {
+      usingOverrideProvider,
+      providerIsAiSdkProvider: Boolean(provider.isAiSdkProvider),
+    });
     return {
       provider,
       model,
@@ -827,6 +1083,11 @@ function resolveCompactionRuntime<Ctx>(
     };
   }
 
+  logCompaction('Resolved compaction runtime successfully.', {
+    model,
+    usingOverrideProvider,
+    providerIsAiSdkProvider: Boolean(provider.isAiSdkProvider),
+  });
   return {
     provider,
     model,
