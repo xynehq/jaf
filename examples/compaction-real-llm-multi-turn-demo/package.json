@@ -1,0 +1,22 @@
+{
+  "name": "jaf-compaction-real-llm-multi-turn-demo",
+  "version": "1.0.0",
+  "description": "Real multi-turn LLM compaction demo for JAF",
+  "main": "index.ts",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@xynehq/jaf": "workspace:*",
+    "dotenv": "^17.2.1",
+    "openai": "^4.0.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
