@@ -16,7 +16,7 @@ import {
 } from './types.js';
 import { setToolRuntime } from './tool-runtime.js';
 import { buildEffectiveGuardrails, executeInputGuardrailsParallel, executeInputGuardrailsSequential, executeOutputGuardrails } from './guardrails.js';
-import { safeConsole } from '../utils/logger.js';
+import { safeConsole, isVerboseLogging } from '../utils/logger.js';
 import { DEFAULT_CLARIFICATION_DESCRIPTION } from '../utils/constants.js';
 
 type ClarificationTriggerMarker = {
@@ -448,13 +448,15 @@ async function runInternal<Ctx, Out>(
      currentAgent.advancedConfig.guardrails.outputPrompt ||
      currentAgent.advancedConfig.guardrails.requireCitations));
 
-  safeConsole.log('[JAF:ENGINE] Debug guardrails setup:', {
-    agentName: currentAgent.name,
-    hasAdvancedConfig: !!currentAgent.advancedConfig,
-    hasAdvancedGuardrails,
-    initialInputGuardrails: config.initialInputGuardrails?.length || 0,
-    finalOutputGuardrails: config.finalOutputGuardrails?.length || 0
-  });
+  if (isVerboseLogging()) {
+    safeConsole.log('[JAF:ENGINE] Debug guardrails setup:', {
+      agentName: currentAgent.name,
+      hasAdvancedConfig: !!currentAgent.advancedConfig,
+      hasAdvancedGuardrails,
+      initialInputGuardrails: config.initialInputGuardrails?.length || 0,
+      finalOutputGuardrails: config.finalOutputGuardrails?.length || 0
+    });
+  }
 
   let effectiveInputGuardrails: Guardrail<string>[] = [];
   let effectiveOutputGuardrails: Guardrail<any>[] = [];
@@ -472,12 +474,14 @@ async function runInternal<Ctx, Out>(
     ? effectiveInputGuardrails
     : [];
 
-  safeConsole.log('[JAF:ENGINE] Input guardrails to run:', {
-    turnCount: state.turnCount,
-    effectiveInputLength: effectiveInputGuardrails.length,
-    inputGuardrailsToRunLength: inputGuardrailsToRun.length,
-    hasAdvancedGuardrails
-  });
+  if (isVerboseLogging()) {
+    safeConsole.log('[JAF:ENGINE] Input guardrails to run:', {
+      turnCount: state.turnCount,
+      effectiveInputLength: effectiveInputGuardrails.length,
+      inputGuardrailsToRunLength: inputGuardrailsToRun.length,
+      hasAdvancedGuardrails
+    });
+  }
 
   const effectiveTools = [
     ...(currentAgent.tools || [])
@@ -492,7 +496,7 @@ async function runInternal<Ctx, Out>(
   };
 
   safeConsole.log(`[JAF:ENGINE] Using agent: ${effectiveAgent.name}`);
-  if (effectiveTools) {
+  if (isVerboseLogging() && effectiveTools) {
     safeConsole.log(`[JAF:ENGINE] Available tools:`, effectiveTools.map(t => t.schema.name));
   }
 
@@ -596,7 +600,7 @@ async function runInternal<Ctx, Out>(
           };
         }
 
-        safeConsole.log(`✅ All input guardrails passed. Starting LLM call.`);
+        if (isVerboseLogging()) safeConsole.log(`✅ All input guardrails passed. Starting LLM call.`);
         llmResponse = await config.modelProvider.getCompletion(state, effectiveAgent, config);
       } else {
         const guardrailPromise = executeInputGuardrailsParallel(inputGuardrailsToRun, firstUserMessage, config);
@@ -630,10 +634,10 @@ async function runInternal<Ctx, Out>(
           };
         }
 
-        safeConsole.log(`✅ All input guardrails passed. Using LLM response.`);
+        if (isVerboseLogging()) safeConsole.log(`✅ All input guardrails passed. Using LLM response.`);
         }
       } else {
-        safeConsole.log('[JAF:ENGINE] Using LEGACY guardrails path with', inputGuardrailsToRun.length, 'guardrails');
+        if (isVerboseLogging()) safeConsole.log('[JAF:ENGINE] Using LEGACY guardrails path with', inputGuardrailsToRun.length, 'guardrails');
         for (const guardrail of inputGuardrailsToRun) {
           const result = await guardrail(getTextContent(firstUserMessage.content));
           if (!result.isValid) {
@@ -903,7 +907,9 @@ async function runInternal<Ctx, Out>(
 
   if (llmResponse.message.tool_calls && llmResponse.message.tool_calls.length > 0) {
     safeConsole.log(`[JAF:ENGINE] Processing ${llmResponse.message.tool_calls.length} tool calls`);
-    safeConsole.log(`[JAF:ENGINE] Tool calls:`, llmResponse.message.tool_calls);
+    if (isVerboseLogging()) {
+      safeConsole.log(`[JAF:ENGINE] Tool calls:`, llmResponse.message.tool_calls);
+    }
     
     try {
       const requests = llmResponse.message.tool_calls.map((tc: any) => ({
@@ -1436,9 +1442,11 @@ async function executeToolCalls<Ctx>(
           };
         }
 
-        safeConsole.log(`[JAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
-        safeConsole.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
-        safeConsole.log(`[JAF:ENGINE] Tool context:`, state.context);
+        if (isVerboseLogging()) {
+          safeConsole.log(`[JAF:ENGINE] About to execute tool: ${toolCall.function.name}`);
+          safeConsole.log(`[JAF:ENGINE] Tool args:`, parseResult.data);
+          safeConsole.log(`[JAF:ENGINE] Tool context:`, state.context);
+        }
 
         const contextWithAdditional = additionalContext
           ? { ...state.context, ...additionalContext }
@@ -1683,9 +1691,11 @@ async function loadConversationHistory<Ctx>(
   if (storedApprovals) {
     safeConsole.log(`[JAF:MEMORY] Loaded ${Object.keys(storedApprovals).length} approvals from memory`);
   }
-  safeConsole.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
-  safeConsole.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
-  safeConsole.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+  if (isVerboseLogging()) {
+    safeConsole.log(`[JAF:MEMORY] Memory messages:`, memoryMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+    safeConsole.log(`[JAF:MEMORY] New messages:`, initialState.messages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+    safeConsole.log(`[JAF:MEMORY] Combined messages (${combinedMessages.length} total):`, combinedMessages.map(m => ({ role: m.role, content: getTextContent(m.content)?.substring(0, 100) + '...' })));
+  }
   
   return {
     ...initialState,
