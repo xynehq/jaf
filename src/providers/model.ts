@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import tunnel from 'tunnel';
 import { ModelProvider, Message, MessageContentPart, getTextContent, type RunState, type Agent, type RunConfig } from '../core/types.js';
 import { extractDocumentContent, isDocumentSupported, getDocumentDescription } from '../utils/document-processor.js';
-import { safeConsole } from '../utils/logger.js';
+import { safeConsole, isVerboseLogging } from '../utils/logger.js';
 
 interface ProxyConfig {
   httpProxy?: string;
@@ -76,7 +76,11 @@ export const makeLiteLLMProvider = <Ctx>(
     async getCompletion(state, agent, config) {
       const { model, params } = await buildChatCompletionParams(state, agent, config);
 
-      safeConsole.log(`📞 Calling model: ${model} with params: ${JSON.stringify(params, null, 2)}`);
+      if (isVerboseLogging()) {
+        safeConsole.log(`📞 Calling model: ${model} with params: ${JSON.stringify(params, null, 2)}`);
+      } else {
+        safeConsole.log(`📞 Calling model: ${model} | messages: ${params.messages.length} | last: "${String(params.messages[params.messages.length - 1]?.content ?? '').slice(0, 120)}"`);
+      }
       try {
         const resp = await client.chat.completions.create(
           params as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
@@ -105,7 +109,11 @@ export const makeLiteLLMProvider = <Ctx>(
     async *getCompletionStream(state, agent, config) {
       const { model, params: baseParams } = await buildChatCompletionParams(state, agent, config);
 
-      safeConsole.log(`📡 Streaming model: ${model} with params: ${JSON.stringify(baseParams, null, 2)}`);
+      if (isVerboseLogging()) {
+        safeConsole.log(`📡 Streaming model: ${model} with params: ${JSON.stringify(baseParams, null, 2)}`);
+      } else {
+        safeConsole.log(`📡 Streaming model: ${model} | messages: ${baseParams.messages.length} | last: "${String(baseParams.messages[baseParams.messages.length - 1]?.content ?? '').slice(0, 120)}"`);
+      }
 
       // Enable streaming on request with usage reporting
       const streamParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {

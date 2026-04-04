@@ -57,6 +57,8 @@ if (process.env.LOG_LEVEL) {
   globalLogLevel = LogLevel[level as keyof typeof LogLevel] || LogLevel.INFO;
 }
 
+export const isVerboseLogging = (): boolean => process.env.JAF_DEBUG === 'true';
+
 if (process.env.NODE_ENV === 'test') {
   globalOutput = 'silent';
 } else if (process.env.NODE_ENV === 'production') {
