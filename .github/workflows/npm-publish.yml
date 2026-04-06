@@ -75,13 +75,13 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.version
         run: pnpm version ${{ github.event.inputs.version }} --no-git-tag-version
         
-      - name: Publish to npm
-        # When running on a release tag, Git is in a detached HEAD state.
-        # pnpm's default git checks enforce publishing from a branch (master|main),
-        # so we disable those checks for tagged releases.
-        run: pnpm publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+      # - name: Publish to npm
+      #   # When running on a release tag, Git is in a detached HEAD state.
+      #   # pnpm's default git checks enforce publishing from a branch (master|main),
+      #   # so we disable those checks for tagged releases.
+      #   run: pnpm publish --access public --no-git-checks
+      #   env:
+      #     NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
 
       - name: Publish to GitHub Packages
         run: pnpm publish --registry=https://npm.pkg.github.com --no-git-checks
