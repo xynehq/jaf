@@ -57,7 +57,15 @@ if (process.env.LOG_LEVEL) {
   globalLogLevel = LogLevel[level as keyof typeof LogLevel] || LogLevel.INFO;
 }
 
-export const isVerboseLogging = (): boolean => process.env.JAF_DEBUG === 'true';
+let jafVerbose = false;
+
+export const configureJAF = (config: { verbose?: boolean }): void => {
+  if (config.verbose !== undefined) {
+    jafVerbose = config.verbose;
+  }
+};
+
+export const isVerboseLogging = (): boolean => jafVerbose;
 
 if (process.env.NODE_ENV === 'test') {
   globalOutput = 'silent';

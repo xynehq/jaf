@@ -32,6 +32,7 @@ export * as Streaming from './streaming';
 
 // constants
 export * from './utils/constants';
+export { configureJAF } from './utils/logger';
 // ADK Layer - Functional Agent Development Kit
 // Re-export specific ADK modules to avoid conflicts
 export * as ADK from './adk';
