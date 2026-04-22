@@ -18,6 +18,13 @@ import { setToolRuntime } from './tool-runtime.js';
 import { buildEffectiveGuardrails, executeInputGuardrailsParallel, executeInputGuardrailsSequential, executeOutputGuardrails } from './guardrails.js';
 import { safeConsole, isVerboseLogging } from '../utils/logger.js';
 import { DEFAULT_CLARIFICATION_DESCRIPTION } from '../utils/constants.js';
+import {
+  shouldCompact,
+  compactState,
+  createCompactionEvent,
+  estimateTotalTokens,
+  resolveCompactionConfig
+} from './compaction.js';
 
 type ClarificationTriggerMarker = {
   readonly _clarification_trigger: true;
@@ -428,6 +435,27 @@ async function runInternal<Ctx, Out>(
       }
     };
   }
+
+  // Token-based compaction: check and trim if messages exceed limit
+  const compactionConfig = resolveCompactionConfig(config.compaction);
+  let compactionState = state;
+  
+  if (shouldCompact(state.messages, compactionConfig)) {
+    const currentTokens = estimateTotalTokens(state.messages);
+    safeConsole.log(`[JAF:ENGINE] Compaction triggered: ${currentTokens} tokens exceed ${compactionConfig.maxTokenLimit} limit`);
+
+    const { state: compactedState, result } = compactState(state, compactionConfig);
+    compactionState = compactedState;
+
+    safeConsole.log(`[JAF:ENGINE] Compaction complete: removed ${result.removedCount} messages, reduced from ${result.originalTokens} to ${result.compactedTokens} tokens`);
+
+    // Emit compaction event with proper conversationId
+    const conversationId = config.conversationId || (state.runId as string);
+    config.onEvent?.(createCompactionEvent(result, conversationId, state.traceId as string));
+  }
+
+  // Use compacted state for all subsequent operations
+  state = compactionState;
 
   const currentAgent = config.agentRegistry.get(state.currentAgentName);
   if (!currentAgent) {
@@ -1508,7 +1536,7 @@ async function executeToolCalls<Ctx>(
               toolResult = modifiedResult;
             }
           } catch (callbackError) {
-            console.error(`[JAF:ENGINE] Error in onAfterToolExecution callback for ${toolCall.function.name}:`, callbackError);
+            safeConsole.error(`[JAF:ENGINE] Error in onAfterToolExecution callback for ${toolCall.function.name}:`, callbackError);
             // Continue with original result if callback fails
           }
         }
