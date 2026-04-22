@@ -447,11 +447,15 @@ async function runInternal<Ctx, Out>(
 
     safeConsole.log(`[JAF:ENGINE] Compaction complete: removed ${result.removedCount} messages, reduced from ${result.originalTokens} to ${result.compactedTokens} tokens`);
 
-    // Emit compaction event
-    config.onEvent?.(createCompactionEvent(result, state.runId as string, state.traceId as string));
+    // Emit compaction event with proper conversationId
+    const conversationId = config.conversationId || (state.runId as string);
+    config.onEvent?.(createCompactionEvent(result, conversationId, state.traceId as string));
   }
 
-  const currentAgent = config.agentRegistry.get(compactionState.currentAgentName);
+  // Use compacted state for all subsequent operations
+  state = compactionState;
+
+  const currentAgent = config.agentRegistry.get(state.currentAgentName);
   if (!currentAgent) {
     return {
       finalState: state,

@@ -1,4 +1,4 @@
-import { Message, RunState, TraceEvent, getTextContent } from './types.js';
+import { Message, RunState, TraceEvent } from './types.js';
 
 /**
  * Configuration for token-based message compaction
@@ -79,20 +79,34 @@ export function shouldCompact(
 }
 
 /**
- * Identifies tool interaction groups (assistant with tool_calls + their tool results)
- * Returns a map of message indices to their group IDs
+ * Precomputed tool group info for efficient compaction
  */
-function identifyToolGroups(messages: readonly Message[]): Map<number, string> {
+interface ToolGroupInfo {
+  readonly groupId: string;
+  readonly indices: number[];
+  readonly tokens: number;
+}
+
+/**
+ * Precomputes tool interaction groups in a single pass (O(n))
+ * Returns ordered array of groups from earliest to latest
+ */
+function precomputeToolGroups(messages: readonly Message[]): ToolGroupInfo[] {
   const messageToGroup = new Map<number, string>();
   const pendingToolCalls = new Map<string, number>(); // tool_call_id -> assistant message index
+  const groupTokens = new Map<string, number>();
+  const groupIndices = new Map<string, number[]>();
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i];
+    const msgTokens = estimateMessageTokens(msg);
 
     if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
       // This is an assistant message initiating tool calls
       const groupId = `group_${i}`;
       messageToGroup.set(i, groupId);
+      groupIndices.set(groupId, [i]);
+      groupTokens.set(groupId, msgTokens);
 
       // Track all tool_call_ids from this assistant message
       for (const tc of msg.tool_calls) {
@@ -105,12 +119,29 @@ function identifyToolGroups(messages: readonly Message[]): Map<number, string> {
         const groupId = messageToGroup.get(assistantIndex);
         if (groupId) {
           messageToGroup.set(i, groupId);
+          groupIndices.get(groupId)!.push(i);
+          groupTokens.set(groupId, groupTokens.get(groupId)! + msgTokens);
         }
       }
     }
   }
 
-  return messageToGroup;
+  // Convert to ordered array (groups naturally ordered by assistant index)
+  const groups: ToolGroupInfo[] = [];
+  const seenGroups = new Set<string>();
+  for (let i = 0; i < messages.length; i++) {
+    const groupId = messageToGroup.get(i);
+    if (groupId && !seenGroups.has(groupId)) {
+      seenGroups.add(groupId);
+      groups.push({
+        groupId,
+        indices: groupIndices.get(groupId)!,
+        tokens: groupTokens.get(groupId)!
+      });
+    }
+  }
+
+  return groups;
 }
 
 /**
@@ -126,11 +157,10 @@ export function trimToolMessages(
   const removedMessages: Message[] = [];
   const preservedMessages: Message[] = [];
 
-  // Identify tool interaction groups
-  const toolGroups = identifyToolGroups(messages);
-
-  // Track which groups we've decided to remove
+  // Precompute tool groups in single pass (O(n))
+  const toolGroups = precomputeToolGroups(messages);
   const removedGroups = new Set<string>();
+  let nextGroupIndex = 0;
 
   // Scan from start
   for (let i = 0; i < messages.length; i++) {
@@ -142,43 +172,27 @@ export function trimToolMessages(
       continue;
     }
 
-    const groupId = toolGroups.get(i);
-
-    if (groupId) {
-      // This message is part of a tool interaction group
-      if (removedGroups.has(groupId)) {
-        // Already decided to remove this group, skip counting tokens again
-        removedMessages.push(msg);
-        continue;
-      }
-
-      // Calculate tokens for the entire group
-      let groupTokens = 0;
-      const groupIndices: number[] = [];
-
-      for (let j = i; j < messages.length; j++) {
-        if (toolGroups.get(j) === groupId) {
-          groupTokens += estimateMessageTokens(messages[j]);
-          groupIndices.push(j);
-        }
-      }
-
-      // Decide whether to remove this group
-      // Always remove complete groups from the start until under target
-      removedGroups.add(groupId);
-      for (const idx of groupIndices) {
+    // Check if this message is the start of the next removable group
+    const nextGroup = toolGroups[nextGroupIndex];
+    if (nextGroup && nextGroup.indices[0] === i && !removedGroups.has(nextGroup.groupId)) {
+      // Remove this complete group
+      removedGroups.add(nextGroup.groupId);
+      for (const idx of nextGroup.indices) {
         removedMessages.push(messages[idx]);
       }
-      currentTokens -= groupTokens;
-
-      // Skip ahead past this group (will be handled in subsequent iterations)
-      // Actually, we need to skip in the outer loop
-      const lastGroupIndex = Math.max(...groupIndices);
-      i = lastGroupIndex; // Will be incremented by the for loop
-    } else {
-      // Not a tool message - preserve it (user messages, plain assistant messages)
-      preservedMessages.push(msg);
+      currentTokens -= nextGroup.tokens;
+      i = nextGroup.indices[nextGroup.indices.length - 1]; // Skip to end of group
+      nextGroupIndex++;
+      continue;
     }
+
+    // If current message is part of an already-removed group, skip it
+    if (nextGroup && nextGroup.indices.includes(i) && removedGroups.has(nextGroup.groupId)) {
+      continue;
+    }
+
+    // Not a tool message or part of removed group - preserve it
+    preservedMessages.push(msg);
   }
 
   return {
