@@ -79,8 +79,43 @@ export function shouldCompact(
 }
 
 /**
- * Trim messages from the start, removing only tool messages (tool calls and results)
- * Stops when token count falls below target limit or no more tool messages to trim
+ * Identifies tool interaction groups (assistant with tool_calls + their tool results)
+ * Returns a map of message indices to their group IDs
+ */
+function identifyToolGroups(messages: readonly Message[]): Map<number, string> {
+  const messageToGroup = new Map<number, string>();
+  const pendingToolCalls = new Map<string, number>(); // tool_call_id -> assistant message index
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+
+    if (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0) {
+      // This is an assistant message initiating tool calls
+      const groupId = `group_${i}`;
+      messageToGroup.set(i, groupId);
+
+      // Track all tool_call_ids from this assistant message
+      for (const tc of msg.tool_calls) {
+        pendingToolCalls.set(tc.id, i);
+      }
+    } else if (msg.role === 'tool' && msg.tool_call_id) {
+      // This is a tool result - associate it with its originating assistant
+      const assistantIndex = pendingToolCalls.get(msg.tool_call_id);
+      if (assistantIndex !== undefined) {
+        const groupId = messageToGroup.get(assistantIndex);
+        if (groupId) {
+          messageToGroup.set(i, groupId);
+        }
+      }
+    }
+  }
+
+  return messageToGroup;
+}
+
+/**
+ * Trim messages from the start, removing complete tool interaction groups
+ * Stops when token count falls below target limit or no more complete groups to trim
  */
 export function trimToolMessages(
   messages: readonly Message[],
@@ -91,24 +126,57 @@ export function trimToolMessages(
   const removedMessages: Message[] = [];
   const preservedMessages: Message[] = [];
 
-  // Scan from start, skip user messages, remove tool messages until under limit
-  for (const msg of messages) {
+  // Identify tool interaction groups
+  const toolGroups = identifyToolGroups(messages);
+
+  // Track which groups we've decided to remove
+  const removedGroups = new Set<string>();
+
+  // Scan from start
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+
+    // If we're under the limit, preserve everything remaining
     if (currentTokens <= targetTokenLimit) {
       preservedMessages.push(msg);
       continue;
     }
 
-    // Only remove tool messages (role: 'tool' or assistant messages with tool_calls)
-    const isToolMessage =
-      msg.role === 'tool' ||
-      (msg.role === 'assistant' && msg.tool_calls && msg.tool_calls.length > 0);
+    const groupId = toolGroups.get(i);
 
-    if (isToolMessage) {
-      const msgTokens = estimateMessageTokens(msg);
-      removedMessages.push(msg);
-      currentTokens -= msgTokens;
+    if (groupId) {
+      // This message is part of a tool interaction group
+      if (removedGroups.has(groupId)) {
+        // Already decided to remove this group, skip counting tokens again
+        removedMessages.push(msg);
+        continue;
+      }
+
+      // Calculate tokens for the entire group
+      let groupTokens = 0;
+      const groupIndices: number[] = [];
+
+      for (let j = i; j < messages.length; j++) {
+        if (toolGroups.get(j) === groupId) {
+          groupTokens += estimateMessageTokens(messages[j]);
+          groupIndices.push(j);
+        }
+      }
+
+      // Decide whether to remove this group
+      // Always remove complete groups from the start until under target
+      removedGroups.add(groupId);
+      for (const idx of groupIndices) {
+        removedMessages.push(messages[idx]);
+      }
+      currentTokens -= groupTokens;
+
+      // Skip ahead past this group (will be handled in subsequent iterations)
+      // Actually, we need to skip in the outer loop
+      const lastGroupIndex = Math.max(...groupIndices);
+      i = lastGroupIndex; // Will be incremented by the for loop
     } else {
-      // Keep user messages and non-tool assistant messages
+      // Not a tool message - preserve it (user messages, plain assistant messages)
       preservedMessages.push(msg);
     }
   }
@@ -125,7 +193,7 @@ export function trimToolMessages(
 }
 
 /**
- * Compacts state by trimming tool messages from the start
+ * Compacts state by trimming tool interaction groups from the start
  * Returns updated state and compaction result
  */
 export function compactState<Ctx>(
@@ -141,9 +209,7 @@ export function compactState<Ctx>(
   return {
     state: {
       ...state,
-      messages: result.removedMessages.length > 0 ? state.messages.filter(
-        msg => !result.removedMessages.includes(msg)
-      ) : state.messages
+      messages: result.preservedMessages
     },
     result
   };
