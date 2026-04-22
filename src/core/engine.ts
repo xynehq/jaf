@@ -18,6 +18,13 @@ import { setToolRuntime } from './tool-runtime.js';
 import { buildEffectiveGuardrails, executeInputGuardrailsParallel, executeInputGuardrailsSequential, executeOutputGuardrails } from './guardrails.js';
 import { safeConsole, isVerboseLogging } from '../utils/logger.js';
 import { DEFAULT_CLARIFICATION_DESCRIPTION } from '../utils/constants.js';
+import {
+  shouldCompact,
+  compactState,
+  createCompactionEvent,
+  estimateTotalTokens,
+  defaultCompactionConfig
+} from './compaction.js';
 
 type ClarificationTriggerMarker = {
   readonly _clarification_trigger: true;
@@ -429,7 +436,22 @@ async function runInternal<Ctx, Out>(
     };
   }
 
-  const currentAgent = config.agentRegistry.get(state.currentAgentName);
+  // Token-based compaction: check and trim if messages exceed limit
+  let compactionState = state;
+  if (shouldCompact(state.messages, defaultCompactionConfig)) {
+    const currentTokens = estimateTotalTokens(state.messages);
+    safeConsole.log(`[JAF:ENGINE] Compaction triggered: ${currentTokens} tokens exceed ${defaultCompactionConfig.maxTokenLimit} limit`);
+
+    const { state: compactedState, result } = compactState(state, defaultCompactionConfig);
+    compactionState = compactedState;
+
+    safeConsole.log(`[JAF:ENGINE] Compaction complete: removed ${result.removedCount} messages, reduced from ${result.originalTokens} to ${result.compactedTokens} tokens`);
+
+    // Emit compaction event
+    config.onEvent?.(createCompactionEvent(result, state.runId as string, state.traceId as string));
+  }
+
+  const currentAgent = config.agentRegistry.get(compactionState.currentAgentName);
   if (!currentAgent) {
     return {
       finalState: state,
@@ -1508,7 +1530,7 @@ async function executeToolCalls<Ctx>(
               toolResult = modifiedResult;
             }
           } catch (callbackError) {
-            console.error(`[JAF:ENGINE] Error in onAfterToolExecution callback for ${toolCall.function.name}:`, callbackError);
+            safeConsole.error(`[JAF:ENGINE] Error in onAfterToolExecution callback for ${toolCall.function.name}:`, callbackError);
             // Continue with original result if callback fails
           }
         }

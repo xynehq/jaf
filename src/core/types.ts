@@ -242,7 +242,7 @@ export type TraceEvent =
   | { type: 'handoff_denied'; data: { from: string; to: string; reason: string } }
   | { type: 'guardrail_violation'; data: { stage: 'input' | 'output'; reason: string } }
   | { type: 'guardrail_check'; data: { guardrailName: string; content: any; isValid?: boolean; errorMessage?: string; } }
-  | { type: 'memory_operation'; data: { operation: 'load' | 'store'; conversationId: string; status: 'start' | 'end' | 'fail'; error?: string; messageCount?: number; } }
+  | { type: 'memory_operation'; data: { operation: 'load' | 'store' | 'compact'; conversationId: string; status: 'start' | 'end' | 'fail'; error?: string; messageCount?: number; metadata?: Record<string, any>; } }
   | { type: 'output_parse'; data: { content: string; status: 'start' | 'end' | 'fail'; parsedOutput?: any; error?: string; } }
   | { type: 'decode_error'; data: { errors: z.ZodIssue[] } }
   | { type: 'turn_end'; data: { turn: number; agentName: string } }
