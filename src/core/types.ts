@@ -438,6 +438,12 @@ export interface ModelProvider<Ctx> {
   ) => AsyncGenerator<CompletionStreamChunk, void, unknown>;
 }
 
+export interface CompactionConfig {
+  readonly enabled?: boolean;
+  readonly maxTokenLimit?: number;
+  readonly targetTokenLimit?: number;
+}
+
 export type RunConfig<Ctx> = {
   readonly agentRegistry: ReadonlyMap<string, Agent<Ctx, any>>;
   readonly modelProvider: ModelProvider<Ctx>;
@@ -470,6 +476,7 @@ export type RunConfig<Ctx> = {
   readonly defaultFastModel?: string;
   readonly allowClarificationRequests?: boolean;
   readonly clarificationDescription?: string;
+  readonly compaction?: CompactionConfig;
 };
 
 export const jsonParseLLMOutput = (text: string): any => {

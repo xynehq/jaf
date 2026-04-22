@@ -23,7 +23,7 @@ import {
   compactState,
   createCompactionEvent,
   estimateTotalTokens,
-  defaultCompactionConfig
+  resolveCompactionConfig
 } from './compaction.js';
 
 type ClarificationTriggerMarker = {
@@ -437,12 +437,14 @@ async function runInternal<Ctx, Out>(
   }
 
   // Token-based compaction: check and trim if messages exceed limit
+  const compactionConfig = resolveCompactionConfig(config.compaction);
   let compactionState = state;
-  if (shouldCompact(state.messages, defaultCompactionConfig)) {
+  
+  if (shouldCompact(state.messages, compactionConfig)) {
     const currentTokens = estimateTotalTokens(state.messages);
-    safeConsole.log(`[JAF:ENGINE] Compaction triggered: ${currentTokens} tokens exceed ${defaultCompactionConfig.maxTokenLimit} limit`);
+    safeConsole.log(`[JAF:ENGINE] Compaction triggered: ${currentTokens} tokens exceed ${compactionConfig.maxTokenLimit} limit`);
 
-    const { state: compactedState, result } = compactState(state, defaultCompactionConfig);
+    const { state: compactedState, result } = compactState(state, compactionConfig);
     compactionState = compactedState;
 
     safeConsole.log(`[JAF:ENGINE] Compaction complete: removed ${result.removedCount} messages, reduced from ${result.originalTokens} to ${result.compactedTokens} tokens`);

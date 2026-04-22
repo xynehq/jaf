@@ -1,22 +1,26 @@
-import { Message, RunState, TraceEvent } from './types.js';
+import { Message, RunState, TraceEvent, CompactionConfig } from './types.js';
 
 /**
- * Configuration for token-based message compaction
+ * Default compaction configuration values
  */
-export interface CompactionConfig {
-  readonly enabled: boolean;
-  readonly maxTokenLimit: number;      // Trigger compaction when token count exceeds this
-  readonly targetTokenLimit: number;   // Compact until token count is below this
-}
-
-/**
- * Default compaction configuration
- */
-export const defaultCompactionConfig: CompactionConfig = {
+const DEFAULT_COMPACTION_CONFIG: Required<CompactionConfig> = {
   enabled: true,
   maxTokenLimit: 180_000,
   targetTokenLimit: 100_000
 };
+
+/**
+ * Merges user-provided compaction config with defaults
+ */
+export function resolveCompactionConfig(
+  userConfig?: CompactionConfig
+): Required<CompactionConfig> {
+  return {
+    enabled: userConfig?.enabled ?? DEFAULT_COMPACTION_CONFIG.enabled,
+    maxTokenLimit: userConfig?.maxTokenLimit ?? DEFAULT_COMPACTION_CONFIG.maxTokenLimit,
+    targetTokenLimit: userConfig?.targetTokenLimit ?? DEFAULT_COMPACTION_CONFIG.targetTokenLimit
+  };
+}
 
 /**
  * Result of a compaction operation
@@ -71,7 +75,7 @@ export function estimateTotalTokens(messages: readonly Message[]): number {
  */
 export function shouldCompact(
   messages: readonly Message[],
-  config: Pick<CompactionConfig, 'enabled' | 'maxTokenLimit'>
+  config: Required<Pick<CompactionConfig, 'enabled' | 'maxTokenLimit'>>
 ): boolean {
   if (!config.enabled) return false;
   const tokens = estimateTotalTokens(messages);
@@ -212,7 +216,7 @@ export function trimToolMessages(
  */
 export function compactState<Ctx>(
   state: RunState<Ctx>,
-  config: Pick<CompactionConfig, 'targetTokenLimit'>
+  config: Required<Pick<CompactionConfig, 'targetTokenLimit'>>
 ): { readonly state: RunState<Ctx>; readonly result: CompactionResult } {
   const result = trimToolMessages(state.messages, config.targetTokenLimit);
 
