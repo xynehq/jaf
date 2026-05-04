@@ -431,7 +431,7 @@ async function buildChatMessageWithAttachments(
   return base as OpenAI.Chat.Completions.ChatCompletionMessageParam;
 }
 
-function zodSchemaToJsonSchema(zodSchema: any): any {
+export function zodSchemaToJsonSchema(zodSchema: any): any {
   if (zodSchema._def?.typeName === 'ZodObject') {
     const properties: Record<string, any> = {};
     const required: string[] = [];
