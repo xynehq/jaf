@@ -291,10 +291,8 @@ function streamSafeCleanContent(text: string): string {
   let safeEnd = text.length;
   let searchFrom = 0;
 
-  while (true) {
-    const toolStart = text.indexOf(TOOL_CALL_PREFIX, searchFrom);
-    if (toolStart === -1) break;
-
+  let toolStart = text.indexOf(TOOL_CALL_PREFIX, searchFrom);
+  while (toolStart !== -1) {
     const toolEnd = text.indexOf('</tool_call>', toolStart);
     if (toolEnd === -1) {
       safeEnd = toolStart;
@@ -302,6 +300,7 @@ function streamSafeCleanContent(text: string): string {
     }
 
     searchFrom = toolEnd + '</tool_call>'.length;
+    toolStart = text.indexOf(TOOL_CALL_PREFIX, searchFrom);
   }
 
   const heldPrefixLength = safeEnd === text.length ? partialToolCallPrefixLength(text) : 0;
