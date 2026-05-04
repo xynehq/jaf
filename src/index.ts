@@ -7,6 +7,7 @@ export * from './core/agent-as-tool';
 export * from './core/websearch';
 
 export * from './providers/model';
+export * from './providers/generic-openai';
 // export * from './providers/mcp'; // Commented out for test compatibility
 
 export * from './policies/validation';
