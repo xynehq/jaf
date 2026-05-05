@@ -21,10 +21,27 @@ import {
 import { safeConsole, isVerboseLogging } from '../utils/logger.js';
 import { zodSchemaToJsonSchema } from './schema.js';
 
-export interface GenericOpenAIProviderOptions {
+export interface GenericOpenAIRequestContext<Ctx> {
+  readonly state: Readonly<RunState<Ctx>>;
+  readonly agent: Readonly<Agent<Ctx, any>>;
+  readonly config: Readonly<RunConfig<Ctx>>;
+  readonly model: string;
+}
+
+export interface GenericOpenAIProviderOptions<Ctx = unknown> {
   readonly baseURL?: string;
   readonly defaultHeaders?: Readonly<Record<string, string>>;
   readonly timeoutMs?: number;
+  readonly schemaConverter?: (schema: unknown) => Record<string, unknown>;
+  readonly customizeRequestBody?: (
+    body: Record<string, unknown>,
+    context: GenericOpenAIRequestContext<Ctx>,
+  ) => Record<string, unknown> | void;
+  readonly getAbortSignal?: (
+    state: Readonly<RunState<Ctx>>,
+    agent: Readonly<Agent<Ctx, any>>,
+    config: Readonly<RunConfig<Ctx>>,
+  ) => AbortSignal | undefined;
 }
 
 type ParsedResponse = {
@@ -76,14 +93,21 @@ function parseParameterValue(rawValue: string): unknown {
   return value;
 }
 
-function generateToolCallId(name: string, params: Record<string, unknown>): string {
+function generateToolCallId(
+  name: string,
+  params: Record<string, unknown>,
+  occurrenceIndex = 0,
+): string {
   const payload = JSON.stringify({ name, params });
   const hash = createHash('sha256').update(payload).digest('hex').slice(0, 10);
-  return `call_${name}_${hash}`;
+  return occurrenceIndex > 0
+    ? `call_${name}_${hash}_${occurrenceIndex + 1}`
+    : `call_${name}_${hash}`;
 }
 
 export function parseXmlToolCalls(text: string): ToolCall[] {
   const toolCalls: ToolCall[] = [];
+  const occurrenceCounts = new Map<string, number>();
 
   for (const toolMatch of text.matchAll(TOOL_CALL_PARSE_REGEX)) {
     const functionName = toolMatch[1];
@@ -94,8 +118,12 @@ export function parseXmlToolCalls(text: string): ToolCall[] {
       params[paramMatch[1]] = parseParameterValue(paramMatch[2]);
     }
 
+    const signature = JSON.stringify({ functionName, params });
+    const occurrenceIndex = occurrenceCounts.get(signature) ?? 0;
+    occurrenceCounts.set(signature, occurrenceIndex + 1);
+
     toolCalls.push({
-      id: generateToolCallId(functionName, params),
+      id: generateToolCallId(functionName, params, occurrenceIndex),
       type: 'function',
       function: {
         name: functionName,
@@ -150,10 +178,18 @@ function parseFullResponse(json: any): ParsedResponse {
   };
 }
 
+function convertUserContent(content: Message['content']): unknown {
+  if (Array.isArray(content)) {
+    return content;
+  }
+
+  return getTextContent(content);
+}
+
 function convertMessage(message: Message): Record<string, unknown> {
   switch (message.role) {
     case 'user':
-      return { role: 'user', content: getTextContent(message.content) };
+      return { role: 'user', content: convertUserContent(message.content) };
     case 'assistant': {
       const converted: Record<string, unknown> = {
         role: 'assistant',
@@ -173,7 +209,10 @@ function convertMessage(message: Message): Record<string, unknown> {
   }
 }
 
-function buildResponseFormat(agent: Readonly<Agent<any, any>>): Record<string, unknown> | undefined {
+function buildResponseFormat(
+  agent: Readonly<Agent<any, any>>,
+  schemaConverter: (schema: unknown) => Record<string, unknown>,
+): Record<string, unknown> | undefined {
   if (!agent.outputCodec) return undefined;
 
   return {
@@ -181,7 +220,7 @@ function buildResponseFormat(agent: Readonly<Agent<any, any>>): Record<string, u
     json_schema: {
       name: agent.name.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 64) || 'jaf_output',
       strict: true,
-      schema: zodSchemaToJsonSchema(agent.outputCodec),
+      schema: schemaConverter(agent.outputCodec),
     },
   };
 }
@@ -190,6 +229,7 @@ function buildRequestBody<Ctx>(
   state: Readonly<RunState<Ctx>>,
   agent: Readonly<Agent<Ctx, any>>,
   config: Readonly<RunConfig<Ctx>>,
+  schemaConverter: (schema: unknown) => Record<string, unknown>,
 ): { readonly model: string; readonly body: Record<string, unknown> } {
   const model = agent.modelConfig?.name ?? config.modelOverride;
   if (!model) {
@@ -201,7 +241,7 @@ function buildRequestBody<Ctx>(
     function: {
       name: tool.schema.name,
       description: tool.schema.description,
-      parameters: zodSchemaToJsonSchema(tool.schema.parameters),
+      parameters: schemaConverter(tool.schema.parameters),
     },
   }));
 
@@ -218,7 +258,7 @@ function buildRequestBody<Ctx>(
     max_tokens: agent.modelConfig?.maxTokens,
     tools: tools && tools.length > 0 ? tools : undefined,
     tool_choice: tools && tools.length > 0 && isAfterToolCall ? 'auto' : undefined,
-    response_format: buildResponseFormat(agent),
+    response_format: buildResponseFormat(agent, schemaConverter),
   };
 
   if (agent.modelConfig?.reasoning?.effort) {
@@ -226,6 +266,41 @@ function buildRequestBody<Ctx>(
   }
 
   return { model, body };
+}
+
+function createRequestSignal(timeoutMs: number, externalSignal?: AbortSignal): {
+  readonly signal: AbortSignal;
+  readonly cleanup: () => void;
+} {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  if (externalSignal?.aborted) {
+    controller.abort();
+  }
+
+  const abortFromExternal = () => controller.abort();
+  externalSignal?.addEventListener('abort', abortFromExternal, { once: true });
+
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timeout);
+      externalSignal?.removeEventListener('abort', abortFromExternal);
+    },
+  };
+}
+
+function customizeBody<Ctx>(
+  body: Record<string, unknown>,
+  context: GenericOpenAIRequestContext<Ctx>,
+  customizer?: GenericOpenAIProviderOptions<Ctx>['customizeRequestBody'],
+): Record<string, unknown> {
+  if (!customizer) {
+    return body;
+  }
+
+  return customizer(body, context) ?? body;
 }
 
 async function* parseSseStream(response: Response): AsyncGenerator<any, void, unknown> {
@@ -358,10 +433,11 @@ function finalizeStreamChunks(options: FinalizeStreamOptions): Array<CompletionS
 
 export const makeGenericOpenAIProvider = <Ctx>(
   apiKey: string,
-  options: GenericOpenAIProviderOptions = {},
+  options: GenericOpenAIProviderOptions<Ctx> = {},
 ): ModelProvider<Ctx> => {
   const baseURL = (options.baseURL ?? 'https://api.openai.com/v1').replace(/\/+$/, '');
   const timeoutMs = options.timeoutMs ?? 120_000;
+  const schemaConverter = options.schemaConverter ?? zodSchemaToJsonSchema;
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
@@ -370,7 +446,13 @@ export const makeGenericOpenAIProvider = <Ctx>(
 
   return {
     async getCompletion(state, agent, config) {
-      const { model, body } = buildRequestBody(state, agent, config);
+      const built = buildRequestBody(state, agent, config, schemaConverter);
+      const model = built.model;
+      const body = customizeBody(
+        built.body,
+        { state, agent, config, model },
+        options.customizeRequestBody,
+      );
 
       if (isVerboseLogging()) {
         safeConsole.log(`[JAF:GENERIC] Calling model: ${model} with body: ${JSON.stringify(body, null, 2)}`);
@@ -381,15 +463,17 @@ export const makeGenericOpenAIProvider = <Ctx>(
         );
       }
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const requestSignal = createRequestSignal(
+        timeoutMs,
+        options.getAbortSignal?.(state, agent, config),
+      );
 
       try {
         const response = await fetch(`${baseURL}/chat/completions`, {
           method: 'POST',
           headers,
           body: JSON.stringify(body),
-          signal: controller.signal,
+          signal: requestSignal.signal,
         });
 
         if (!response.ok) {
@@ -414,12 +498,18 @@ export const makeGenericOpenAIProvider = <Ctx>(
           thinking: parsed.thinking,
         };
       } finally {
-        clearTimeout(timeout);
+        requestSignal.cleanup();
       }
     },
 
     async *getCompletionStream(state, agent, config) {
-      const { model, body } = buildRequestBody(state, agent, config);
+      const built = buildRequestBody(state, agent, config, schemaConverter);
+      const model = built.model;
+      const body = customizeBody(
+        built.body,
+        { state, agent, config, model },
+        options.customizeRequestBody,
+      );
       body.stream = true;
       body.stream_options = { include_usage: true };
 
@@ -432,8 +522,10 @@ export const makeGenericOpenAIProvider = <Ctx>(
         );
       }
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const requestSignal = createRequestSignal(
+        timeoutMs,
+        options.getAbortSignal?.(state, agent, config),
+      );
       let response: Response;
 
       try {
@@ -441,10 +533,10 @@ export const makeGenericOpenAIProvider = <Ctx>(
           method: 'POST',
           headers,
           body: JSON.stringify(body),
-          signal: controller.signal,
+          signal: requestSignal.signal,
         });
       } catch (error) {
-        clearTimeout(timeout);
+        requestSignal.cleanup();
         safeConsole.error(`[JAF:GENERIC] getCompletionStream failed for model=${model}`, {
           message: error instanceof Error ? error.message : String(error),
         });
@@ -452,7 +544,7 @@ export const makeGenericOpenAIProvider = <Ctx>(
       }
 
       if (!response.ok) {
-        clearTimeout(timeout);
+        requestSignal.cleanup();
         const errorBody = await response.text().catch(() => 'unknown');
         throw new Error(`GenericOpenAI API error ${response.status}: ${errorBody}`);
       }
@@ -541,7 +633,7 @@ export const makeGenericOpenAIProvider = <Ctx>(
           }
         }
       } finally {
-        clearTimeout(timeout);
+        requestSignal.cleanup();
       }
     },
   };

@@ -132,6 +132,20 @@ describe('parseXmlToolCalls', () => {
 
     expect(parseXmlToolCalls(text)[0].id).toBe(parseXmlToolCalls(text)[0].id);
   });
+
+  it('assigns unique deterministic IDs to duplicate identical tool calls', () => {
+    const text = `
+<tool_call><function=search><parameter=q>test</parameter></function></tool_call>
+<tool_call><function=search><parameter=q>test</parameter></function></tool_call>`;
+
+    const firstParse = parseXmlToolCalls(text);
+    const secondParse = parseXmlToolCalls(text);
+
+    expect(firstParse).toHaveLength(2);
+    expect(firstParse[0].id).not.toBe(firstParse[1].id);
+    expect(firstParse[0].id).toBe(secondParse[0].id);
+    expect(firstParse[1].id).toBe(secondParse[1].id);
+  });
 });
 
 describe('stripXmlToolCalls', () => {
@@ -354,6 +368,261 @@ describe('makeGenericOpenAIProvider', () => {
         properties: { query: { type: 'string' } },
         required: ['query'],
       });
+    });
+
+    it('allows custom schema conversion and request body customization', async () => {
+      mockFetch({
+        id: 'chatcmpl-custom',
+        model: 'rewritten-model',
+        choices: [{ message: { role: 'assistant', content: 'Done.' } }],
+      });
+
+      const schemaConverter = jest.fn(() => ({
+        type: 'object',
+        properties: { custom: { type: 'string' } },
+      }));
+
+      const provider = makeGenericOpenAIProvider('test-key', {
+        baseURL: 'https://test.api/v1',
+        schemaConverter,
+        customizeRequestBody: (body, context) => ({
+          ...body,
+          model: `rewritten-${context.model}`,
+          parallel_tool_calls: false,
+        }),
+      });
+
+      await provider.getCompletion(makeState(), makeAgent(), makeConfig(provider));
+
+      const [, options] = (global.fetch as MockedFetch).mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect(body.model).toBe('rewritten-nemotron-3-120b-a12b-bf16');
+      expect(body.parallel_tool_calls).toBe(false);
+      expect(body.tools[0].function.parameters).toEqual({
+        type: 'object',
+        properties: { custom: { type: 'string' } },
+      });
+      expect(schemaConverter).toHaveBeenCalledTimes(1);
+    });
+
+    it('preserves OpenAI-compatible content parts on user messages', async () => {
+      mockFetch({
+        id: 'chatcmpl-multimodal',
+        model: 'nemotron-3-120b-a12b-bf16',
+        choices: [{ message: { role: 'assistant', content: 'Saw it.' } }],
+      });
+
+      const state: RunState<Record<string, never>> = {
+        ...makeState(),
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Describe this image' },
+              { type: 'image_url', image_url: { url: 'data:image/png;base64,abc' } },
+            ],
+          },
+        ],
+      };
+
+      const provider = makeGenericOpenAIProvider('test-key', { baseURL: 'https://test.api/v1' });
+      await provider.getCompletion(state, makeAgent(), makeConfig(provider));
+
+      const [, options] = (global.fetch as MockedFetch).mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect(body.messages[1]).toEqual({
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Describe this image' },
+          { type: 'image_url', image_url: { url: 'data:image/png;base64,abc' } },
+        ],
+      });
+    });
+
+    it('preserves synthetic assistant tool context before the first model call', async () => {
+      mockFetch({
+        id: 'chatcmpl-synthetic-context',
+        model: 'nemotron-3-120b-a12b-bf16',
+        choices: [{ message: { role: 'assistant', content: 'Continuing from seeded context.' } }],
+      });
+
+      const state: RunState<Record<string, never>> = {
+        ...makeState(),
+        messages: [
+          { role: 'user', content: 'Continue the seeded workflow.' },
+          {
+            role: 'assistant',
+            content: '',
+            tool_calls: [
+              {
+                id: 'call_seed_1',
+                type: 'function',
+                function: {
+                  name: 'searchGlobal',
+                  arguments: '{"query":"seeded search"}',
+                },
+              },
+            ],
+          },
+          {
+            role: 'tool',
+            content: '{"status":"executed","result":"seed result"}',
+            tool_call_id: 'call_seed_1',
+          },
+        ],
+      };
+
+      const provider = makeGenericOpenAIProvider('test-key', { baseURL: 'https://test.api/v1' });
+      await provider.getCompletion(state, makeAgent(), makeConfig(provider));
+
+      const [, options] = (global.fetch as MockedFetch).mock.calls[0];
+      const body = JSON.parse(options.body);
+
+      expect(body.messages).toEqual([
+        { role: 'system', content: 'You are a test agent.' },
+        { role: 'user', content: 'Continue the seeded workflow.' },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            {
+              id: 'call_seed_1',
+              type: 'function',
+              function: {
+                name: 'searchGlobal',
+                arguments: '{"query":"seeded search"}',
+              },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          content: '{"status":"executed","result":"seed result"}',
+          tool_call_id: 'call_seed_1',
+        },
+      ]);
+      expect(body.tool_choice).toBe('auto');
+    });
+
+    it('converts complex nested tool schemas into OpenAI-compatible parameters', async () => {
+      mockFetch({
+        id: 'chatcmpl-complex-schema',
+        model: 'nemotron-3-120b-a12b-bf16',
+        choices: [{ message: { role: 'assistant', content: 'Done.' } }],
+      });
+
+      const complexAgent: Agent<Record<string, never>, string> = {
+        name: 'ComplexAgent',
+        instructions: () => 'Use the nested tool schema.',
+        tools: [
+          {
+            schema: {
+              name: 'complexTool',
+              description: 'A complex nested tool',
+              parameters: z.object({
+                merchantId: z.string(),
+                mode: z.enum(['fast', 'deep']),
+                filters: z.array(z.object({
+                  field: z.string(),
+                  values: z.array(z.string()),
+                })),
+                options: z.object({
+                  dryRun: z.boolean(),
+                  thresholds: z.object({
+                    minScore: z.number(),
+                    maxResults: z.number().optional(),
+                  }),
+                }),
+                metadata: z.record(z.string()).optional(),
+              }),
+            },
+            execute: async () => 'ok',
+          },
+        ],
+        modelConfig: { name: 'nemotron-3-120b-a12b-bf16' },
+      };
+
+      const provider = makeGenericOpenAIProvider('test-key', { baseURL: 'https://test.api/v1' });
+      const config: RunConfig<Record<string, never>> = {
+        agentRegistry: new Map([[complexAgent.name, complexAgent]]),
+        modelProvider: provider,
+      };
+
+      await provider.getCompletion(makeState(), complexAgent, config);
+
+      const [, options] = (global.fetch as MockedFetch).mock.calls[0];
+      const body = JSON.parse(options.body);
+
+      expect(body.tools[0].function.parameters).toEqual({
+        type: 'object',
+        properties: {
+          merchantId: { type: 'string' },
+          mode: { type: 'string', enum: ['fast', 'deep'] },
+          filters: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                field: { type: 'string' },
+                values: {
+                  type: 'array',
+                  items: { type: 'string' },
+                },
+              },
+              required: ['field', 'values'],
+              additionalProperties: false,
+            },
+          },
+          options: {
+            type: 'object',
+            properties: {
+              dryRun: { type: 'boolean' },
+              thresholds: {
+                type: 'object',
+                properties: {
+                  minScore: { type: 'number' },
+                  maxResults: { type: 'number' },
+                },
+                required: ['minScore'],
+                additionalProperties: false,
+              },
+            },
+            required: ['dryRun', 'thresholds'],
+            additionalProperties: false,
+          },
+          metadata: {
+            type: 'object',
+            additionalProperties: { type: 'string' },
+          },
+        },
+        required: ['merchantId', 'mode', 'filters', 'options'],
+        additionalProperties: false,
+      });
+    });
+
+    it('uses an external abort signal for requests', async () => {
+      const controller = new AbortController();
+      global.fetch = jest.fn(
+        async (_url: string | URL | Request, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(new Error('aborted by external signal'));
+            });
+            controller.abort();
+          }),
+      );
+
+      const provider = makeGenericOpenAIProvider('test-key', {
+        baseURL: 'https://test.api/v1',
+        getAbortSignal: () => controller.signal,
+      });
+
+      await expect(provider.getCompletion(makeState(), makeAgent(), makeConfig(provider)))
+        .rejects
+        .toThrow('aborted by external signal');
+
+      const [, options] = (global.fetch as MockedFetch).mock.calls[0];
+      expect(options.signal?.aborted).toBe(true);
     });
 
     it('throws on non-OK responses', async () => {
