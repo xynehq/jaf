@@ -3,6 +3,7 @@
 
 export * from './model';
 export * from './mcp';
+export * from './generic-openai';
 export {
   createAiSdkProvider,
   type AiSdkFunctionTool,
@@ -11,4 +12,3 @@ export {
   type AiSdkChatResponse,
   type AiSdkClient,
 } from './ai-sdk';
-
