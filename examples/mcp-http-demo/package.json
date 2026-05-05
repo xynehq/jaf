@@ -11,7 +11,7 @@
     "dev:server": "tsx --watch run-server.ts"
   },
   "dependencies": {
-    "@xynehq/jaf": "workspace:*",
+    "@juspay-xyne-jaf/jaf": "workspace:*",
     "dotenv": "^17.2.1"
   },
   "devDependencies": {

@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "dotenv": "^17.2.1",
-    "@xynehq/jaf": "workspace:*"
+    "@juspay-xyne-jaf/jaf": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

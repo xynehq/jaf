@@ -11,7 +11,7 @@ import {
   generateTraceId,
   makeLiteLLMProvider,
   ConsoleTraceCollector,
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 type DemoCtx = { userId: string };
 

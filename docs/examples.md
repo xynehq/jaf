@@ -567,7 +567,7 @@ A return URL is a web address where users are redirected after completing an act
 
 ```typescript
 import { z } from 'zod';
-import { Tool, ToolResponse, ToolErrorCodes, withErrorHandling } from '@xynehq/jaf';
+import { Tool, ToolResponse, ToolErrorCodes, withErrorHandling } from '@juspay-xyne-jaf/jaf';
 
 const myTool: Tool<{ input: string }, MyContext> = {
   schema: {
@@ -606,7 +606,7 @@ const myTool: Tool<{ input: string }, MyContext> = {
 #### Tool with Validation Policies
 
 ```typescript
-import { withValidation, createPathValidator, composeValidations } from '@xynehq/jaf';
+import { withValidation, createPathValidator, composeValidations } from '@juspay-xyne-jaf/jaf';
 
 // Create validators
 const pathValidator = createPathValidator(['/safe', '/public']);
@@ -629,7 +629,7 @@ const secureFileTool = withValidation(baseFileTool, combinedValidator);
 #### Agent Handoff Implementation
 
 ```typescript
-import { handoffTool, Agent } from '@xynehq/jaf';
+import { handoffTool, Agent } from '@juspay-xyne-jaf/jaf';
 
 const triageAgent: Agent<Context, { agentName: string }> = {
   name: 'TriageAgent',
@@ -667,7 +667,7 @@ const workflowConfig: RunConfig<MyContext> = {
 #### Custom Memory Provider
 
 ```typescript
-import { MemoryProvider, ConversationMemory, Result } from '@xynehq/jaf';
+import { MemoryProvider, ConversationMemory, Result } from '@juspay-xyne-jaf/jaf';
 
 class CustomMemoryProvider implements MemoryProvider {
   async storeMessages(
@@ -731,7 +731,7 @@ const prodMemoryConfig = {
 #### Custom Trace Collector
 
 ```typescript
-import { TraceEvent, ConsoleTraceCollector } from '@xynehq/jaf';
+import { TraceEvent, ConsoleTraceCollector } from '@juspay-xyne-jaf/jaf';
 
 class CustomTraceCollector {
   constructor(private logLevel: 'debug' | 'info' | 'warn' | 'error' = 'info') {}
@@ -775,7 +775,7 @@ class CustomTraceCollector {
 #### Error Handling Strategies
 
 ```typescript
-import { JAFErrorHandler, RunResult } from '@xynehq/jaf';
+import { JAFErrorHandler, RunResult } from '@juspay-xyne-jaf/jaf';
 
 async function handleRunResult<T>(result: RunResult<T>): Promise<T> {
   if (result.outcome.status === 'completed') {
@@ -815,7 +815,7 @@ async function handleRunResult<T>(result: RunResult<T>): Promise<T> {
 #### Content Filtering
 
 ```typescript
-import { Guardrail, createContentFilter, createRateLimiter } from '@xynehq/jaf';
+import { Guardrail, createContentFilter, createRateLimiter } from '@juspay-xyne-jaf/jaf';
 
 const contentFilter: Guardrail<string> = createContentFilter({
   blockedWords: ['spam', 'abuse'],
@@ -866,7 +866,7 @@ const customGuardrail: Guardrail<string> = async (input: string) => {
 #### Setting Up MCP Tools
 
 ```typescript
-import { makeMCPClient, mcpToolToJAFTool } from '@xynehq/jaf';
+import { makeMCPClient, mcpToolToJAFTool } from '@juspay-xyne-jaf/jaf';
 
 // Connect to MCP server
 const mcpClient = await makeMCPClient('python', ['-m', 'mcp_server']);
@@ -892,7 +892,7 @@ const mcpAgent: Agent<MyContext, string> = {
 You can connect to a remote MCP server that implements the Streamable HTTP transport with SSE. For example, the Cloudflare Docs MCP server:
 
 ```typescript
-import { makeMCPClientSSE } from '@xynehq/jaf'
+import { makeMCPClientSSE } from '@juspay-xyne-jaf/jaf'
 
 const endpoint = 'https://docs.mcp.cloudflare.com/sse'
 const mcpClient = await makeMCPClientSSE(endpoint)
@@ -908,7 +908,7 @@ See a runnable demo in `examples/mcp-sse-demo/` that lists all available tools f
 For production MCP servers that need session management, authentication, and bidirectional communication, use the full Streamable HTTP transport:
 
 ```typescript
-import { makeMCPClientHTTP } from '@xynehq/jaf'
+import { makeMCPClientHTTP } from '@juspay-xyne-jaf/jaf'
 
 const endpoint = 'https://your-mcp-server.com/mcp'
 const mcpClient = await makeMCPClientHTTP(endpoint, {

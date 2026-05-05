@@ -7,8 +7,8 @@ import {
   type RunConfig,
   type Agent,
   makeLiteLLMProvider,
-} from '@xynehq/jaf';
-import { mathTool } from '@xynehq/jaf/tools';
+} from '@juspay-xyne-jaf/jaf';
+import { mathTool } from '@juspay-xyne-jaf/jaf/tools';
 
 type Ctx = Record<string, never>;
 

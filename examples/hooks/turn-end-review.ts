@@ -10,7 +10,7 @@ import {
   type RunConfig,
   type RunState,
   type Message
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 type ReviewContext = {
   reviewNotes: string[];

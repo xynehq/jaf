@@ -39,7 +39,7 @@ From repo root:
 
 ```bash
 pnpm -w install
-pnpm -w build  # ensure @xynehq/jaf exports are up-to-date
+pnpm -w build  # ensure @juspay-xyne-jaf/jaf exports are up-to-date
 ```
 
 ## Setup

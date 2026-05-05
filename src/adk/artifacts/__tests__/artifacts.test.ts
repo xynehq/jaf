@@ -269,9 +269,17 @@ describe('Artifact Storage System', () => {
         expect(retrieved?.value).toEqual(testValue);
       } catch (error) {
         // Skip test if PostgreSQL connection fails (e.g., in CI)
-        if (error instanceof Error && 
-            (error.message.includes('ECONNREFUSED') || 
-             error.message.includes('connect ECONNREFUSED'))) {
+        // pg-pool can throw AggregateError or a plain Error depending on version
+        const isConnRefused = (e: unknown): boolean => {
+          if (e instanceof AggregateError) return e.errors.some(isConnRefused);
+          if (e instanceof Error) {
+            return (e as NodeJS.ErrnoException).code === 'ECONNREFUSED' ||
+              e.message.includes('ECONNREFUSED') ||
+              e.message.includes('connect ECONNREFUSED');
+          }
+          return false;
+        };
+        if (isConnRefused(error)) {
           console.log('Skipping PostgreSQL test - Connection failed (expected in CI)');
           return;
         }

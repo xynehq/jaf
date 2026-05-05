@@ -18,8 +18,8 @@ import {
   Agent,
   RunConfig,
   createSimpleMemoryProvider
-} from '@xynehq/jaf';
-import { createAiSdkProvider } from '@xynehq/jaf/providers';
+} from '@juspay-xyne-jaf/jaf';
+import { createAiSdkProvider } from '@juspay-xyne-jaf/jaf/providers';
 import { z } from 'zod';
 
 if (!process.env.OPENAI_API_KEY) {

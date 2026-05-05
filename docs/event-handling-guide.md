@@ -26,7 +26,7 @@ JAF emits events throughout the agent execution lifecycle. All events follow a d
 Handle raw `TraceEvent` discriminated unions for maximum flexibility:
 
 ```typescript
-import { run, type TraceEvent, type RunConfig } from '@xynehq/jaf';
+import { run, type TraceEvent, type RunConfig } from '@juspay-xyne-jaf/jaf';
 
 const config: RunConfig<MyContext> = {
   // ... other config
@@ -54,7 +54,7 @@ const config: RunConfig<MyContext> = {
 Use the `EventData` helper type for type-safe access to event data:
 
 ```typescript
-import { type EventData } from '@xynehq/jaf';
+import { type EventData } from '@juspay-xyne-jaf/jaf';
 
 // Extract specific event data type
 type LLMCallEndData = EventData<'llm_call_end'>;
@@ -71,7 +71,7 @@ function handleLLMCallEnd(data: LLMCallEndData) {
 For common use cases, use the simplified event handler API:
 
 ```typescript
-import { createSimpleEventHandler, type SimpleEventHandlers } from '@xynehq/jaf';
+import { createSimpleEventHandler, type SimpleEventHandlers } from '@juspay-xyne-jaf/jaf';
 
 const handlers: SimpleEventHandlers = {
   // Called when assistant generates text
@@ -134,7 +134,7 @@ const config: RunConfig<MyContext> = {
 Combine both approaches for maximum flexibility:
 
 ```typescript
-import { createSimpleEventHandler } from '@xynehq/jaf';
+import { createSimpleEventHandler } from '@juspay-xyne-jaf/jaf';
 
 const config: RunConfig<MyContext> = {
   onEvent: (event) => {
@@ -159,7 +159,7 @@ const config: RunConfig<MyContext> = {
 ### Building a UI Progress Tracker
 
 ```typescript
-import { createSimpleEventHandler } from '@xynehq/jaf';
+import { createSimpleEventHandler } from '@juspay-xyne-jaf/jaf';
 
 class AgentProgressTracker {
   private messages: string[] = [];
@@ -193,7 +193,7 @@ class AgentProgressTracker {
 ### Collecting Metrics
 
 ```typescript
-import { type TraceEvent } from '@xynehq/jaf';
+import { type TraceEvent } from '@juspay-xyne-jaf/jaf';
 
 class MetricsCollector {
   private totalTokens = 0;
@@ -231,7 +231,7 @@ class MetricsCollector {
 ### Debugging with Full Event Logging
 
 ```typescript
-import { type TraceEvent } from '@xynehq/jaf';
+import { type TraceEvent } from '@juspay-xyne-jaf/jaf';
 
 function createDebugHandler(): (event: TraceEvent) => void {
   return (event: TraceEvent) => {
@@ -251,7 +251,7 @@ const config: RunConfig<MyContext> = {
 ### Extract Event Data Types
 
 ```typescript
-import { type EventData } from '@xynehq/jaf';
+import { type EventData } from '@juspay-xyne-jaf/jaf';
 
 // Get type-safe access to specific event data
 type ToolCallEndData = EventData<'tool_call_end'>;
@@ -267,7 +267,7 @@ function analyzeToolExecution(data: ToolCallEndData) {
 ### Custom Event Filters
 
 ```typescript
-import { type TraceEvent } from '@xynehq/jaf';
+import { type TraceEvent } from '@juspay-xyne-jaf/jaf';
 
 // Type-safe event filtering
 function isToolEvent(event: TraceEvent): event is Extract<TraceEvent, { type: 'tool_call_start' | 'tool_call_end' }> {

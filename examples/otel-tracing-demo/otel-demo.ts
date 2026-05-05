@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { config } from 'dotenv';
-import { run, createRunId, createTraceId, OpenTelemetryTraceCollector, makeLiteLLMProvider, configureProxy } from '@xynehq/jaf';
+import { run, createRunId, createTraceId, OpenTelemetryTraceCollector, makeLiteLLMProvider, configureProxy } from '@juspay-xyne-jaf/jaf';
 
 // Load environment variables
 config();

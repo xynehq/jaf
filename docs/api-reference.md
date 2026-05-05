@@ -43,7 +43,7 @@ function run<Ctx, Out>(
 
 **Example:**
 ```typescript
-import { run, createRunId, createTraceId } from '@xynehq/jaf';
+import { run, createRunId, createTraceId } from '@juspay-xyne-jaf/jaf';
 
 const initialState = {
   runId: createRunId('run-123'),
@@ -86,7 +86,7 @@ function runServer<Ctx>(
 
 **Example:**
 ```typescript
-import { runServer, makeLiteLLMProvider } from '@xynehq/jaf';
+import { runServer, makeLiteLLMProvider } from '@juspay-xyne-jaf/jaf';
 
 const myAgent = {
   name: 'assistant',
@@ -116,7 +116,7 @@ function generateRunId(): RunId
 
 **Example:**
 ```typescript
-import { generateTraceId, generateRunId } from '@xynehq/jaf';
+import { generateTraceId, generateRunId } from '@juspay-xyne-jaf/jaf';
 
 const traceId = generateTraceId();
 const runId = generateRunId();
@@ -333,7 +333,7 @@ const ToolErrorCodes = {
 ### Example Tool Implementation
 ```typescript
 import { z } from 'zod';
-import { Tool, ToolResponse, withErrorHandling } from '@xynehq/jaf';
+import { Tool, ToolResponse, withErrorHandling } from '@juspay-xyne-jaf/jaf';
 
 const weatherSchema = z.object({
   city: z.string().describe("The city to get weather for"),
@@ -506,7 +506,7 @@ type PostgresConfig = z.infer<typeof PostgresConfigSchema>;
 
 ### Example Memory Usage
 ```typescript
-import { createSimpleMemoryProvider } from '@xynehq/jaf';
+import { createSimpleMemoryProvider } from '@juspay-xyne-jaf/jaf';
 
 // In-memory provider
 const memoryProvider = await createSimpleMemoryProvider('memory');
@@ -567,7 +567,7 @@ function makeLiteLLMProvider<Ctx>(
 
 **Example:**
 ```typescript
-import { makeLiteLLMProvider } from '@xynehq/jaf';
+import { makeLiteLLMProvider } from '@juspay-xyne-jaf/jaf';
 
 // For local LiteLLM instance
 const localProvider = makeLiteLLMProvider('http://localhost:4000');
@@ -860,7 +860,7 @@ Pre-built tool for handing off conversations between agents.
 
 **Example:**
 ```typescript
-import { handoffTool } from '@xynehq/jaf';
+import { handoffTool } from '@juspay-xyne-jaf/jaf';
 
 const routerAgent = {
   name: 'router',
@@ -921,7 +921,7 @@ type TraceEvent =
 Use `runStream` to stream `TraceEvent`s from the engine as they occur.
 
 ```typescript
-import { runStream, Agent, Tool, Message, RunState, RunConfig } from '@xynehq/jaf';
+import { runStream, Agent, Tool, Message, RunState, RunConfig } from '@juspay-xyne-jaf/jaf';
 
 const agent: Agent<{}, string> = { /* ... */ };
 
@@ -994,7 +994,7 @@ import {
   ConsoleTraceCollector,
   FileTraceCollector,
   createCompositeTraceCollector 
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 const collector = createCompositeTraceCollector(
   new ConsoleTraceCollector(),
@@ -1109,7 +1109,7 @@ import {
   ToolResponse,
   handoffTool,
   z 
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 // Define context type
 interface AppContext {

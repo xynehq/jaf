@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Tool } from '@xynehq/jaf/core';
+import { Tool } from '@juspay-xyne-jaf/jaf/core';
 import { GoogleGenAI } from '@google/genai';
 
 interface RAGMetrics {

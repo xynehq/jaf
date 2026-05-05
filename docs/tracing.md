@@ -33,7 +33,7 @@ All events include trace and run identifiers for correlation across distributed 
 Logs events to the console with structured formatting:
 
 ```typescript
-import { ConsoleTraceCollector } from '@xynehq/jaf/core';
+import { ConsoleTraceCollector } from '@juspay-xyne-jaf/jaf/core';
 
 const collector = new ConsoleTraceCollector();
 
@@ -48,7 +48,7 @@ const config = {
 Stores events in memory for programmatic access:
 
 ```typescript
-import { InMemoryTraceCollector } from '@xynehq/jaf/core';
+import { InMemoryTraceCollector } from '@juspay-xyne-jaf/jaf/core';
 
 const collector = new InMemoryTraceCollector();
 
@@ -64,7 +64,7 @@ const specificTrace = collector.getTrace(traceId);
 Writes events to a file in JSON Lines format:
 
 ```typescript
-import { FileTraceCollector } from '@xynehq/jaf/core';
+import { FileTraceCollector } from '@juspay-xyne-jaf/jaf/core';
 
 const collector = new FileTraceCollector('/path/to/traces.jsonl');
 ```
@@ -74,7 +74,7 @@ const collector = new FileTraceCollector('/path/to/traces.jsonl');
 Combine multiple collectors and automatically enable external integrations:
 
 ```typescript
-import { createCompositeTraceCollector, ConsoleTraceCollector } from '@xynehq/jaf/core';
+import { createCompositeTraceCollector, ConsoleTraceCollector } from '@juspay-xyne-jaf/jaf/core';
 
 // Automatically includes OpenTelemetry and Langfuse collectors if configured
 const collector = createCompositeTraceCollector(
@@ -100,7 +100,7 @@ JAF supports OpenTelemetry for integration with observability platforms like Jae
 
 3. **Enable tracing:**
    ```typescript
-   import { createCompositeTraceCollector, ConsoleTraceCollector } from '@xynehq/jaf/core';
+   import { createCompositeTraceCollector, ConsoleTraceCollector } from '@juspay-xyne-jaf/jaf/core';
 
    // OpenTelemetry collector is automatically added when TRACE_COLLECTOR_URL is set
    const collector = createCompositeTraceCollector(new ConsoleTraceCollector());
@@ -139,7 +139,7 @@ JAF provides flexible proxy support for routing OpenTelemetry traces through HTT
 Configure the proxy directly in your code before creating trace collectors:
 
 ```typescript
-import { configureProxy, OpenTelemetryTraceCollector } from '@xynehq/jaf';
+import { configureProxy, OpenTelemetryTraceCollector } from '@juspay-xyne-jaf/jaf';
 
 // Configure proxy before creating trace collector
 configureProxy('http://proxy.example.com:8080');
@@ -157,7 +157,7 @@ configureProxy('http://username:password@proxy.example.com:8080');
 **Reset Configuration:**
 
 ```typescript
-import { resetProxyConfig } from '@xynehq/jaf';
+import { resetProxyConfig } from '@juspay-xyne-jaf/jaf';
 
 resetProxyConfig();  // Clear manual proxy config
 // Will now fall back to environment variables
@@ -293,7 +293,7 @@ JAF integrates with [Langfuse](https://langfuse.com/) for LLM observability and 
 
 3. **Enable tracing:**
    ```typescript
-   import { createCompositeTraceCollector, ConsoleTraceCollector } from '@xynehq/jaf/core';
+   import { createCompositeTraceCollector, ConsoleTraceCollector } from '@juspay-xyne-jaf/jaf/core';
 
    // OpenTelemetry collector automatically sends to Langfuse OTLP endpoint
    const collector = createCompositeTraceCollector(new ConsoleTraceCollector());
@@ -302,7 +302,7 @@ JAF integrates with [Langfuse](https://langfuse.com/) for LLM observability and 
 Alternatively, configure programmatically:
 
 ```typescript
-import { OpenTelemetryTraceCollector } from '@xynehq/jaf';
+import { OpenTelemetryTraceCollector } from '@juspay-xyne-jaf/jaf';
 
 // Set up Langfuse OTLP endpoint
 const langfuseHost = 'http://localhost:3000';
@@ -371,7 +371,7 @@ LLM usage data is automatically captured and includes:
 Implement the `TraceCollector` interface for custom integrations:
 
 ```typescript
-import { TraceCollector, TraceEvent, TraceId } from '@xynehq/jaf/core';
+import { TraceCollector, TraceEvent, TraceId } from '@juspay-xyne-jaf/jaf/core';
 
 class CustomTraceCollector implements TraceCollector {
   collect(event: TraceEvent): void {

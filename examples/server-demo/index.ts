@@ -10,7 +10,7 @@ import {
   ToolErrorCodes,
   withErrorHandling,
   createMemoryProviderFromEnv
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 // Define context type
 type MyContext = {
@@ -43,7 +43,7 @@ const calculatorTool: Tool<{ expression: string }, MyContext> = {
     
     try {
       // Use safe math evaluator instead of eval
-      const { evaluateMathExpression } = require('@xynehq/jaf/utils');
+      const { evaluateMathExpression } = require('@juspay-xyne-jaf/jaf/utils');
       const result = evaluateMathExpression(sanitized);
       return ToolResponse.success(`${args.expression} = ${result}`, {
         originalExpression: args.expression,

@@ -10,7 +10,7 @@ import {
   generateRunId,
   generateTraceId,
   makeLiteLLMProvider
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 type DemoCtx = { userId: string };
 

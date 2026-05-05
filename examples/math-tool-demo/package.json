@@ -1,7 +1,7 @@
 {
   "name": "jaf-math-tool-demo",
   "version": "1.0.0",
-  "description": "Demonstration of the built-in mathTool in @xynehq/jaf",
+  "description": "Demonstration of the built-in mathTool in @juspay-xyne-jaf/jaf",
   "main": "index.ts",
   "scripts": {
     "direct": "tsx index.ts",
@@ -11,7 +11,7 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@xynehq/jaf": "workspace:*",
+    "@juspay-xyne-jaf/jaf": "workspace:*",
     "dotenv": "^17.2.1"
   },
   "devDependencies": {

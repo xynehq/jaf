@@ -111,7 +111,7 @@ Error types include:
 #### Configuration
 
 ```typescript
-import { createInMemoryProvider } from '@xynehq/jaf';
+import { createInMemoryProvider } from '@juspay-xyne-jaf/jaf';
 
 const provider = createInMemoryProvider({
   type: 'memory',
@@ -161,7 +161,7 @@ sudo apt install redis-server && sudo systemctl start redis-server  # Ubuntu
 #### Configuration
 
 ```typescript
-import { createRedisProvider } from '@xynehq/jaf';
+import { createRedisProvider } from '@juspay-xyne-jaf/jaf';
 import { createClient } from 'redis';
 
 // Create Redis client
@@ -252,7 +252,7 @@ sudo -u postgres createdb jaf_memory  # Ubuntu
 #### Configuration
 
 ```typescript
-import { createPostgresProvider } from '@xynehq/jaf';
+import { createPostgresProvider } from '@juspay-xyne-jaf/jaf';
 import { Client } from 'pg';
 
 // Create PostgreSQL client
@@ -337,7 +337,7 @@ const analytics = await provider.getAnalytics('user123');
 #### Create from Configuration Object
 
 ```typescript
-import { createMemoryProvider } from '@xynehq/jaf';
+import { createMemoryProvider } from '@juspay-xyne-jaf/jaf';
 
 const provider = await createMemoryProvider(
   {
@@ -356,7 +356,7 @@ const provider = await createMemoryProvider(
 #### Create from Environment Variables
 
 ```typescript
-import { createMemoryProviderFromEnv } from '@xynehq/jaf';
+import { createMemoryProviderFromEnv } from '@juspay-xyne-jaf/jaf';
 
 const provider = await createMemoryProviderFromEnv({
   redis: redisClient,  // Only needed if JAF_MEMORY_TYPE=redis
@@ -367,7 +367,7 @@ const provider = await createMemoryProviderFromEnv({
 #### Simple Provider Creation
 
 ```typescript
-import { createSimpleMemoryProvider } from '@xynehq/jaf';
+import { createSimpleMemoryProvider } from '@juspay-xyne-jaf/jaf';
 
 // In-memory
 const memoryProvider = await createSimpleMemoryProvider('memory');
@@ -385,7 +385,7 @@ const postgresProvider = await createSimpleMemoryProvider('postgres', postgresCl
 ### Memory Configuration in Engine
 
 ```typescript
-import { runServer } from '@xynehq/jaf';
+import { runServer } from '@juspay-xyne-jaf/jaf';
 
 const server = await runServer(
   agents,
@@ -538,7 +538,7 @@ import {
   isMemoryConnectionError,
   isMemoryNotFoundError,
   isMemoryStorageError 
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 const result = await provider.getConversation('conv-123');
 

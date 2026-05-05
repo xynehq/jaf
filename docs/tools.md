@@ -32,7 +32,7 @@ Every tool in JAF implements the `Tool<A, Ctx>` interface:
 
 ```typescript
 import { z } from 'zod';
-import { Tool } from '@xynehq/jaf';
+import { Tool } from '@juspay-xyne-jaf/jaf';
 
 export type Tool<A, Ctx> = {
   readonly schema: {
@@ -164,7 +164,7 @@ JAF provides a comprehensive error handling system with standardized error types
 Instead of throwing exceptions, tools should return `ToolResult` objects for better error handling:
 
 ```typescript
-import { ToolResponse, ToolErrorCodes, ToolResult } from '@xynehq/jaf';
+import { ToolResponse, ToolErrorCodes, ToolResult } from '@juspay-xyne-jaf/jaf';
 
 // Success response
 return ToolResponse.success(data, metadata);
@@ -200,7 +200,7 @@ return ToolResponse.notFound(
 Use the `withErrorHandling` wrapper to automatically catch exceptions and convert them to standard error responses:
 
 ```typescript
-import { withErrorHandling } from '@xynehq/jaf';
+import { withErrorHandling } from '@juspay-xyne-jaf/jaf';
 
 const safeTool: Tool<{ expression: string }, MyContext> = {
   schema: {
@@ -355,7 +355,7 @@ const fileTool: Tool<{ path: string }, MyContext> = {
 Use the built-in permission system:
 
 ```typescript
-import { requirePermissions } from '@xynehq/jaf';
+import { requirePermissions } from '@juspay-xyne-jaf/jaf';
 
 const adminTool: Tool<{ action: string }, MyContext> = {
   schema: {
@@ -383,7 +383,7 @@ const adminTool: Tool<{ action: string }, MyContext> = {
 Implement rate limiting for resource-intensive tools:
 
 ```typescript
-import { createRateLimiter } from '@xynehq/jaf';
+import { createRateLimiter } from '@juspay-xyne-jaf/jaf';
 
 const rateLimiter = createRateLimiter(
   10, // max calls
@@ -615,7 +615,7 @@ const compositeEmailTool: Tool<{ recipient: string; message: string }, MyContext
 Tools can trigger handoffs to specialized agents:
 
 ```typescript
-import { handoffTool } from '@xynehq/jaf';
+import { handoffTool } from '@juspay-xyne-jaf/jaf';
 
 const complexAnalysisTool: Tool<{ data: any }, MyContext> = {
   schema: {
@@ -804,7 +804,7 @@ const memoryAwareTool: Tool<{ query: string }, MyContext> = {
 JAF automatically traces tool execution. You can access trace data:
 
 ```typescript
-import { ConsoleTraceCollector, createCompositeTraceCollector, FileTraceCollector } from '@xynehq/jaf';
+import { ConsoleTraceCollector, createCompositeTraceCollector, FileTraceCollector } from '@juspay-xyne-jaf/jaf';
 
 // Set up comprehensive tracing
 const traceCollector = createCompositeTraceCollector(
@@ -1009,7 +1009,7 @@ const healthCheckTool: Tool<{}, MyContext> = {
 
 ```typescript
 import { z } from 'zod';
-import { Tool, ToolResponse, ToolErrorCodes, withErrorHandling, requirePermissions } from '@xynehq/jaf';
+import { Tool, ToolResponse, ToolErrorCodes, withErrorHandling, requirePermissions } from '@juspay-xyne-jaf/jaf';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -1146,7 +1146,7 @@ export const fileManagerTool: Tool<z.infer<typeof fileOperationSchema>, FileCont
 
 ```typescript
 import { z } from 'zod';
-import { Tool, ToolResponse, ToolErrorCodes, withErrorHandling } from '@xynehq/jaf';
+import { Tool, ToolResponse, ToolErrorCodes, withErrorHandling } from '@juspay-xyne-jaf/jaf';
 
 interface APIContext {
   userId: string;

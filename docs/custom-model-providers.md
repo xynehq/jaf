@@ -61,7 +61,7 @@ Key points:
 ## Step 1: Start with a minimal provider
 
 ```typescript
-import { getTextContent } from '@xynehq/jaf';
+import { getTextContent } from '@juspay-xyne-jaf/jaf';
 import type {
   ModelProvider,
   RunState,
@@ -70,7 +70,7 @@ import type {
   Message,
   Tool,
   ToolCall,
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 type ProviderOptions = {
   baseUrl: string;

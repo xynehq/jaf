@@ -14,7 +14,7 @@ import {
   ToolResponse,
   withErrorHandling,
   createInMemoryProvider
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 import { z } from 'zod';
 
 // Import our flight booking tools (converted to JAF format)

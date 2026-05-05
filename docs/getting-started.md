@@ -21,7 +21,7 @@ Welcome to the Juspay Agent Framework (JAF) - a purely functional agent framewor
 ### Basic Installation
 
 ```bash
-npm install @xynehq/jaf
+npm install @juspay-xyne-jaf/jaf
 ```
 
 ### Prerequisites
@@ -95,7 +95,7 @@ import {
   makeLiteLLMProvider,
   generateRunId,
   generateTraceId
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 // 1. Define your context type
 type MyContext = {
@@ -172,7 +172,7 @@ import {
   ToolResponse,
   ToolErrorCodes,
   withErrorHandling
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 type MyContext = {
   userId: string;
@@ -297,7 +297,7 @@ const myTool: Tool<ArgsType, ContextType> = {
 ### Using Standardized Error Handling
 
 ```typescript
-import { withErrorHandling, ToolResponse, ToolErrorCodes } from '@xynehq/jaf';
+import { withErrorHandling, ToolResponse, ToolErrorCodes } from '@juspay-xyne-jaf/jaf';
 
 const robustTool: Tool<{ input: string }, MyContext> = {
   schema: {
@@ -352,7 +352,7 @@ return ToolResponse.permissionDenied("Access denied", ['admin']);
 ### Basic Execution
 
 ```typescript
-import { run, makeLiteLLMProvider } from '@xynehq/jaf';
+import { run, makeLiteLLMProvider } from '@juspay-xyne-jaf/jaf';
 
 async function runAgent() {
   const modelProvider = makeLiteLLMProvider('http://localhost:4000');
@@ -384,7 +384,7 @@ async function runAgent() {
 ### With Tracing and Observability
 
 ```typescript
-import { ConsoleTraceCollector } from '@xynehq/jaf';
+import { ConsoleTraceCollector } from '@juspay-xyne-jaf/jaf';
 
 const traceCollector = new ConsoleTraceCollector();
 
@@ -430,7 +430,7 @@ JAF provides a powerful memory system for conversation persistence:
 ### Basic Memory Setup
 
 ```typescript
-import { createInMemoryProvider } from '@xynehq/jaf';
+import { createInMemoryProvider } from '@juspay-xyne-jaf/jaf';
 
 const memoryProvider = await createInMemoryProvider();
 
@@ -454,7 +454,7 @@ npm install redis
 ```
 
 ```typescript
-import { createMemoryProviderFromEnv } from '@xynehq/jaf';
+import { createMemoryProviderFromEnv } from '@juspay-xyne-jaf/jaf';
 
 // Set environment variables
 process.env.JAF_MEMORY_TYPE = 'redis';
@@ -504,7 +504,7 @@ const memoryProvider = await createMemoryProviderFromEnv({ postgres: postgresCli
 JAF includes a built-in development server for testing agents via HTTP:
 
 ```typescript
-import { runServer } from '@xynehq/jaf';
+import { runServer } from '@juspay-xyne-jaf/jaf';
 
 async function startDevServer() {
   const modelProvider = makeLiteLLMProvider('http://localhost:4000');
@@ -577,7 +577,7 @@ Each SSE event is named after a `TraceEvent.type` (e.g., `run_start`, `assistant
 Stream events without starting a server using `runStream`:
 
 ```typescript
-import { runStream, generateRunId, generateTraceId } from '@xynehq/jaf';
+import { runStream, generateRunId, generateTraceId } from '@juspay-xyne-jaf/jaf';
 
 const initialState = {
   runId: generateRunId(),
@@ -602,7 +602,7 @@ JAF provides comprehensive error handling:
 ### Runtime Error Types
 
 ```typescript
-import { JAFErrorHandler } from '@xynehq/jaf';
+import { JAFErrorHandler } from '@juspay-xyne-jaf/jaf';
 
 if (result.outcome.status === 'error') {
   const error = result.outcome.error;
@@ -648,7 +648,7 @@ if (toolResult.status === 'error') {
 ### Agent Handoffs
 
 ```typescript
-import { handoffTool } from '@xynehq/jaf';
+import { handoffTool } from '@juspay-xyne-jaf/jaf';
 
 const triageAgent: Agent<MyContext, string> = {
   name: 'TriageAgent',

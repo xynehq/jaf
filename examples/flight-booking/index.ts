@@ -19,7 +19,7 @@ import {
   stringSchema,
   numberSchema,
   quickSetup
-} from '@xynehq/jaf/adk';
+} from '@juspay-xyne-jaf/jaf/adk';
 
 // ========== Types ==========
 

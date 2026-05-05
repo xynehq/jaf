@@ -24,7 +24,7 @@ import {
   generateRunId,
   generateTraceId,
   makeLiteLLMProvider
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 import { ClarificationInterruption } from '../../src/core/types';
 
 type DemoCtx = { userId: string };

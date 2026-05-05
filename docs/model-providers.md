@@ -74,7 +74,7 @@ JAF includes a built-in LiteLLM provider that supports 100+ LLM providers throug
 ### Creating a LiteLLM Provider
 
 ```typescript
-import { makeLiteLLMProvider } from '@xynehq/jaf';
+import { makeLiteLLMProvider } from '@juspay-xyne-jaf/jaf';
 
 const modelProvider = makeLiteLLMProvider(
   'http://localhost:4000',  // LiteLLM server URL
@@ -599,7 +599,7 @@ class StreamingModelProvider implements ModelProvider<any> {
 ### Enable Tracing
 
 ```typescript
-import { ConsoleTraceCollector } from '@xynehq/jaf';
+import { ConsoleTraceCollector } from '@juspay-xyne-jaf/jaf';
 
 const traceCollector = new ConsoleTraceCollector();
 
@@ -713,7 +713,7 @@ import {
   createTraceId, 
   createRunId,
   makeLiteLLMProvider 
-} from '@xynehq/jaf';
+} from '@juspay-xyne-jaf/jaf';
 
 // Set up model provider
 const modelProvider = makeLiteLLMProvider(
