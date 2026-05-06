@@ -16,8 +16,8 @@ import {
   withErrorHandling,
   createInMemoryProvider,
   ToolErrorCodes
-} from '@juspay-xyne-jaf/jaf';
-import { makeMCPClient, mcpToolToJAFTool } from '@juspay-xyne-jaf/jaf/providers';
+} from '@juspay-jaf/jaf';
+import { makeMCPClient, mcpToolToJAFTool } from '@juspay-jaf/jaf/providers';
 import { z } from 'zod';
 
 // Context type for filesystem operations

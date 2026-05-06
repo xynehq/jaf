@@ -9,7 +9,7 @@
     "build": "npx tsc"
   },
   "dependencies": {
-    "@juspay-xyne-jaf/jaf": "workspace:*",
+    "@juspay-jaf/jaf": "workspace:*",
     "dotenv": "^16.0.3",
     "zod": "^3.22.4"
   },

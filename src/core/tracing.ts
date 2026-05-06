@@ -418,7 +418,7 @@ let manualProxyConfig: string | null = null; // Store manual proxy URL
  *
  * @example
  * ```typescript
- * import { configureProxy, OpenTelemetryTraceCollector } from '@juspay-xyne-jaf/jaf';
+ * import { configureProxy, OpenTelemetryTraceCollector } from '@juspay-jaf/jaf';
  *
  * // Configure proxy before creating trace collector
  * configureProxy('http://proxy.example.com:8080');
@@ -456,7 +456,7 @@ export function configureProxy(proxyUrl: string): void {
  *
  * @example
  * ```typescript
- * import { resetProxyConfig } from '@juspay-xyne-jaf/jaf';
+ * import { resetProxyConfig } from '@juspay-jaf/jaf';
  *
  * resetProxyConfig();  // Clear manual proxy config
  * ```

@@ -17,7 +17,7 @@ import {
   Model,
   ToolParameterType,
   AgentConfig
-} from '@juspay-xyne-jaf/jaf/adk';
+} from '@juspay-jaf/jaf/adk';
 
 // Import tools from main example
 import {

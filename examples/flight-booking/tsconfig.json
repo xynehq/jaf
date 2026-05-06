@@ -5,8 +5,8 @@
     "rootDir": "../..",
     "baseUrl": "../..",
     "paths": {
-      "@juspay-xyne-jaf/jaf": ["./src/index"],
-      "@juspay-xyne-jaf/jaf/*": ["./src/*"]
+      "@juspay-jaf/jaf": ["./src/index"],
+      "@juspay-jaf/jaf/*": ["./src/*"]
     }
   },
   "include": [

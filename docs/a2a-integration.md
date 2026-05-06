@@ -21,7 +21,7 @@ The A2A integration allows JAF agents to communicate with other A2A-compatible a
 ### 1. Create an A2A-Compatible Agent
 
 ```typescript
-import { createA2AAgent, createA2ATool } from '@juspay-xyne-jaf/jaf/a2a';
+import { createA2AAgent, createA2ATool } from '@juspay-jaf/jaf/a2a';
 import { z } from 'zod';
 
 const weatherAgent = createA2AAgent({
@@ -48,7 +48,7 @@ const weatherAgent = createA2AAgent({
 ### 2. Start A2A Server
 
 ```typescript
-import { startA2AServer } from '@juspay-xyne-jaf/jaf/a2a';
+import { startA2AServer } from '@juspay-jaf/jaf/a2a';
 
 const server = await startA2AServer({
   agents: new Map([
@@ -70,7 +70,7 @@ const server = await startA2AServer({
 ### 3. Connect A2A Client
 
 ```typescript
-import { connectToA2AAgent } from '@juspay-xyne-jaf/jaf/a2a';
+import { connectToA2AAgent } from '@juspay-jaf/jaf/a2a';
 
 const agent = await connectToA2AAgent('http://localhost:3000');
 

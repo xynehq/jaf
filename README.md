@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/xynehq/jaf/workflows/CI/badge.svg)](https://github.com/xynehq/jaf/actions)
 [![Documentation](https://img.shields.io/badge/docs-mkdocs-blue)](https://xynehq.github.io/jaf/)
-[![npm version](https://img.shields.io/npm/v/@juspay-xyne-jaf%2Fjaf.svg)](https://www.npmjs.com/package/@juspay-xyne-jaf/jaf)
-[![npm downloads](https://img.shields.io/npm/dm/@juspay-xyne-jaf%2Fjaf.svg)](https://www.npmjs.com/package/@juspay-xyne-jaf/jaf)
+[![npm version](https://img.shields.io/npm/v/@juspay-jaf%2Fjaf.svg)](https://www.npmjs.com/package/@juspay-jaf/jaf)
+[![npm downloads](https://img.shields.io/npm/dm/@juspay-jaf%2Fjaf.svg)](https://www.npmjs.com/package/@juspay-jaf/jaf)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ![Juspay Agent Framework](/docs/cover.png?raw=true "Juspay Agent Framework")
@@ -27,13 +27,13 @@ A purely functional agent framework built on immutable state, type safety, and c
 
 ```bash
 # Install from npm
-npm install @juspay-xyne-jaf/jaf
+npm install @juspay-jaf/jaf
 
 # Or using yarn
-yarn add @juspay-xyne-jaf/jaf
+yarn add @juspay-jaf/jaf
 
 # Or using pnpm
-pnpm add @juspay-xyne-jaf/jaf
+pnpm add @juspay-jaf/jaf
 ```
 
 ### Development Setup
@@ -111,7 +111,7 @@ docs/               # Documentation
 
 ```typescript
 import { z } from 'zod';
-import { Agent, Tool, RunState, run } from '@juspay-xyne-jaf/jaf';
+import { Agent, Tool, RunState, run } from '@juspay-jaf/jaf';
 
 // Define your context type
 type MyContext = {
@@ -145,7 +145,7 @@ const mathAgent: Agent<MyContext, string> = {
 ### Running the Framework
 
 ```typescript
-import { run, makeLiteLLMProvider } from '@juspay-xyne-jaf/jaf';
+import { run, makeLiteLLMProvider } from '@juspay-jaf/jaf';
 
 const modelProvider = makeLiteLLMProvider('http://localhost:4000');
 const agentRegistry = new Map([['MathTutor', mathAgent]]);
@@ -181,7 +181,7 @@ JAF emphasizes function composition to build complex behaviors from simple, reus
 ### Composing Tools
 
 ```typescript
-import { createFunctionTool, composeTool, withRetry, withCache } from '@juspay-xyne-jaf/jaf';
+import { createFunctionTool, composeTool, withRetry, withCache } from '@juspay-jaf/jaf';
 
 // Simple base tools
 const fetchWeatherTool = createFunctionTool({
@@ -218,7 +218,7 @@ const weatherReportTool = composeTool([
 ### Composing Validators
 
 ```typescript
-import { compose, createValidator } from '@juspay-xyne-jaf/jaf';
+import { compose, createValidator } from '@juspay-jaf/jaf';
 
 // Base validators
 const isPositive = createValidator<number>(
@@ -260,7 +260,7 @@ const ageTool = createFunctionTool({
 ### Composing Agent Behaviors
 
 ```typescript
-import { createAgent, withMiddleware, withFallback } from '@juspay-xyne-jaf/jaf';
+import { createAgent, withMiddleware, withFallback } from '@juspay-jaf/jaf';
 
 // Base agents
 const primaryAgent = createAgent({
@@ -318,7 +318,7 @@ const productionAgent = compose(
 ### Composing Memory Providers
 
 ```typescript
-import { composeMemoryProviders, createCacheLayer } from '@juspay-xyne-jaf/jaf';
+import { composeMemoryProviders, createCacheLayer } from '@juspay-jaf/jaf';
 
 // Layer memory providers for performance and reliability
 const memoryProvider = composeMemoryProviders([
@@ -338,7 +338,7 @@ const memoryProvider = composeMemoryProviders([
 ### Composable Validation Policies
 
 ```typescript
-import { createPathValidator, createPermissionValidator, composeValidations } from '@juspay-xyne-jaf/jaf';
+import { createPathValidator, createPermissionValidator, composeValidations } from '@juspay-jaf/jaf';
 
 // Create individual validators
 const pathValidator = createPathValidator(['/shared', '/public']);
@@ -354,7 +354,7 @@ const secureFileTool = withValidation(baseFileTool, combinedValidator);
 ### Guardrails
 
 ```typescript
-import { createContentFilter, createRateLimiter } from '@juspay-xyne-jaf/jaf';
+import { createContentFilter, createRateLimiter } from '@juspay-jaf/jaf';
 
 const config = {
   // ... other config
@@ -371,7 +371,7 @@ const config = {
 ## 🔗 Agent Handoffs
 
 ```typescript
-import { handoffTool } from '@juspay-xyne-jaf/jaf';
+import { handoffTool } from '@juspay-jaf/jaf';
 
 const triageAgent: Agent<Context, { agentName: string }> = {
   name: 'TriageAgent',
@@ -389,7 +389,7 @@ const triageAgent: Agent<Context, { agentName: string }> = {
 ### Real-time Tracing
 
 ```typescript
-import { ConsoleTraceCollector, FileTraceCollector } from '@juspay-xyne-jaf/jaf';
+import { ConsoleTraceCollector, FileTraceCollector } from '@juspay-jaf/jaf';
 
 // Console logging
 const consoleTracer = new ConsoleTraceCollector();
@@ -409,7 +409,7 @@ const config = {
 ### Error Handling
 
 ```typescript
-import { JAFErrorHandler } from '@juspay-xyne-jaf/jaf';
+import { JAFErrorHandler } from '@juspay-jaf/jaf';
 
 if (result.outcome.status === 'error') {
   const formattedError = JAFErrorHandler.format(result.outcome.error);
@@ -425,7 +425,7 @@ if (result.outcome.status === 'error') {
 ### LiteLLM Provider
 
 ```typescript
-import { makeLiteLLMProvider } from '@juspay-xyne-jaf/jaf';
+import { makeLiteLLMProvider } from '@juspay-jaf/jaf';
 
 // Connect to LiteLLM proxy for 100+ model support
 const modelProvider = makeLiteLLMProvider(
@@ -437,7 +437,7 @@ const modelProvider = makeLiteLLMProvider(
 ### MCP (Model Context Protocol) Tools
 
 ```typescript
-import { makeMCPClient, mcpToolToJAFTool } from '@juspay-xyne-jaf/jaf';
+import { makeMCPClient, mcpToolToJAFTool } from '@juspay-jaf/jaf';
 
 // Connect to MCP server
 const mcpClient = await makeMCPClient('python', ['-m', 'mcp_server']);
@@ -456,7 +456,7 @@ const jafTools = mcpTools.map(tool =>
 JAF includes a built-in development server for testing agents locally via HTTP endpoints:
 
 ```typescript
-import { runServer, makeLiteLLMProvider, createInMemoryProvider } from '@juspay-xyne-jaf/jaf';
+import { runServer, makeLiteLLMProvider, createInMemoryProvider } from '@juspay-jaf/jaf';
 
 const myAgent = {
   name: 'MyAgent',

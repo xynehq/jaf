@@ -21,8 +21,8 @@ import {
   ToolErrorCodes,
   withErrorHandling,
   Tool,
-} from "@juspay-xyne-jaf/jaf";
-import { createAiSdkProvider } from "@juspay-xyne-jaf/jaf/providers";
+} from "@juspay-jaf/jaf";
+import { createAiSdkProvider } from "@juspay-jaf/jaf/providers";
 import { z } from "zod";
 
 if (!process.env.OPENAI_API_KEY) {

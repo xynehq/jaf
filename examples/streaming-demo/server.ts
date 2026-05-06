@@ -6,7 +6,7 @@ import {
   Agent,
   makeLiteLLMProvider,
   ConsoleTraceCollector,
-} from '@juspay-xyne-jaf/jaf';
+} from '@juspay-jaf/jaf';
 
 type DemoCtx = { userId: string };
 

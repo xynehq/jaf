@@ -10,7 +10,7 @@
  *   createRedisStreamProvider, 
  *   withStreamOutput,
  *   EventMappings 
- * } from '@juspay-xyne-jaf/jaf/streaming';
+ * } from '@juspay-jaf/jaf/streaming';
  * 
  * // Create Redis provider (requires: npm install ioredis)
  * const streamProvider = await createRedisStreamProvider({
@@ -33,7 +33,7 @@
  * 
  * @example Composing multiple handlers
  * ```typescript
- * import { composeEventHandlers, withStreamOutput, createConsoleEventHandler } from '@juspay-xyne-jaf/jaf/streaming';
+ * import { composeEventHandlers, withStreamOutput, createConsoleEventHandler } from '@juspay-jaf/jaf/streaming';
  * 
  * const config: RunConfig<MyContext> = {
  *   onEvent: composeEventHandlers([

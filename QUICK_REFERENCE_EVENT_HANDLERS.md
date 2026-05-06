@@ -9,7 +9,7 @@ import {
   type EventData,
   type TokenUsage,
   type TraceEvent
-} from '@juspay-xyne-jaf/jaf';
+} from '@juspay-jaf/jaf';
 ```
 
 ## Simple Event Handlers (Recommended)

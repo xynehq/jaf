@@ -238,7 +238,7 @@ async function main() {
   console.log(`
 📝 To use Redis in production:
 
-  import { Streaming } from '@juspay-xyne-jaf/jaf';
+  import { Streaming } from '@juspay-jaf/jaf';
   
   // Install: npm install ioredis
   const streamProvider = await Streaming.createRedisStreamProvider({

@@ -6,7 +6,7 @@ import {
   Agent,
   agentAsTool,
   createMemoryProviderFromEnv,
-} from '@juspay-xyne-jaf/jaf';
+} from '@juspay-jaf/jaf';
 
 type AppContext = {
   userId: string;

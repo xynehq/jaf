@@ -1,6 +1,6 @@
 # JAF Math Tool Demo
 
-This example shows how to use the built-in `mathTool` from `@juspay-xyne-jaf/jaf/tools`:
+This example shows how to use the built-in `mathTool` from `@juspay-jaf/jaf/tools`:
 
 - Directly call the tool executor without any LLM involvement
 - Use the tool inside a minimal agent run powered by a mock model provider (no API keys required)
@@ -11,7 +11,7 @@ From repo root:
 
 ```
 pnpm -w install
-pnpm -w build  # ensure @juspay-xyne-jaf/jaf exports are up-to-date
+pnpm -w build  # ensure @juspay-jaf/jaf exports are up-to-date
 ```
 
 ## Run the examples

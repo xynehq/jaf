@@ -1,5 +1,5 @@
 // Public provider entrypoint: re-export provider modules
-// This backs the `@juspay-xyne-jaf/jaf/providers` subpath export declared in package.json
+// This backs the `@juspay-jaf/jaf/providers` subpath export declared in package.json
 
 export * from './model';
 export * from './mcp';

@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "dotenv": "^17.2.1",
-    "@juspay-xyne-jaf/jaf": "workspace:*",
+    "@juspay-jaf/jaf": "workspace:*",
     "ai": "^5.0.35",
     "@ai-sdk/openai": "^2.0.26",
     "@ai-sdk/google": "^2.0.13",

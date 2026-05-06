@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { runServer, Agent, makeLiteLLMProvider, ConsoleTraceCollector, createMemoryProviderFromEnv } from '@juspay-xyne-jaf/jaf'
+import { runServer, Agent, makeLiteLLMProvider, ConsoleTraceCollector, createMemoryProviderFromEnv } from '@juspay-jaf/jaf'
 import { makeMCPClientSSE, mcpToolToJAFTool } from '../../src/providers/mcp'
 
 type Ctx = Record<string, never>

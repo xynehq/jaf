@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "dotenv": "^17.2.1",
-    "@juspay-xyne-jaf/jaf": "workspace:*",
+    "@juspay-jaf/jaf": "workspace:*",
     "zod": "^3.22.4"
   },
   "devDependencies": {

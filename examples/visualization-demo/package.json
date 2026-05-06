@@ -11,7 +11,7 @@
     "clean": "rm -rf output"
   },
   "dependencies": {
-    "@juspay-xyne-jaf/jaf": "workspace:*"
+    "@juspay-jaf/jaf": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

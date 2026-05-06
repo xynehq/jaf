@@ -89,7 +89,7 @@ Found an issue or want to improve the documentation?
 
 ### Key Functions
 ```typescript
-import { run, runServer, createInMemoryProvider } from '@juspay-xyne-jaf/jaf';
+import { run, runServer, createInMemoryProvider } from '@juspay-jaf/jaf';
 ```
 
 ### Essential Types

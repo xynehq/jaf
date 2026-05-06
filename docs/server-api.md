@@ -19,7 +19,7 @@ The Juspay Agent Framework (JAF) provides a production-ready HTTP server that ex
 ### Basic Server Setup
 
 ```typescript
-import { runServer, makeLiteLLMProvider, createInMemoryProvider } from '@juspay-xyne-jaf/jaf';
+import { runServer, makeLiteLLMProvider, createInMemoryProvider } from '@juspay-jaf/jaf';
 
 const myAgent = {
   name: 'MyAgent',
@@ -40,7 +40,7 @@ const server = await runServer(
 ### Using createJAFServer for Advanced Configuration
 
 ```typescript
-import { createJAFServer } from '@juspay-xyne-jaf/jaf/server';
+import { createJAFServer } from '@juspay-jaf/jaf/server';
 
 const server = createJAFServer({
   port: 3000,
@@ -457,7 +457,7 @@ Override memory settings per request:
 
 #### In-Memory Provider
 ```typescript
-import { createInMemoryProvider } from '@juspay-xyne-jaf/jaf';
+import { createInMemoryProvider } from '@juspay-jaf/jaf';
 
 const memoryProvider = createInMemoryProvider({
   maxConversations: 1000,
@@ -467,7 +467,7 @@ const memoryProvider = createInMemoryProvider({
 
 #### Redis Provider
 ```typescript
-import { createRedisProvider } from '@juspay-xyne-jaf/jaf';
+import { createRedisProvider } from '@juspay-jaf/jaf';
 import { createClient } from 'redis';
 
 const redisClient = createClient({ url: 'redis://localhost:6379' });
@@ -482,7 +482,7 @@ const memoryProvider = await createRedisProvider({
 
 #### PostgreSQL Provider
 ```typescript
-import { createPostgresProvider } from '@juspay-xyne-jaf/jaf';
+import { createPostgresProvider } from '@juspay-jaf/jaf';
 import { Client } from 'pg';
 
 const postgresClient = new Client({
@@ -699,7 +699,7 @@ JAF server includes structured logging via Fastify:
 Implement custom event collection:
 
 ```typescript
-import { TraceCollector } from '@juspay-xyne-jaf/jaf';
+import { TraceCollector } from '@juspay-jaf/jaf';
 
 class ProductionTraceCollector implements TraceCollector {
   collect(event: TraceEvent): void {
@@ -732,7 +732,7 @@ Monitor these endpoints for service health:
 ### Basic Chat Server
 
 ```typescript
-import { runServer, makeLiteLLMProvider, createInMemoryProvider } from '@juspay-xyne-jaf/jaf';
+import { runServer, makeLiteLLMProvider, createInMemoryProvider } from '@juspay-jaf/jaf';
 
 const chatAgent = {
   name: 'ChatBot',
@@ -763,7 +763,7 @@ startChatServer().catch(console.error);
 ### Multi-Agent Server with Persistence
 
 ```typescript
-import { runServer, makeLiteLLMProvider, createRedisProvider } from '@juspay-xyne-jaf/jaf';
+import { runServer, makeLiteLLMProvider, createRedisProvider } from '@juspay-jaf/jaf';
 import { createClient } from 'redis';
 
 const mathAgent = {
@@ -825,7 +825,7 @@ startProductionServer().catch(console.error);
 ### Advanced Server with Custom Middleware
 
 ```typescript
-import { createJAFServer } from '@juspay-xyne-jaf/jaf/server';
+import { createJAFServer } from '@juspay-jaf/jaf/server';
 
 async function startAdvancedServer() {
   const server = createJAFServer({

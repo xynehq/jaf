@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Agent } from '@juspay-xyne-jaf/jaf/core';
+import { Agent } from '@juspay-jaf/jaf/core';
 import { vertexAIRAGTool } from './rag-tool';
 
 type RAGContext = {

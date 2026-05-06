@@ -31,7 +31,7 @@ npm install pg
 Always available, no dependencies required:
 
 ```typescript
-import { createInMemorySessionProvider } from '@juspay-xyne-jaf/jaf/adk';
+import { createInMemorySessionProvider } from '@juspay-jaf/jaf/adk';
 
 const provider = createInMemorySessionProvider();
 ```
@@ -41,7 +41,7 @@ const provider = createInMemorySessionProvider();
 Requires `ioredis` to be installed. Will throw an error if the library is not available:
 
 ```typescript
-import { createRedisSessionProvider } from '@juspay-xyne-jaf/jaf/adk';
+import { createRedisSessionProvider } from '@juspay-jaf/jaf/adk';
 
 const provider = createRedisSessionProvider({
   host: 'localhost',
@@ -58,7 +58,7 @@ const provider = createRedisSessionProvider({
 Requires `pg` to be installed. Will throw an error if the library is not available:
 
 ```typescript
-import { createPostgresSessionProvider } from '@juspay-xyne-jaf/jaf/adk';
+import { createPostgresSessionProvider } from '@juspay-jaf/jaf/adk';
 
 const provider = createPostgresSessionProvider({
   connectionString: 'postgresql://user:password@localhost/dbname',
@@ -138,7 +138,7 @@ import {
   createRedisSessionProvider,
   createPostgresSessionProvider,
   migrateFromRedisToPostgres 
-} from '@juspay-xyne-jaf/jaf/adk';
+} from '@juspay-jaf/jaf/adk';
 
 const redisProvider = createRedisSessionProvider({ ... });
 const pgProvider = createPostgresSessionProvider({ ... });

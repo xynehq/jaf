@@ -136,7 +136,7 @@ importers:
 
   examples/agent-as-tool-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -167,7 +167,7 @@ importers:
       '@fastify/cors':
         specifier: ^10.0.1
         version: 10.1.0
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       ai:
@@ -192,7 +192,7 @@ importers:
 
   examples/flight-booking:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -214,7 +214,7 @@ importers:
 
   examples/hitl-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -233,7 +233,7 @@ importers:
 
   examples/math-tool-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -252,7 +252,7 @@ importers:
 
   examples/mcp-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -274,7 +274,7 @@ importers:
 
   examples/mcp-http-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -293,7 +293,7 @@ importers:
 
   examples/mcp-sse-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -312,7 +312,7 @@ importers:
 
   examples/otel-tracing-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -334,7 +334,7 @@ importers:
       '@google/genai':
         specifier: ^1.11.0
         version: 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -353,7 +353,7 @@ importers:
 
   examples/server-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -382,7 +382,7 @@ importers:
 
   examples/simple-event-handler-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -401,7 +401,7 @@ importers:
 
   examples/streaming-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
       dotenv:
@@ -423,7 +423,7 @@ importers:
 
   examples/visualization-demo:
     dependencies:
-      '@juspay-xyne-jaf/jaf':
+      '@juspay-jaf/jaf':
         specifier: workspace:*
         version: link:../..
     devDependencies:

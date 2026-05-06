@@ -29,7 +29,7 @@ The JAF ADK now supports real streaming from LLM providers, replacing the previo
 ### Basic Streaming
 
 ```typescript
-import { createAdkLLMService, createAgent } from '@juspay-xyne-jaf/jaf/adk';
+import { createAdkLLMService, createAgent } from '@juspay-jaf/jaf/adk';
 
 // Create service with provider
 const service = createAdkLLMService({

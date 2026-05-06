@@ -7,7 +7,7 @@ This pattern enables agent-to-agent composition where the parent agent stays in 
 ## Quick Start
 
 ```ts
-import { Agent, agentAsTool } from '@juspay-xyne-jaf/jaf';
+import { Agent, agentAsTool } from '@juspay-jaf/jaf';
 
 // 1) Define a sub-agent
 const summarizer: Agent<MyCtx, string> = {
@@ -92,7 +92,7 @@ Handoffs remain available via the `handoff_to_agent` tool and agent `handoffs` c
 
 ```ts
 import 'dotenv/config';
-import { runServer, makeLiteLLMProvider, ConsoleTraceCollector, agentAsTool, Agent } from '@juspay-xyne-jaf/jaf';
+import { runServer, makeLiteLLMProvider, ConsoleTraceCollector, agentAsTool, Agent } from '@juspay-jaf/jaf';
 
 type Ctx = { userId: string; permissions: string[] };
 

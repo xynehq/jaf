@@ -8,7 +8,7 @@ import {
   ConsoleTraceCollector,
   makeLiteLLMProvider,
   createInMemoryProvider
-} from '@juspay-xyne-jaf/jaf';
+} from '@juspay-jaf/jaf';
 import { ragAgent } from './rag-agent';
 
 type RAGContext = {

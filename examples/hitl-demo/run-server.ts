@@ -3,7 +3,7 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
-import { runServer, Agent, Tool, makeLiteLLMProvider, createMemoryProviderFromEnv } from '@juspay-xyne-jaf/jaf';
+import { runServer, Agent, Tool, makeLiteLLMProvider, createMemoryProviderFromEnv } from '@juspay-jaf/jaf';
 
 // Tools that require approval
 const redirectTool: Tool<{ url: string; reason?: string }, any> = {
