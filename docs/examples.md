@@ -20,6 +20,10 @@ The JAF framework includes multiple example projects that demonstrate different 
 2. **Streaming Demo** (`examples/streaming-demo/`) - Event-level streaming via SSE and direct engine streaming
 3. **RAG Demo** (`examples/rag-demo/`) - Vertex AI RAG integration with streaming responses
 4. **Visualization Demo** (`examples/visualization-demo/`) - Graphviz-based agent and tool visualization
+5. **Compaction Demo** (`examples/compaction-demo/`) - Deterministic compaction flow with no external LLM dependency
+6. **Real LiteLLM Compaction Demo** (`examples/compaction-real-llm-demo/`) - Real LLM compaction in a single seeded run
+7. **Real LiteLLM Multi-Turn Compaction Demo** (`examples/compaction-real-llm-multi-turn-demo/`) - Real LLM compaction after several conversational turns, followed by continued turns and a final answer
+8. **Real LiteLLM Message-Agents Demo** (`examples/message-agents-real-llm-demo/`) - Parent-orchestrated planning, delegated specialist analysis, explicit final synthesis, and compaction in one realistic flow
 
 All examples showcase the framework's core principles:
 - **Immutability**: All state is deeply readonly

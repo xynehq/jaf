@@ -320,6 +320,12 @@ export class ConsoleTraceCollector implements TraceCollector {
       case 'tool_call_end':
         console.log(`${prefix} Tool ${event.data.toolName} completed`);
         break;
+      case 'compaction_start':
+        console.log(`${prefix} Compaction started for ${event.data.agentName} (turn ${event.data.turn}) threshold=${event.data.thresholdTokens} current=${event.data.currentInputTokens}`);
+        break;
+      case 'compaction_end':
+        console.log(`${prefix} Compaction ${event.data.status} for ${event.data.agentName} (turn ${event.data.turn})`);
+        break;
       case 'handoff':
         console.log(`${prefix} Agent handoff: ${event.data.from} → ${event.data.to}`);
         break;
