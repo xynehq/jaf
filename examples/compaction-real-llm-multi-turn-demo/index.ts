@@ -1,8 +1,10 @@
 #!/usr/bin/env tsx
 
-import 'dotenv/config';
 import { randomUUID } from 'crypto';
+import { config as loadDotenv } from 'dotenv';
 import OpenAI from 'openai';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 import { z } from 'zod';
 import {
   createRunId,
@@ -19,6 +21,12 @@ import {
 } from '../../src/core/types';
 import { run } from '../../src/core/engine';
 import { configureSanitization, resetSanitizationConfig } from '../../src/core/tracing';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+loadDotenv({ path: resolve(__dirname, '../../.env'), quiet: true });
+loadDotenv({ path: resolve(__dirname, '.env'), quiet: true });
 
 type DemoContext = {
   accountName: string;
@@ -56,6 +64,9 @@ const colors = {
 const LITELLM_REQUEST_HEADERS = {
   'x-litellm-disable-logging': 'true',
 };
+
+const MIN_DEMO_INPUT_TOKENS = 4200;
+const MIN_DEMO_OUTPUT_TOKENS = 1200;
 
 const SCRIPTED_TURNS: readonly ScriptedTurn[] = [
   {
@@ -97,7 +108,7 @@ const SCRIPTED_TURNS: readonly ScriptedTurn[] = [
 
 function loadEnv(): DemoEnv {
   const baseURL = process.env.LITELLM_URL;
-  const apiKey = process.env.LITELLM_API_KEY;
+  const apiKey = 'sk-3X33Ycz1FV8rHZ2YCL1Hwg';
   const mainProvider = process.env.LITELLM_PROVIDER;
   const mainModel = process.env.LITELLM_MODEL;
 
@@ -123,8 +134,8 @@ function loadEnv(): DemoEnv {
     mainModel: resolveLiteLLMModel(mainProvider, mainModel),
     compactionProvider: compactionProvider || 'direct',
     compactionModel: resolveLiteLLMModel(compactionProvider, compactionModel),
-    maxInputTokens: parsePositiveInt(process.env.LITELLM_MAX_INPUT_TOKENS, 4200),
-    maxOutputTokens: parsePositiveInt(process.env.LITELLM_MAX_OUTPUT_TOKENS, 420),
+    maxInputTokens: parsePositiveInt(process.env.LITELLM_MAX_INPUT_TOKENS, MIN_DEMO_INPUT_TOKENS, MIN_DEMO_INPUT_TOKENS),
+    maxOutputTokens: parsePositiveInt(process.env.LITELLM_MAX_OUTPUT_TOKENS, MIN_DEMO_OUTPUT_TOKENS, MIN_DEMO_OUTPUT_TOKENS),
     triggerPercentage: parseTriggerPercentage(process.env.COMPACTION_TRIGGER_PERCENTAGE, 0.38),
   };
 }
@@ -144,12 +155,12 @@ function resolveLiteLLMModel(provider: string | undefined, model: string): strin
   return `${provider}/${model}`;
 }
 
-function parsePositiveInt(value: string | undefined, fallback: number): number {
+function parsePositiveInt(value: string | undefined, fallback: number, minimum = 1): number {
   const parsed = Number.parseInt(value || '', 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return fallback;
   }
-  return parsed;
+  return Math.max(parsed, minimum);
 }
 
 function parseTriggerPercentage(value: string | undefined, fallback: number): number {
@@ -318,9 +329,10 @@ function createAgent(env: DemoEnv): Agent<DemoContext, string> {
         'Maintain continuity across turns and update the working brief as new facts arrive.',
         'When the user asks for fresh operational, commercial, or delivery detail, call the relevant tool before answering.',
         'If the user explicitly names a tool, use that tool instead of guessing.',
-        'Before the final turn, respond in 3 short bullets covering signal, risk, and what is still missing.',
-        'Only when the user explicitly asks for the final executive-ready renewal brief, output exactly 3 markdown bullets titled "Current state", "Top risks", and "Recommended next step".',
+        'Before the final turn, respond in exactly 3 terse bullets titled Signal, Risk, and Missing.',
+        'Only when the user explicitly asks for the final executive-ready renewal brief, output exactly 3 markdown bullet items: "- **Current state** ...", "- **Top risks** ...", and "- **Recommended next step** ...".',
         'Keep the writing concrete and commercially grounded. Preserve names, metrics, timing, discounts, commitments, milestone dates, and ownership details.',
+        'Keep each non-final response under 120 words.',
         'Use tool outputs as source-of-truth details and fold them naturally into the brief.',
         'Do not mention compaction, summarization, token limits, or transcript management.',
       ].join('\n'),
@@ -335,7 +347,7 @@ function createAgent(env: DemoEnv): Agent<DemoContext, string> {
       preserveLastAssistantMessage: true,
       minCandidateMessages: 2,
       rules:
-        'Preserve the account name, renewal timing, ARR, stakeholder names, tool-derived operational metrics, legal and pricing guardrails, committed owners, milestone-based credits, and the final requested output shape. Drop repeated phrasing and duplicate recap text.',
+        'Preserve the account name, renewal timing, ARR, stakeholder names, tool-derived operational metrics, legal and pricing guardrails, committed owners, milestone-based credits, and the final requested output shape. Return at most 180 words. Drop repeated phrasing and duplicate recap text.',
     },
   };
 }
@@ -367,7 +379,7 @@ function createProvider(label: string, env: DemoEnv): ModelProvider<DemoContext>
       const params: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
         model,
         temperature: agent.modelConfig?.temperature,
-        max_tokens: agent.modelConfig?.maxTokens,
+        max_tokens: agent.modelConfig?.maxTokens ?? env.maxOutputTokens,
         messages: [
           {
             role: 'system',
@@ -383,18 +395,63 @@ function createProvider(label: string, env: DemoEnv): ModelProvider<DemoContext>
       const response = await client.chat.completions.create(
         params as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
       );
-      const choice = response.choices[0];
-      const result = {
-        ...choice,
-        usage: response.usage,
-        model: response.model,
-        id: response.id,
-      };
+      let result = buildProviderResult(response);
 
       logProviderResponse(`${label} response #${callCount}`, result);
+
+      if (shouldRetryForVisibleOutput(result)) {
+        const retryParams: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
+          ...params,
+          messages: [
+            ...params.messages,
+            {
+              role: 'user',
+              content:
+                'Return only the visible assistant response for the current task. Do not include analysis or hidden reasoning. If this is the final executive-ready renewal brief, output exactly three markdown bullet items titled Current state, Top risks, and Recommended next step.',
+            },
+          ],
+          tool_choice: params.tools ? 'auto' : undefined,
+        };
+
+        logProviderRequest(`${label} retry request #${callCount}`, state, agent, retryParams);
+        const retryResponse = await client.chat.completions.create(
+          retryParams as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming
+        );
+        result = buildProviderResult(retryResponse);
+        logProviderResponse(`${label} retry response #${callCount}`, result);
+      }
+
       return result as any;
     },
   };
+}
+
+function buildProviderResult(response: OpenAI.Chat.Completions.ChatCompletion) {
+  const choice = response.choices[0];
+  return {
+    ...choice,
+    usage: response.usage,
+    model: response.model,
+    id: response.id,
+  };
+}
+
+function hasVisibleAssistantOutput(result: any): boolean {
+  const message = result?.message;
+  if (!message) {
+    return false;
+  }
+  if (typeof message.content === 'string' && message.content.trim().length > 0) {
+    return true;
+  }
+  return Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
+}
+
+function shouldRetryForVisibleOutput(result: any): boolean {
+  if (!hasVisibleAssistantOutput(result)) {
+    return true;
+  }
+  return result?.finish_reason === 'length';
 }
 
 function buildOpenAITools(

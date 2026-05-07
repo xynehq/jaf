@@ -176,9 +176,10 @@ function buildInitialState(): RunState<DemoContext> {
 function onEvent(event: TraceEvent) {
   switch (event.type) {
     case 'llm_call_start':
+      const messageCount = event.data.messages?.length ?? 0;
       console.log(
         colors.blue(
-          `LLM call starting for ${event.data.agentName} with ${event.data.messages.length} transcript messages`
+          `LLM call starting for ${event.data.agentName} with ${messageCount} transcript messages`
         )
       );
       break;

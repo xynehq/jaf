@@ -80,6 +80,16 @@ export type CompactionConfig = {
   readonly triggerPercentage?: number;
   readonly doNotCompactSystemPrompt?: boolean;
   readonly preserveLastAssistantMessage?: boolean;
+  /**
+   * Overrides the default system instructions used for the compaction model.
+   * Additional `rules`, when provided, are still appended below these instructions.
+   */
+  readonly instructions?: string;
+  /**
+   * Overrides the default user prompt preamble used before the compactable transcript.
+   * The runtime still appends the optional system prompt, additional `rules`, and transcript.
+   */
+  readonly prompt?: string;
   readonly rules?: string;
   readonly minCandidateMessages?: number;
 };

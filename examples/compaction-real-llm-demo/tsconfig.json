@@ -1,12 +1,17 @@
 {
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "ESNext",
-    "moduleResolution": "Node",
-    "esModuleInterop": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "outDir": "dist"
+    "outDir": "./dist",
+    "rootDir": "../.."
   },
-  "include": ["./**/*.ts"]
+  "include": [
+    "./**/*.ts",
+    "../../src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "../../src/**/*.test.ts",
+    "../../src/**/__tests__/**/*.ts"
+  ]
 }

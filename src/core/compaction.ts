@@ -21,6 +21,8 @@ type ResolvedCompactionConfig = {
   readonly triggerPercentage: number;
   readonly doNotCompactSystemPrompt: boolean;
   readonly preserveLastAssistantMessage: boolean;
+  readonly instructions?: string;
+  readonly prompt?: string;
   readonly rules?: string;
   readonly minCandidateMessages: number;
 };
@@ -86,6 +88,8 @@ export function normalizeCompactionConfig(
     triggerPercentage: normalizeTriggerPercentage(config.triggerPercentage),
     doNotCompactSystemPrompt: config.doNotCompactSystemPrompt ?? true,
     preserveLastAssistantMessage: config.preserveLastAssistantMessage ?? true,
+    instructions: config.instructions?.trim() || undefined,
+    prompt: config.prompt?.trim() || undefined,
     rules: config.rules?.trim() || undefined,
     minCandidateMessages: normalizeMinCandidateMessages(config.minCandidateMessages),
   };
@@ -442,7 +446,7 @@ export async function maybeCompactStateBeforeTurn<Ctx>(
     });
     const compactionResponse = await provider.getCompletion(
       createCompactionState(stateWithLedger, segments, compactionConfig, synced.systemPromptText),
-      createCompactionAgent(agent, model, compactionConfig.rules),
+      createCompactionAgent(agent, model, compactionConfig),
       createCompactionRunConfig(config, provider, model)
     );
 
@@ -931,10 +935,12 @@ function buildCompactionTranscript(
   systemPromptText: string,
   compactionConfig: Readonly<ResolvedCompactionConfig>
 ): string {
-  const sections: string[] = [
-    'Compact the following conversation history into a concise summary that preserves goals, facts, decisions, constraints, unresolved questions, approvals, clarifications, and important tool outputs.',
-    'Return plain text only.',
-  ];
+  const sections: string[] = compactionConfig.prompt
+    ? [compactionConfig.prompt]
+    : [
+        'Compact the following conversation history into a concise summary that preserves goals, facts, decisions, constraints, unresolved questions, approvals, clarifications, and important tool outputs.',
+        'Return plain text only.',
+      ];
 
   if (!compactionConfig.doNotCompactSystemPrompt) {
     sections.push(`SYSTEM PROMPT:\n${systemPromptText}`);
@@ -1007,17 +1013,19 @@ function describeMessageBody(message: Readonly<Message>): string {
 function createCompactionAgent<Ctx>(
   agent: Readonly<Agent<Ctx, any>>,
   model: string,
-  rules?: string
+  compactionConfig: Readonly<ResolvedCompactionConfig>
 ): Agent<Ctx, string> {
-  const instructionLines = [
-    'You summarize older conversation history for JAF core compaction.',
-    'Preserve user intent, important facts, constraints, important tool outputs, approvals, clarifications, and unresolved threads.',
-    'Do not invent details.',
-    'Return plain text only.',
-  ];
+  const instructionLines = compactionConfig.instructions
+    ? [compactionConfig.instructions]
+    : [
+        'You summarize older conversation history for JAF core compaction.',
+        'Preserve user intent, important facts, constraints, important tool outputs, approvals, clarifications, and unresolved threads.',
+        'Do not invent details.',
+        'Return plain text only.',
+      ];
 
-  if (rules) {
-    instructionLines.push(`Additional rules:\n${rules}`);
+  if (compactionConfig.rules) {
+    instructionLines.push(`Additional rules:\n${compactionConfig.rules}`);
   }
 
   return {
