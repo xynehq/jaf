@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Message, TraceId, RunId } from '../core/types';
+import type { Message, TraceId, RunId } from '../core/types.js';
 
 // Conversation status types
 export type ConversationStatus = 
