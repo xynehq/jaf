@@ -562,15 +562,25 @@ function getProxyConfiguration(collectorUrl: string) {
   }
 }
 
+export type LangfuseCredentials = {
+  /** Langfuse public key. Falls back to process.env.LANGFUSE_PUBLIC_KEY */
+  publicKey?: string;
+  /** Langfuse secret key. Falls back to process.env.LANGFUSE_SECRET_KEY */
+  secretKey?: string;
+  /** Langfuse host / base URL. Falls back to process.env.LANGFUSE_BASE_URL */
+  host?: string;
+};
+
 /**
- * Get Langfuse configuration from environment variables
- * Automatically builds OTLP endpoint and auth header from LANGFUSE_* vars
+ * Get Langfuse configuration from explicit credentials or environment variables
+ * Automatically builds OTLP endpoint and auth header from the resolved LANGFUSE_* values.
+ * Explicit `credentials` take priority; each missing field falls back to its env var.
  */
-function getLangfuseOTLPConfig(): { collectorUrl: string; headers: Record<string, string> } | null {
-  const secretKey = process.env.LANGFUSE_SECRET_KEY;
-  const publicKey = process.env.LANGFUSE_PUBLIC_KEY;
-  const baseUrl = process.env.LANGFUSE_BASE_URL;
-  
+function getLangfuseOTLPConfig(credentials?: LangfuseCredentials): { collectorUrl: string; headers: Record<string, string> } | null {
+  const secretKey = credentials?.secretKey ?? process.env.LANGFUSE_SECRET_KEY;
+  const publicKey = credentials?.publicKey ?? process.env.LANGFUSE_PUBLIC_KEY;
+  const baseUrl = credentials?.host ?? process.env.LANGFUSE_BASE_URL;
+
   if (!secretKey || !publicKey || !baseUrl) {
     return null;
   }
@@ -585,7 +595,7 @@ function getLangfuseOTLPConfig(): { collectorUrl: string; headers: Record<string
   return { collectorUrl, headers };
 }
 
-function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: string): void {
+function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: string, langfuseCredentials?: LangfuseCredentials): void {
   if (!NodeSDK || !OTLPTraceExporter || !Resource || !SemanticResourceAttributes) {
     return;
   }
@@ -593,9 +603,9 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
   try {
     let finalCollectorUrl = collectorUrl;
     let headers: Record<string, string> = {};
-    
-    // Priority 1: Check for Langfuse env vars and build config automatically
-    const langfuseConfig = getLangfuseOTLPConfig();
+
+    // Priority 1: Check for resolved Langfuse credentials (explicit or env) and build config automatically
+    const langfuseConfig = getLangfuseOTLPConfig(langfuseCredentials);
     if (langfuseConfig) {
       finalCollectorUrl = langfuseConfig.collectorUrl;
       headers = langfuseConfig.headers;
@@ -782,9 +792,16 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
   private traceModels: Map<TraceId, string> = new Map();
   private tracer: any;
 
-  constructor(serviceName: string = 'jaf-agent') {
-    // Initialize OpenTelemetry SDK if Langfuse or TRACE_COLLECTOR_URL is configured
-    const langfuseConfig = getLangfuseOTLPConfig();
+  /**
+   * @param serviceName - Logical service name reported to OpenTelemetry/Langfuse.
+   * @param langfuseCredentials - Optional explicit Langfuse credentials. Any field
+   *   left undefined falls back to its environment variable (LANGFUSE_PUBLIC_KEY,
+   *   LANGFUSE_SECRET_KEY, LANGFUSE_BASE_URL), so omitting this argument preserves the
+   *   previous env-var-driven behavior.
+   */
+  constructor(serviceName: string = 'jaf-agent', langfuseCredentials?: LangfuseCredentials) {
+    // Initialize OpenTelemetry SDK if Langfuse (explicit or env) or TRACE_COLLECTOR_URL is configured
+    const langfuseConfig = getLangfuseOTLPConfig(langfuseCredentials);
     const collectorUrl = langfuseConfig?.collectorUrl || process.env.TRACE_COLLECTOR_URL;
 
     console.log(`[OTEL] Constructor called with serviceName: ${serviceName}`);
@@ -792,10 +809,10 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
     console.log(`[OTEL] otelSdk already initialized: ${!!otelSdk}`);
     console.log(`[OTEL] NodeSDK available: ${!!NodeSDK}`);
     console.log(`[OTEL] OTLPTraceExporter available: ${!!OTLPTraceExporter}`);
-    
+
     if (collectorUrl && !otelSdk) {
       console.log(`[OTEL] Initializing OpenTelemetry SDK with collector URL: ${collectorUrl}`);
-      setupOpenTelemetry(serviceName, collectorUrl);
+      setupOpenTelemetry(serviceName, collectorUrl, langfuseCredentials);
     }
     
     this.tracer = trace?.getTracer(serviceName);
@@ -1346,16 +1363,54 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
 }
 
 
-export function createCompositeTraceCollector(...collectors: TraceCollector[]): TraceCollector {
-  const collectorList = [...collectors];
-  
-  // Automatically add OpenTelemetry collector if Langfuse or TRACE_COLLECTOR_URL is configured
-  const langfuseConfig = getLangfuseOTLPConfig();
+/**
+ * Options for {@link createCompositeTraceCollector}. Lets consumers inject Langfuse
+ * credentials programmatically instead of relying solely on environment variables.
+ * Any field left undefined falls back to its env var (LANGFUSE_PUBLIC_KEY,
+ * LANGFUSE_SECRET_KEY, LANGFUSE_BASE_URL).
+ */
+export type CompositeTraceCollectorOptions = {
+  /** Langfuse public key. Falls back to process.env.LANGFUSE_PUBLIC_KEY */
+  langfusePublicKey?: string;
+  /** Langfuse secret key. Falls back to process.env.LANGFUSE_SECRET_KEY */
+  langfuseSecretKey?: string;
+  /** Langfuse host / base URL. Falls back to process.env.LANGFUSE_BASE_URL */
+  langfuseHost?: string;
+};
+
+export function createCompositeTraceCollector(...collectors: TraceCollector[]): TraceCollector;
+export function createCompositeTraceCollector(options: CompositeTraceCollectorOptions, ...collectors: TraceCollector[]): TraceCollector;
+export function createCompositeTraceCollector(
+  optionsOrCollector?: CompositeTraceCollectorOptions | TraceCollector,
+  ...collectors: TraceCollector[]
+): TraceCollector {
+  // The leading argument may be an options object or the first collector; a collector
+  // is identified by its `collect` method. This keeps the original variadic API intact.
+  let options: CompositeTraceCollectorOptions = {};
+  const collectorList: TraceCollector[] = [];
+  if (optionsOrCollector) {
+    if (typeof (optionsOrCollector as TraceCollector).collect === 'function') {
+      collectorList.push(optionsOrCollector as TraceCollector);
+    } else {
+      options = optionsOrCollector as CompositeTraceCollectorOptions;
+    }
+  }
+  collectorList.push(...collectors);
+
+  // Resolve Langfuse credentials from explicit options, falling back to env vars.
+  const langfuseCredentials: LangfuseCredentials = {
+    publicKey: options.langfusePublicKey,
+    secretKey: options.langfuseSecretKey,
+    host: options.langfuseHost,
+  };
+
+  // Automatically add OpenTelemetry collector if Langfuse (explicit or env) or TRACE_COLLECTOR_URL is configured
+  const langfuseConfig = getLangfuseOTLPConfig(langfuseCredentials);
   const collectorUrl = langfuseConfig?.collectorUrl || process.env.TRACE_COLLECTOR_URL;
-  
+
   if (collectorUrl && OTLPTraceExporter) {
-    setupOpenTelemetry('jaf-agent', collectorUrl);
-    const otelCollector = new OpenTelemetryTraceCollector();
+    setupOpenTelemetry('jaf-agent', collectorUrl, langfuseCredentials);
+    const otelCollector = new OpenTelemetryTraceCollector('jaf-agent', langfuseCredentials);
     collectorList.push(otelCollector);
   }
 
