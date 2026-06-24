@@ -1,0 +1,43 @@
+Support Ticket #SUP-2024-0892
+Date: 2024-01-15 14:23:00
+Customer: John Smith (john.smith@example.com)
+
+Agent: Hello! Thank you for contacting TechSupport. I'm Sarah, how can I assist you today?
+
+Customer: Hi Sarah, I'm having issues with my recent order ORD-2024-45678. I received the wrong item.
+
+Agent: I apologize for the inconvenience. Let me look up your order ORD-2024-45678. Can you confirm your phone number on file?
+
+Customer: Sure, it's +1-555-123-4567.
+
+Agent: Thank you. I see the order was shipped on 01/12/2024 with tracking number 1Z999AA1234567890. 
+
+Customer: Yes, that's correct. I also tried reaching out via email at support@techcompany.com yesterday.
+
+Agent: I see your email from john.smith@example.com. We'll process a return for you. Can I also reach you at an alternate email?
+
+Customer: Yes, you can use my work email: j.smith@workplace.org
+
+Agent: Perfect. I've initiated a return with reference number RET-2024-10923. You'll receive a prepaid shipping label at both john.smith@example.com and j.smith@workplace.org within 24 hours.
+
+Customer: Great! What about the replacement?
+
+Agent: Your replacement will be shipped with express delivery. New order number is ORD-2024-45901. Expected delivery is 01/18/2024.
+
+Customer: Can you also apply the 15% discount code I had?
+
+Agent: Absolutely! I've applied a 15% discount to your replacement order, saving you $23.50.
+
+Agent: Is there anything else I can help you with today?
+
+Customer: No, that's all. Thank you for your help, Sarah!
+
+Agent: You're welcome! Your case number is SUP-2024-0892 for future reference. Have a great day!
+
+Additional Notes:
+- Customer satisfaction rating: 5/5
+- Resolution time: 8 minutes
+- Follow-up scheduled: 01/19/2024 at 10:00 AM
+- Alternate contact: 555-987-6543
+- Website mentioned: https://www.techcompany.com/returns
+- Invoice number for original order: INV-2024-89012
