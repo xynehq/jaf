@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import {
   run,
+  runStream,  // NEW: Use runStream for real-time streaming!
   Agent,
   RunConfig,
   Tool,
@@ -17,7 +18,8 @@ import {
   createRunId,
   Message,
   Streaming,
-  agentAsTool
+  agentAsTool,
+  TraceEvent
 } from '../../src/index.js';
 import type { StreamProvider } from '../../src/streaming/types.js';
 
@@ -500,14 +502,53 @@ async function main() {
   console.log('Running streaming tool demo...\n');
   console.log('-'.repeat(60));
 
-  // Run the agent
+  // ========== NEW: Real-time streaming with runStream ==========
+  // With the new subscribe() support, runStream automatically merges
+  // JAF events + tool-pushed events into a single real-time stream!
+  
+  console.log('\n🔴 REAL-TIME MODE: Events arrive immediately as tools push them!\n');
+
+  // Run the agent with runStream (events arrive in real-time!)
   try {
-    const result = await run(initialState, config);
+    let result;
+    
+    // Use for-await to consume events in real-time
+    for await (const event of runStream(initialState, config)) {
+      // Events arrive immediately as they happen (NOT buffered!)
+      const timestamp = new Date().toISOString().substr(11, 12);
+      
+      // Check if it's a custom tool event (pushed via streamProvider)
+      if (event.type.startsWith('tool_partial') ||
+          event.type.startsWith('tool_streaming') ||
+          event.type.startsWith('tool_progress') ||
+          event.type.startsWith('subagent')) {
+        console.log(`  🔧 [${timestamp}] Tool Event: ${event.type}`);
+        if (event.data && typeof event.data === 'object') {
+          const data = event.data as any;
+          if (data.progress?.percentage) {
+            console.log(`       Progress: ${data.progress.percentage}%`);
+          }
+          if (data.partialResult) {
+            console.log(`       Partial: ${JSON.stringify(data.partialResult).substring(0, 50)}...`);
+          }
+        }
+      } else {
+        // JAF framework event
+        console.log(`  📋 [${timestamp}] JAF Event: ${event.type}`);
+      }
+      
+      // Capture final result when run ends
+      if (event.type === 'run_end') {
+        result = (event.data as any);
+      }
+    }
+    
+    const finalResult = result;
 
     console.log('-'.repeat(60));
     console.log('\n📊 Run Result:');
-    console.log(`   Status: ${result.outcome.status}`);
-    console.log(`   Turns: ${result.finalState.turnCount}`);
+    console.log(`   Status: ${finalResult?.outcome?.status || 'unknown'}`);
+    console.log(`   Turns: ${finalResult?.finalState?.turnCount || 'unknown'}`);
 
     // Get ALL events (JAF events + tool custom events)
     const allEvents = streamProvider.getEvents(sessionId);
@@ -551,26 +592,35 @@ async function main() {
   await streamProvider.close();
   console.log('\n✅ Demo complete!\n');
 
-  console.log('='.repeat(60));
+    console.log('='.repeat(60));
   console.log('KEY TAKEAWAY');
   console.log('='.repeat(60));
   console.log(`
 ✅ Tools can push custom events during execution!
+✅ NEW: Events are NOT buffered - they arrive IMMEDIATELY!
 
 Pattern:
 1. Add streamProvider to your context type
 2. Pass it when creating the context
 3. Tools access it via context.streamProvider
 4. Push events: await context.streamProvider.push(sessionId, event)
+5. NEW: Use runStream() to receive events in REAL-TIME!
+
+NEW Real-Time Streaming:
+  for await (const event of runStream(state, config)) {
+    // Events arrive IMMEDIATELY as tools push them
+    // No more waiting until tool execution completes!
+    console.log(event.type, event.data);
+  }
 
 Use Cases:
-• Streaming API responses (like GPT)
-• Progress updates for long operations
-• Partial results from search
-• Multi-step process tracking
-• Real-time status updates
+• Streaming API responses (like GPT) - see progress immediately!
+• Progress updates for long operations - real-time status!
+• Partial results from search - show results as they come!
+• Multi-step process tracking - live step updates!
+• Real-time status updates - no buffering!
 
-All events (JAF + custom) go to the same stream!
+All events (JAF + custom) go to the same stream in REAL-TIME!
 `);
 }
 

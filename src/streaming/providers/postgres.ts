@@ -29,6 +29,16 @@ export interface PostgresClient {
 }
 
 /**
+ * Subscriber callback type
+ */
+type EventSubscriber = (event: StreamEvent) => void;
+
+/**
+ * Subscriber store by session
+ */
+type SubscriberStore = Map<string, Set<EventSubscriber>>;
+
+/**
  * PostgreSQL stream provider configuration
  */
 export type PostgresStreamProviderConfig = {
@@ -76,6 +86,7 @@ export async function createPostgresStreamProvider(
   const autoCreateTable = config.autoCreateTable ?? true;
   const retryConfig = config.retry ?? { maxRetries: 3, retryDelayMs: 50 };
   
+  const subscribers: SubscriberStore = new Map();
   let closed = false;
   
   // Initialize schema if needed
@@ -132,6 +143,18 @@ export async function createPostgresStreamProvider(
       
       if (result.success) {
         safeConsole.log(`[JAF:STREAM:POSTGRES] Pushed event to ${streamKey}: ${event.eventType}`);
+        
+        // Notify local subscribers
+        const sessionSubscribers = subscribers.get(sessionId);
+        if (sessionSubscribers) {
+          for (const subscriber of sessionSubscribers) {
+            try {
+              subscriber(event);
+            } catch (e) {
+              safeConsole.error(`[JAF:STREAM:POSTGRES] Subscriber error:`, e);
+            }
+          }
+        }
       }
       
       return result;
@@ -225,9 +248,67 @@ export async function createPostgresStreamProvider(
       }
       
       closed = true;
+      subscribers.clear();
       // Don't close the client since we don't own it
       safeConsole.log(`[JAF:STREAM:POSTGRES] Provider closed (client not closed)`);
       return createStreamSuccess(undefined);
+    },
+
+    /**
+     * Subscribe to events for a session (real-time streaming)
+     * Returns an async generator that yields events as they are pushed
+     */
+    subscribe(sessionId: string): AsyncGenerator<StreamEvent, void, unknown> {
+      // Create a queue for this subscription
+      const eventQueue: StreamEvent[] = [];
+      let resolveNext: ((value: IteratorResult<StreamEvent>) => void) | null = null;
+      let subscriptionDone = false;
+      
+      // Subscriber callback
+      const subscriber: EventSubscriber = (event: StreamEvent) => {
+        if (subscriptionDone) return;
+        if (resolveNext) {
+          const r = resolveNext;
+          resolveNext = null;
+          r({ value: event, done: false });
+        } else {
+          eventQueue.push(event);
+        }
+      };
+      
+      // Register subscriber
+      if (!subscribers.has(sessionId)) {
+        subscribers.set(sessionId, new Set());
+      }
+      subscribers.get(sessionId)!.add(subscriber);
+      
+      // Return async generator
+      const asyncGen: AsyncGenerator<StreamEvent, void, unknown> = {
+        [Symbol.asyncIterator]() { return this; },
+        async next(): Promise<IteratorResult<StreamEvent>> {
+          if (eventQueue.length > 0) {
+            return { value: eventQueue.shift()!, done: false };
+          }
+          if (subscriptionDone || closed) {
+            return { value: undefined as any, done: true };
+          }
+          return new Promise<IteratorResult<StreamEvent>>((resolve) => {
+            resolveNext = resolve;
+          });
+        },
+        async return(): Promise<IteratorResult<StreamEvent>> {
+          subscriptionDone = true;
+          subscribers.get(sessionId)?.delete(subscriber);
+          return { value: undefined as any, done: true };
+        },
+        async throw(e: any): Promise<IteratorResult<StreamEvent>> {
+          subscriptionDone = true;
+          subscribers.get(sessionId)?.delete(subscriber);
+          throw e;
+        }
+      };
+      
+      return asyncGen;
     }
   };
 }
