@@ -1,0 +1,6 @@
+order_id,customer_name,product,quantity,price,order_date,status
+1001,John Smith,Laptop,1,999.99,2024-01-15,completed
+1002,Jane Doe,Mouse,2,24.99,2024-01-16,completed
+1004,Alice Brown,Monitor,2,299.99,2024-01-17,completed
+1007,Frank Miller,USB Hub,2,19.99,2024-01-19,completed
+1009,Henry Chen,External SSD,1,149.99,2024-01-20,completed

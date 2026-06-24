@@ -1,0 +1,124 @@
+{
+  "totalOrders": 10,
+  "totalRevenue": 2254.84,
+  "averageOrderValue": 225.48,
+  "statusBreakdown": {
+    "completed": 5,
+    "processing": 3,
+    "shipped": 2
+  },
+  "topProducts": [
+    {
+      "product": "Headphones",
+      "totalQuantity": 3
+    },
+    {
+      "product": "Mouse",
+      "totalQuantity": 2
+    },
+    {
+      "product": "Monitor",
+      "totalQuantity": 2
+    },
+    {
+      "product": "USB Hub",
+      "totalQuantity": 2
+    },
+    {
+      "product": "Wireless Charger",
+      "totalQuantity": 2
+    }
+  ],
+  "orderDetails": [
+    {
+      "order_id": "1001",
+      "customer_name": "John Smith",
+      "product": "Laptop",
+      "quantity": "1",
+      "price": "999.99",
+      "order_date": "2024-01-15",
+      "status": "completed"
+    },
+    {
+      "order_id": "1002",
+      "customer_name": "Jane Doe",
+      "product": "Mouse",
+      "quantity": "2",
+      "price": "24.99",
+      "order_date": "2024-01-16",
+      "status": "completed"
+    },
+    {
+      "order_id": "1003",
+      "customer_name": "Bob Johnson",
+      "product": "Keyboard",
+      "quantity": "1",
+      "price": "79.99",
+      "order_date": "2024-01-17",
+      "status": "processing"
+    },
+    {
+      "order_id": "1004",
+      "customer_name": "Alice Brown",
+      "product": "Monitor",
+      "quantity": "2",
+      "price": "299.99",
+      "order_date": "2024-01-17",
+      "status": "completed"
+    },
+    {
+      "order_id": "1005",
+      "customer_name": "Charlie Wilson",
+      "product": "Headphones",
+      "quantity": "3",
+      "price": "49.99",
+      "order_date": "2024-01-18",
+      "status": "shipped"
+    },
+    {
+      "order_id": "1006",
+      "customer_name": "Emma Davis",
+      "product": "Webcam",
+      "quantity": "1",
+      "price": "89.99",
+      "order_date": "2024-01-19",
+      "status": "processing"
+    },
+    {
+      "order_id": "1007",
+      "customer_name": "Frank Miller",
+      "product": "USB Hub",
+      "quantity": "2",
+      "price": "19.99",
+      "order_date": "2024-01-19",
+      "status": "completed"
+    },
+    {
+      "order_id": "1008",
+      "customer_name": "Grace Lee",
+      "product": "Desk Lamp",
+      "quantity": "1",
+      "price": "34.99",
+      "order_date": "2024-01-20",
+      "status": "shipped"
+    },
+    {
+      "order_id": "1009",
+      "customer_name": "Henry Chen",
+      "product": "External SSD",
+      "quantity": "1",
+      "price": "149.99",
+      "order_date": "2024-01-20",
+      "status": "completed"
+    },
+    {
+      "order_id": "1010",
+      "customer_name": "Isabel Garcia",
+      "product": "Wireless Charger",
+      "quantity": "2",
+      "price": "29.99",
+      "order_date": "2024-01-21",
+      "status": "processing"
+    }
+  ]
+}
