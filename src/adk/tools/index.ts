@@ -633,3 +633,6 @@ export const createTimestampTool = (): Tool => {
     parameters: []
   });
 };
+
+// Export summarizer tool
+export { summarizerTool, createSummarizerTool } from './summarizer-tool';

@@ -140,6 +140,7 @@
     "url": "https://github.com/xynehq/jaf/issues"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^2.0.27",
     "@fastify/cors": "^9.0.1",
     "@modelcontextprotocol/sdk": "^1.17.4",
     "@types/yauzl": "^2.10.3",
