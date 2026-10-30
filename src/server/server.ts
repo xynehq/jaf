@@ -76,7 +76,7 @@ const attachmentSchema = {
 const httpMessageSchema = {
   type: 'object',
   properties: {
-    role: { type: 'string', enum: ['user', 'assistant', 'system'] },
+    role: { type: 'string', enum: ['user', 'assistant', 'system', 'tool'] },
     content: {
       oneOf: [
         { type: 'string' },
@@ -89,7 +89,27 @@ const httpMessageSchema = {
     attachments: {
       type: 'array',
       items: attachmentSchema
-    }
+    },
+    tool_calls: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          type: { type: 'string', enum: ['function'] },
+          function: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              arguments: { type: 'string' }
+            },
+            required: ['name', 'arguments']
+          }
+        },
+        required: ['id', 'type', 'function']
+      }
+    },
+    tool_call_id: { type: 'string' }
   },
   required: ['role', 'content']
 };
@@ -288,11 +308,18 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         }
 
         // Convert HTTP messages to JAF messages
-        const jafMessages: Message[] = validatedRequest.messages.map(msg => ({
-          role: msg.role === 'system' ? 'user' : msg.role as 'user' | 'assistant',
-          content: msg.content,
-          attachments: (msg as any).attachments
-        }));
+        // Tool traces (assistant tool_calls, tool messages) are preserved so a replayed transcript
+        // can resume approvals and continue from previous tool results.
+        const jafMessages: Message[] = validatedRequest.messages.map((msg): Message => {
+          if (msg.role === 'tool') return { role: 'tool', content: msg.content, tool_call_id: msg.tool_call_id };
+          if (msg.role === 'assistant') return {
+            role: 'assistant',
+            content: msg.content,
+            ...('tool_calls' in msg && msg.tool_calls && msg.tool_calls.length > 0 ? { tool_calls: msg.tool_calls } : {}),
+            ...(msg.attachments ? { attachments: msg.attachments } : {})
+          };
+          return { role: 'user', content: msg.content, ...(msg.attachments ? { attachments: msg.attachments } : {}) }; // system → user, as today
+        });
 
         // Create initial state
         const runId = createRunId(uuidv4());

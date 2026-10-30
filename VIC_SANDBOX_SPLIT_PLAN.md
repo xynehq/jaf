@@ -261,7 +261,7 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 
 | ID | Repo | Phase | Title | Depends on | Status | Notes |
 |---|---|---|---|---|---|---|
-| J1 | jaf | 1 | `/chat` accepts full transcript with tool traces | – | in_progress | |
+| J1 | jaf | 1 | `/chat` accepts full transcript with tool traces | – | done | commit `J1:` (git log --grep '^J1:'), review: 1 rounds, APPROVE. Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED, no local DB), fails identically on main. Reviewer notes: /chat callers can replay tool_calls+approvals, so V9 bearer check gates tool execution (document in J5); tool `tool_call_id` still optional, consider requiring it in V2 contracts. |
 | J2 | jaf | 1 | Agent registry as a function on `ServerConfig` | – | todo | |
 | J4 | jaf | 1 | Export `jsonSchemaToZod` and `zodSchemaToJsonSchema` | – | todo | |
 | J3 | jaf | 1 | Remote tool helper `discoverRemoteTools` | J4 | todo | |

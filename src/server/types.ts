@@ -38,8 +38,37 @@ export const approvalMessageSchema = z.object({
   additionalContext: z.record(z.any()).optional()
 });
 
+export type ChatRequest = z.infer<typeof chatRequestSchema>;
+export type HttpMessage = z.infer<typeof httpMessageSchema>;
+export type ApprovalMessage = z.infer<typeof approvalMessageSchema>;
+
+// Extended message schema that includes tool calls and responses.
+// The tool-call-aware variants come first so z.union does not strip tool_calls / tool_call_id
+// by matching the narrower httpMessageSchema.
+export const fullMessageSchema = z.union([
+  z.object({
+    role: z.literal('assistant'),
+    content: z.string(),
+    tool_calls: z.array(z.object({
+      id: z.string(),
+      type: z.literal('function'),
+      function: z.object({
+        name: z.string(),
+        arguments: z.string()
+      })
+    })).optional(),
+    attachments: z.array(attachmentSchema).optional()
+  }),
+  z.object({
+    role: z.literal('tool'),
+    content: z.string(),
+    tool_call_id: z.string().optional()
+  }),
+  httpMessageSchema
+]);
+
 export const chatRequestSchema = z.object({
-  messages: z.array(httpMessageSchema),
+  messages: z.array(fullMessageSchema),
   agentName: z.string(),
   context: z.any().optional(),
   maxTurns: z.number().optional(),
@@ -53,32 +82,6 @@ export const chatRequestSchema = z.object({
   }).optional(),
   approvals: z.array(approvalMessageSchema).optional()
 });
-
-export type ChatRequest = z.infer<typeof chatRequestSchema>;
-export type HttpMessage = z.infer<typeof httpMessageSchema>;
-export type ApprovalMessage = z.infer<typeof approvalMessageSchema>;
-
-// Extended message schema that includes tool calls and responses
-export const fullMessageSchema = z.union([
-  httpMessageSchema,
-  z.object({
-    role: z.literal('assistant'),
-    content: z.string(),
-    tool_calls: z.array(z.object({
-      id: z.string(),
-      type: z.literal('function'),
-      function: z.object({
-        name: z.string(),
-        arguments: z.string()
-      })
-    })).optional()
-  }),
-  z.object({
-    role: z.literal('tool'),
-    content: z.string(),
-    tool_call_id: z.string().optional()
-  })
-]);
 
 export const chatResponseSchema = z.object({
   success: z.boolean(),
