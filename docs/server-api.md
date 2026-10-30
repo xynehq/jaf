@@ -72,10 +72,35 @@ interface ServerConfig<Ctx> {
   port?: number;                    // Default: 3000
   host?: string;                    // Default: '127.0.0.1'
   cors?: boolean;                   // Default: false
-  runConfig: RunConfig<Ctx>;        // Required: Framework run configuration
-  agentRegistry: Map<string, Agent<Ctx, any>>; // Required: Available agents
+  // Required: Framework run configuration. runConfig.agentRegistry is an AgentRegistrySource.
+  runConfig: Omit<RunConfig<Ctx>, 'agentRegistry'> & { agentRegistry: AgentRegistrySource<Ctx> };
+  agentRegistry?: AgentRegistrySource<Ctx>;    // Deprecated: legacy top-level registry
   defaultMemoryProvider?: MemoryProvider;      // Optional: Memory persistence
 }
+
+type AgentRegistry<Ctx> = ReadonlyMap<string, Agent<Ctx, any>>;
+type AgentRegistrySource<Ctx> =
+  | AgentRegistry<Ctx>
+  | (() => AgentRegistry<Ctx> | Promise<AgentRegistry<Ctx>>);
+```
+
+#### Dynamic agent registry
+
+`runConfig.agentRegistry` may be a function instead of a `Map`. The server calls it once per request
+(`/agents`, `/chat`, `/agents/:agentName/chat`) and uses the returned map for that whole request: the
+agent existence check, and the `RunConfig` passed to the engine, which always receives the resolved
+`ReadonlyMap`, never the function. Returning a new map from the function changes the available agents
+for the next request without restarting the server; a run in progress keeps its snapshot.
+
+```typescript
+let current: ReadonlyMap<string, Agent<Ctx, any>> = buildAgents();
+
+createJAFServer({
+  runConfig: { agentRegistry: () => current, modelProvider },
+});
+
+// later, e.g. after a tool catalog change:
+current = buildAgents();
 ```
 
 ### runServer Parameters

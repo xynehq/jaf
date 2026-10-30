@@ -262,7 +262,7 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | ID | Repo | Phase | Title | Depends on | Status | Notes |
 |---|---|---|---|---|---|---|
 | J1 | jaf | 1 | `/chat` accepts full transcript with tool traces | – | done | commit `J1:` (git log --grep '^J1:'), review: 1 rounds, APPROVE. Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED, no local DB), fails identically on main. Reviewer notes: /chat callers can replay tool_calls+approvals, so V9 bearer check gates tool execution (document in J5); tool `tool_call_id` still optional, consider requiring it in V2 contracts. |
-| J2 | jaf | 1 | Agent registry as a function on `ServerConfig` | – | in_progress | |
+| J2 | jaf | 1 | Agent registry as a function on `ServerConfig` | – | done | commit `J2:` (git log --grep '^J2:'), review: 1 rounds, APPROVE. Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED), same as J1. Also fixed J1 test to bind a free port (server uses `port || 3000`, so port 0 collided). Startup agents log guarded so a throwing registry fn cannot process.exit. Follow-ups: re-export AgentRegistry/AgentRegistrySource from src/server/index.ts in J5; J3 errors must not embed request headers (registry fn error messages reach /agents and /chat 500 bodies). |
 | J4 | jaf | 1 | Export `jsonSchemaToZod` and `zodSchemaToJsonSchema` | – | todo | |
 | J3 | jaf | 1 | Remote tool helper `discoverRemoteTools` | J4 | todo | |
 | J5 | jaf | 5 | Docs, version bump, publish | J1, J2, J3, J4 | todo | publish step is human |

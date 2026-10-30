@@ -2,14 +2,20 @@ import { z } from 'zod';
 import { Agent, RunConfig } from '../core/types';
 import { MemoryProvider } from '../memory/types';
 
+export type AgentRegistry<Ctx> = ReadonlyMap<string, Agent<Ctx, any>>;
+
+// A registry, or a function returning the current registry. A function is called once per
+// request, so each run sees one snapshot while the registry can change between requests.
+export type AgentRegistrySource<Ctx> = AgentRegistry<Ctx> | (() => AgentRegistry<Ctx> | Promise<AgentRegistry<Ctx>>);
+
 export interface ServerConfig<Ctx> {
   port?: number;
   host?: string;
   cors?: boolean;
   maxBodySize?: number;
-  runConfig: RunConfig<Ctx>;
+  runConfig: Omit<RunConfig<Ctx>, 'agentRegistry'> & { agentRegistry: AgentRegistrySource<Ctx> };
   // BACKWARDS COMPATIBILITY: Support legacy agentRegistry at top level
-  agentRegistry?: Map<string, Agent<Ctx, any>>;
+  agentRegistry?: AgentRegistrySource<Ctx>;
   defaultMemoryProvider?: MemoryProvider;
 }
 

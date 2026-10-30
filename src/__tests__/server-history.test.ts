@@ -1,6 +1,18 @@
+import net from 'net';
 import { z } from 'zod';
 import { createJAFServer } from '../server/server';
 import { Agent, Message, ModelProvider, RunState, Tool } from '../core/types';
+
+const getFreePort = (): Promise<number> =>
+  new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.unref();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const { port } = srv.address() as net.AddressInfo;
+      srv.close(() => resolve(port));
+    });
+  });
 
 describe('Server /chat full transcript with tool traces', () => {
   const executedArgs: Array<{ x: number }> = [];
@@ -34,16 +46,7 @@ describe('Server /chat full transcript with tool traces', () => {
     },
   };
 
-  const server = createJAFServer<any>({
-    port: 0,
-    host: '127.0.0.1',
-    cors: false,
-    runConfig: {
-      agentRegistry: new Map([[agent.name, agent]]),
-      modelProvider,
-      maxTurns: 5,
-    },
-  });
+  let server: ReturnType<typeof createJAFServer<any>>;
 
   const assistantWithToolCall = {
     role: 'assistant' as const,
@@ -58,6 +61,16 @@ describe('Server /chat full transcript with tool traces', () => {
   };
 
   beforeAll(async () => {
+    server = createJAFServer<any>({
+      port: await getFreePort(),
+      host: '127.0.0.1',
+      cors: false,
+      runConfig: {
+        agentRegistry: new Map([[agent.name, agent]]),
+        modelProvider,
+        maxTurns: 5,
+      },
+    });
     await server.start();
   });
 
