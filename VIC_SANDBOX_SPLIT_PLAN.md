@@ -261,7 +261,7 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 
 | ID | Repo | Phase | Title | Depends on | Status | Notes |
 |---|---|---|---|---|---|---|
-| J1 | jaf | 1 | `/chat` accepts full transcript with tool traces | – | todo | |
+| J1 | jaf | 1 | `/chat` accepts full transcript with tool traces | – | in_progress | |
 | J2 | jaf | 1 | Agent registry as a function on `ServerConfig` | – | todo | |
 | J4 | jaf | 1 | Export `jsonSchemaToZod` and `zodSchemaToJsonSchema` | – | todo | |
 | J3 | jaf | 1 | Remote tool helper `discoverRemoteTools` | J4 | todo | |
