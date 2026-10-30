@@ -4,6 +4,7 @@
 export * from './model';
 export * from './mcp';
 export * from './generic-openai';
+export * from './schema';
 export {
   createAiSdkProvider,
   type AiSdkFunctionTool,
