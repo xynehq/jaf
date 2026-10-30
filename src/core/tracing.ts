@@ -46,8 +46,23 @@ async function initOtelModules(): Promise<void> {
   }
 }
 
-// Initialize OTEL modules on module load
-initOtelModules().catch(() => {});
+// Initialize OTEL modules on module load. Loading is asynchronous, so consumers that
+// construct a collector in the same turn must not assume the modules are ready yet.
+let otelModulesSettled = false;
+const otelModulesReady: Promise<boolean> = initOtelModules()
+  .then(() => otelAvailable, () => false)
+  .then((ready) => {
+    otelModulesSettled = true;
+    return ready;
+  });
+
+/**
+ * Resolves once the optional OpenTelemetry modules have finished loading:
+ * `true` when they are available, `false` when tracing is disabled.
+ */
+export function ensureOtelReady(): Promise<boolean> {
+  return otelModulesReady;
+}
 
 
 // Default sensitive fields that should be redacted from logs
@@ -597,6 +612,7 @@ function getLangfuseOTLPConfig(credentials?: LangfuseCredentials): { collectorUr
 
 function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: string, langfuseCredentials?: LangfuseCredentials): void {
   if (!NodeSDK || !OTLPTraceExporter || !Resource || !SemanticResourceAttributes) {
+    console.log('[JAF:OTEL] OpenTelemetry modules not loaded yet; deferring setup');
     return;
   }
 
@@ -760,7 +776,7 @@ function setupOpenTelemetry(serviceName: string = 'jaf-agent', collectorUrl?: st
     process.on('beforeExit', async () => {
       console.log('[JAF:OTEL] Flushing traces before exit...');
       try {
-        await otelSdk.shutdown();
+        await otelSdk?.shutdown();
         console.log('[JAF:OTEL] Traces flushed successfully.');
       } catch (error) {
         console.error('[JAF:OTEL] Error flushing traces:', JSON.stringify(error, null, 2));
@@ -791,6 +807,15 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
   private tokenUsage: Map<TraceId, { prompt: number; completion: number; total: number }> = new Map();
   private traceModels: Map<TraceId, string> = new Map();
   private tracer: any;
+  private readonly serviceName: string;
+  private readonly langfuseCredentials?: LangfuseCredentials;
+  private readonly collectorUrl?: string;
+  // Events received before the OpenTelemetry modules finished loading; replayed once ready.
+  private pending: TraceEvent[] = [];
+  private readonly pendingMax = ((n: number) => (Number.isFinite(n) && n > 0 ? n : 1000))(
+    Number(process.env.JAF_OTEL_PENDING_MAX ?? 1000)
+  );
+  private pendingOverflowWarned = false;
 
   /**
    * @param serviceName - Logical service name reported to OpenTelemetry/Langfuse.
@@ -810,33 +835,87 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
     console.log(`[OTEL] NodeSDK available: ${!!NodeSDK}`);
     console.log(`[OTEL] OTLPTraceExporter available: ${!!OTLPTraceExporter}`);
 
-    if (collectorUrl && !otelSdk) {
-      console.log(`[OTEL] Initializing OpenTelemetry SDK with collector URL: ${collectorUrl}`);
-      setupOpenTelemetry(serviceName, collectorUrl, langfuseCredentials);
+    this.serviceName = serviceName;
+    this.langfuseCredentials = langfuseCredentials;
+    this.collectorUrl = collectorUrl;
+
+    this.tryInit();
+    if (!this.tracer && !otelModulesSettled) {
+      console.log('[OTEL] OpenTelemetry modules still loading; buffering trace events until ready');
+      void otelModulesReady
+        .then(() => {
+          this.tryInit();
+          this.logTracerState();
+          this.flushPending();
+        })
+        .catch((error) => console.error('[OTEL] Deferred initialization failed:', error));
+    } else {
+      this.logTracerState();
     }
-    
-    this.tracer = trace?.getTracer(serviceName);
+  }
+
+  // Idempotent: sets up the SDK (once per process) and binds the tracer when the modules are available.
+  private tryInit(): void {
+    if (!otelAvailable) return;
+    if (this.collectorUrl && !otelSdk) {
+      console.log(`[OTEL] Initializing OpenTelemetry SDK with collector URL: ${this.collectorUrl}`);
+      setupOpenTelemetry(this.serviceName, this.collectorUrl, this.langfuseCredentials);
+    }
+    this.tracer = trace.getTracer(this.serviceName);
+  }
+
+  private logTracerState(): void {
     if (!this.tracer) {
       console.warn('[OTEL] OpenTelemetry tracer not available');
       console.warn('[OTEL] trace object:', !!trace);
-      if (!collectorUrl) {
+      if (!this.collectorUrl) {
         console.warn('[OTEL] TRACE_COLLECTOR_URL not set - traces will not be exported');
       }
     } else {
-      console.log(`[OTEL] OpenTelemetry tracer initialized for service: ${serviceName}`);
-      if (collectorUrl) {
-        console.log(`[OTEL] Configured to export traces to: ${collectorUrl}`);
+      console.log(`[OTEL] OpenTelemetry tracer initialized for service: ${this.serviceName}`);
+      if (this.collectorUrl) {
+        console.log(`[OTEL] Configured to export traces to: ${this.collectorUrl}`);
       }
+    }
+  }
+
+  private flushPending(): void {
+    const events = this.pending;
+    this.pending = [];
+    if (!this.tracer) return;
+    for (const event of events) {
+      this.handle(event);
     }
   }
 
   collect(event: TraceEvent): void {
     this.inMemory.collect(event);
 
-    if (!this.tracer) {
+    // The modules may have become available before the readiness callback bound the tracer;
+    // bind it now and replay the buffer first so event order is preserved.
+    if (!this.tracer && otelAvailable) {
+      this.tryInit();
+      this.flushPending();
+    }
+
+    if (this.tracer) {
+      this.handle(event);
       return;
     }
 
+    if (!otelModulesSettled) {
+      if (this.pending.length >= this.pendingMax) {
+        this.pending.shift();
+        if (!this.pendingOverflowWarned) {
+          this.pendingOverflowWarned = true;
+          console.warn(`[OTEL] Pending trace buffer full (${this.pendingMax}); dropping oldest events until OpenTelemetry is ready`);
+        }
+      }
+      this.pending.push(event);
+    }
+  }
+
+  private handle(event: TraceEvent): void {
     try {
       const traceId = this._getTraceId(event);
       if (!traceId) {
@@ -1364,6 +1443,32 @@ export class OpenTelemetryTraceCollector implements TraceCollector {
 
 
 /**
+ * Construct an {@link OpenTelemetryTraceCollector} after the OpenTelemetry modules have loaded,
+ * so the tracer is bound immediately and no events are buffered.
+ */
+export async function createOpenTelemetryTraceCollector(
+  serviceName?: string,
+  langfuseCredentials?: LangfuseCredentials
+): Promise<OpenTelemetryTraceCollector> {
+  await ensureOtelReady();
+  return new OpenTelemetryTraceCollector(serviceName, langfuseCredentials);
+}
+
+/**
+ * Flush and stop the OpenTelemetry SDK, e.g. from a SIGTERM handler (`beforeExit` does not fire
+ * on signals). Call it once, at process exit. Always resolves; flush errors are logged.
+ */
+export async function shutdownOpenTelemetry(): Promise<void> {
+  const sdk = otelSdk;
+  otelSdk = null;
+  try {
+    await sdk?.shutdown();
+  } catch (error) {
+    console.error('[JAF:OTEL] Error flushing traces:', error);
+  }
+}
+
+/**
  * Options for {@link createCompositeTraceCollector}. Lets consumers inject Langfuse
  * credentials programmatically instead of relying solely on environment variables.
  * Any field left undefined falls back to its env var (LANGFUSE_PUBLIC_KEY,
@@ -1408,10 +1513,10 @@ export function createCompositeTraceCollector(
   const langfuseConfig = getLangfuseOTLPConfig(langfuseCredentials);
   const collectorUrl = langfuseConfig?.collectorUrl || process.env.TRACE_COLLECTOR_URL;
 
-  if (collectorUrl && OTLPTraceExporter) {
-    setupOpenTelemetry('jaf-agent', collectorUrl, langfuseCredentials);
-    const otelCollector = new OpenTelemetryTraceCollector('jaf-agent', langfuseCredentials);
-    collectorList.push(otelCollector);
+  // Added even while the OpenTelemetry modules are still loading: the collector sets up the SDK
+  // itself once they are ready and buffers events until then.
+  if (collectorUrl) {
+    collectorList.push(new OpenTelemetryTraceCollector('jaf-agent', langfuseCredentials));
   }
 
 

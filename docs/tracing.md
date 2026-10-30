@@ -106,6 +106,30 @@ JAF supports OpenTelemetry for integration with observability platforms like Jae
    const collector = createCompositeTraceCollector(new ConsoleTraceCollector());
    ```
 
+### Initialization and Shutdown
+
+The OpenTelemetry packages are optional and load asynchronously when JAF is imported. A collector
+constructed before they finish loading (for example right after the import, at the top of a server
+module) buffers its trace events and replays them once the modules are ready, so no spans are lost.
+The buffer holds at most `JAF_OTEL_PENDING_MAX` events (default 1000); beyond that the oldest events
+are dropped with a single warning. `createCompositeTraceCollector` always adds the OpenTelemetry
+collector when a collector URL or Langfuse credentials are configured, whether or not the modules
+have loaded yet.
+
+To avoid buffering, wait for the modules first:
+
+```typescript
+import { createOpenTelemetryTraceCollector, ensureOtelReady, shutdownOpenTelemetry } from '@juspay-jaf/jaf';
+
+const collector = await createOpenTelemetryTraceCollector('my-service'); // awaits ensureOtelReady()
+
+// beforeExit does not fire on signals: flush buffered spans explicitly on SIGTERM.
+process.on('SIGTERM', async () => {
+  await shutdownOpenTelemetry();
+  process.exit(0);
+});
+```
+
 ### Local Development with Jaeger
 
 Run Jaeger locally for trace visualization:
