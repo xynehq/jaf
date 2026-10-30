@@ -1,7 +1,7 @@
 # VIC / JAF Sandbox Split: Implementation Plan
 
 ```
-plan_version: 2
+plan_version: 3
 plan_updated: 2026-10-30
 copies (must be byte-identical at every commit):
   jaf:              VIC_SANDBOX_SPLIT_PLAN.md   branch feat/vic-sandbox-split   base main          (55edcf5)
@@ -265,8 +265,9 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | J2 | jaf | 1 | Agent registry as a function on `ServerConfig` | – | done | commit `J2:` (git log --grep '^J2:'), review: 1 rounds, APPROVE. Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED), same as J1. Also fixed J1 test to bind a free port (server uses `port || 3000`, so port 0 collided). Startup agents log guarded so a throwing registry fn cannot process.exit. Follow-ups: re-export AgentRegistry/AgentRegistrySource from src/server/index.ts in J5; J3 errors must not embed request headers (registry fn error messages reach /agents and /chat 500 bodies). |
 | J4 | jaf | 1 | Export `jsonSchemaToZod` and `zodSchemaToJsonSchema` | – | in_progress | |
 | J3 | jaf | 1 | Remote tool helper `discoverRemoteTools` | J4 | todo | |
-| J5 | jaf | 5 | Docs, version bump, publish | J1, J2, J3, J4 | todo | publish step is human |
-| V1 | agentic-commerce | 2 | Dependency: `@xynehq/jaf@0.1.18` → linked `@juspay-jaf/jaf` | – | blocked | BLOCKED (review r1, REQUEST_CHANGES). Done: link + import rewrite, root typecheck 0, /health 200; JAF/tsconfig node16→preserve/bundler (jaf is now type:module with extensionless .d.ts re-exports; tsx-only runtime, reviewer accepted); server.ts onEvent fallback now strips run_end.data.finalState (0.1.46 added it; would have sent full context incl. card/password to Ardra SYSTEM msg). OPEN blocking: jaf OpenTelemetryTraceCollector binds tracer in its sync constructor while OTEL modules now load via async import() → VIC (server.ts:180) gets no tracer, Langfuse spans silently dropped. Human decision: (a) add a J task to fix jaf tracing.ts (await init or lazy tracer in collect) and make V1 depend on it, or (b) allow a VIC-side workaround (construct collector lazily on first event), or (c) accept loss of tracing until fixed. Non-blocking to record: link bypasses root fastify/@fastify/cors overrides (jaf ships fastify 4.29.1, cors 9.0.1) → needs jaf bump before V13; zod: same version 3.25.76 but two physical copies (J4/V3 must not use instanceof); Docker image unbuildable-at-runtime until V13 (link target absent); tsc emit now ESM syntax (unused). |
+| J6 | jaf | 1 | Tracing: OpenTelemetry collector independent of module load order | – | todo | unblocks V1 |
+| J5 | jaf | 5 | Docs, version bump, publish | J1, J2, J3, J4, J6 | todo | publish step is human |
+| V1 | agentic-commerce | 2 | Dependency: `@xynehq/jaf@0.1.18` → linked `@juspay-jaf/jaf` | J6 | todo | Was blocked on the jaf OTEL init race (review r1); decision (a) taken in plan v3: J6 added, V1 re-queued. Partial work already committed in vic 67ae193b (link, import rewrite, tsconfig preserve/bundler, onEvent strips run_end.data.finalState): resume from it, do not redo. Carry forward, non-blocking: link bypasses root fastify/@fastify/cors overrides (jaf ships fastify 4.29.1, cors 9.0.1) so a jaf bump is needed before V13; zod is the same version but two physical copies (J4/V3 must not use instanceof); Docker image unbuildable until V13; tsc emit now ESM (unused). |
 | V2 | agentic-commerce | 2 | `shared` package: types, context schemas, prompt helpers, contracts, logger | V1 | todo | |
 | V3 | agentic-commerce | 2 | Tool registry and catalog | V2, J4 | todo | |
 | V5 | agentic-commerce | 2 | Run-token store | V2 | todo | |
@@ -385,6 +386,9 @@ immutable, avoids mutating a map the server already holds, and gives each run on
    assert `jsonSchemaToZod(zodSchemaToJsonSchema(s))` accepts the same valid inputs and rejects the same invalid ones
    (missing `a`, wrong `c`), and that descriptions survive.
 
+4. Neither function may rely on `instanceof` against zod classes: VIC passes schemas built with its own physical copy
+   of zod (see the V1 note). Use `_def.typeName` duck typing throughout both converters.
+
 **Acceptance.** Both functions importable from `@juspay-jaf/jaf` and `@juspay-jaf/jaf/providers`. MCP tests unchanged.
 
 **Verify.** `pnpm typecheck && pnpm lint && pnpm test`.
@@ -439,6 +443,8 @@ export async function discoverRemoteTools<Ctx>(opts: RemoteToolsOptions<Ctx>): P
   - non-2xx → `ToolResponse.error(ToolErrorCodes.EXTERNAL_SERVICE_ERROR, \`remote tool ${entry.id} failed: HTTP ${status}\`, { httpStatus, body: text.slice(0, 2000) })`.
   - abort → `ToolResponse.error(ToolErrorCodes.TIMEOUT, ...)`; network error → `EXTERNAL_SERVICE_ERROR`.
   Never throw from `execute`.
+- Error messages, `RemoteToolsError` and `ToolResponse.error` details must never include request or response headers
+  or the request body: the run token travels in a header, and these messages can surface in `/chat` error bodies.
 - Must not import `./mcp` (keeps `@modelcontextprotocol/sdk` out of the root index).
 
 **Acceptance.** Tests with a local `http.createServer`: catalog parse, version mismatch, stub schema validation,
@@ -447,12 +453,74 @@ per-call headers and `call` meta present on the request.
 
 **Verify.** `pnpm typecheck && pnpm lint && pnpm test`.
 
+### J6. Tracing: OpenTelemetry collector independent of module load order
+
+**Why.** `jaf:src/core/tracing.ts` loads the OpenTelemetry packages with an async `import()` started at module load
+(`initOtelModules()`, near line 17), but the `OpenTelemetryTraceCollector` constructor calls `setupOpenTelemetry()` and
+`trace.getTracer()` synchronously (near line 802). A consumer that constructs the collector right after importing the
+library, as VIC does in `vic:JAF/src/server.ts` near line 180, gets `tracer === undefined`; `collect()` then returns early
+forever and every Langfuse span is dropped without an error. `createCompositeTraceCollector` (near line 1411) has the same
+race: `if (collectorUrl && OTLPTraceExporter)` silently omits the OTEL collector when the modules are not loaded yet. The
+SDK is also only flushed on `beforeExit`, which does not fire on SIGTERM, so a pod termination loses buffered spans.
+Found while doing V1 (`vic` commit 67ae193b).
+
+**Files.** `jaf:src/core/tracing.ts`, new `jaf:src/__tests__/tracing-init.test.ts`, `jaf:docs/tracing.md` (short section).
+
+**Changes.**
+1. Make module loading observable. Replace the fire-and-forget `initOtelModules().catch(() => {})` with
+   ```ts
+   const otelModulesReady: Promise<boolean> = initOtelModules().then(() => otelAvailable, () => false);
+   export function ensureOtelReady(): Promise<boolean> { return otelModulesReady; }
+   ```
+   `initOtelModules` itself is unchanged.
+2. `OpenTelemetryTraceCollector`: keep the constructor signature. Store `serviceName`, `langfuseCredentials` and
+   `collectorUrl` on the instance. Add a private idempotent `tryInit(): void`: return if `!otelAvailable`; if
+   `collectorUrl && !otelSdk` call `setupOpenTelemetry(serviceName, collectorUrl, langfuseCredentials)`; then
+   `this.tracer = trace.getTracer(serviceName)`. The constructor calls `tryInit()`; if the tracer is still unset and the
+   modules are still loading, it registers `otelModulesReady.then(() => { this.tryInit(); this.flushPending(); })`.
+   Keep the existing log lines.
+3. Pending buffer. Add `private pending: TraceEvent[] = []` and `private readonly pendingMax = Number(process.env.JAF_OTEL_PENDING_MAX ?? 1000)`.
+   Extract the per-event span logic of `collect()` into `private handle(event: TraceEvent): void`. New `collect()`:
+   `this.inMemory.collect(event)` as today; if `this.tracer` is set → `handle(event)`; else if the modules are still loading →
+   push to `pending` (when full, drop the oldest and log one warning per collector instance) and return; else (loading
+   finished without OTEL) return. `flushPending()` runs the buffered events through `handle` in order and clears the buffer.
+4. `createCompositeTraceCollector`: when `collectorUrl` is set, always push `new OpenTelemetryTraceCollector('jaf-agent', langfuseCredentials)`.
+   Remove the `&& OTLPTraceExporter` condition and the eager `setupOpenTelemetry(...)` call there; the collector's
+   `tryInit` performs it.
+5. Export two helpers (they reach the root index through the existing `export * from './core/tracing'`):
+   ```ts
+   export async function createOpenTelemetryTraceCollector(serviceName?: string, langfuseCredentials?: LangfuseCredentials): Promise<OpenTelemetryTraceCollector>; // awaits ensureOtelReady(), then constructs
+   export async function shutdownOpenTelemetry(): Promise<void>; // await otelSdk?.shutdown(); otelSdk = null; resolves even if nothing was started
+   ```
+   Keep the `beforeExit` hook.
+6. `setupOpenTelemetry`: when it returns early because the modules are missing, log one line
+   `[JAF:OTEL] OpenTelemetry modules not loaded yet; deferring setup` instead of returning silently.
+
+**Acceptance.**
+- Constructing the collector synchronously right after loading the module, then `collect(run_start)` and
+  `collect(llm_call_end)` **before** `await ensureOtelReady()` settles, yields the root span after readiness:
+  `(collector as any).traceSpans.size === 1` and `(collector as any).pending.length === 0`.
+- With `TRACE_COLLECTOR_URL` set and the modules not yet loaded, `createCompositeTraceCollector()` includes an
+  `OpenTelemetryTraceCollector` (assert with `instanceof` on the collector list, or by observing the in-memory collector it wraps).
+- `JAF_OTEL_PENDING_MAX=3` with 5 events before readiness keeps the last 3 and logs exactly one warning.
+- `shutdownOpenTelemetry()` resolves when nothing was started; with `TRACE_COLLECTOR_URL` pointing at a local
+  `http.createServer` on `127.0.0.1` that records requests, after a `run_start`/`run_end` pair it resolves and at least
+  one POST was received.
+- Consumers that construct after readiness behave exactly as before; existing tests pass.
+
+**Verify.** `pnpm typecheck && pnpm lint && pnpm test`. Test notes: under ts-jest (CommonJS) load the module with `require`
+inside `jest.isolateModules` and construct the collector in the same synchronous turn; the dynamic imports in
+`initOtelModules` cannot settle before that turn ends, so the pending path is exercised deterministically. Restore
+`process.env` in `afterEach`. No network beyond `127.0.0.1`.
+
 ### J5. Docs, version bump, publish
 
 **Files.** `jaf:docs/server-api.md`, `jaf:docs/tools.md`, `jaf:README.md`, `jaf:package.json`.
 
 **Changes.** Document J1 (full transcript input, which fields), J2 (registry function, snapshot semantics), J3
-(remote tools, with the VIC-style example), J4. Bump version `0.1.46 → 0.2.0`. Run `pnpm build` and confirm
+(remote tools, with the VIC-style example), J4, and J6 (`ensureOtelReady`, `createOpenTelemetryTraceCollector`,
+`shutdownOpenTelemetry`, `JAF_OTEL_PENDING_MAX`) in `docs/tracing.md`. Re-export `AgentRegistry` and
+`AgentRegistrySource` from `src/server/index.ts` (J2 follow-up). Bump version `0.1.46 → 0.2.0`. Run `pnpm build` and confirm
 `dist/` exports the new symbols. **Publishing is a human step**: set the task to `review` with the note
 "ready to publish", stop the loop, and a human runs `pnpm publish --access public`. After publishing, the human sets
 `done` with the published version in Notes.
@@ -474,8 +542,18 @@ per-call headers and `call` meta present on the request.
    `createJAFServer`, `ConsoleTraceCollector`, `OpenTelemetryTraceCollector`, `configureSanitization`,
    `createInMemoryProvider`, `Agent`, `ModelProvider`, `getTextContent`).
 
+4. After J6 is `done`: run `pnpm build` in `../jaf`, then with `TRACE_COLLECTOR_URL` pointing at a local recording
+   `http.createServer` on `127.0.0.1` (or the Langfuse variables from your `.env`), start the VIC dev server, send one
+   `/chat`, and confirm the `[OTEL] OpenTelemetry tracer initialized` log line and at least one OTLP POST. Keep VIC's
+   construction site unchanged (synchronous `new OpenTelemetryTraceCollector(...)`); J6 makes that safe.
+
+**Resume note (plan v3).** Steps 1 to 3 are already committed in `vic` 67ae193b, including a `tsconfig` move to
+`module: preserve` / `moduleResolution: bundler` and an `onEvent` change that strips `run_end.data.finalState` before
+it reaches the Ardra SYSTEM message. Build on that commit; do not redo it.
+
 **Acceptance.** `pnpm --filter jaf-agent-standalone typecheck` passes; `pnpm --filter jaf-agent-standalone dev` boots and
-`GET /health` returns 200; no `@xynehq/jaf` string remains under `vic:JAF/src`.
+`GET /health` returns 200; no `@xynehq/jaf` string remains under `vic:JAF/src`; one `/chat` produces at least one OTLP
+export with the linked library (step 4).
 
 **Verify.** `pnpm typecheck` at the `vic` root; `grep -rn "@xynehq/jaf" JAF/src | wc -l` is 0.
 
@@ -661,6 +739,8 @@ No import of `createJAFServer` remains under `vic:JAF/src`.
   `await ensureCatalog(request.headers['x-tool-catalog-version'])` → on `RemoteToolsError` respond 503 `{ error: 'tool catalog unavailable' }`.
 - Copy from the current `vic:JAF/src/server.ts` verbatim: Langfuse OTLP header setup incl. optional KMS, `configureSanitization`
   whitelist, trace collector choice, the `withContext` request wrapper, graceful shutdown (without browsers/MCP).
+  Construct the OTEL collector with `await createOpenTelemetryTraceCollector('jaf-sandbox', creds)` (J6) and call
+  `await shutdownOpenTelemetry()` in the SIGTERM/SIGINT handler so buffered spans flush on pod termination.
 - `src/providers/bedrock-provider.ts` moved from `vic:JAF/src/providers/`.
 
 **Acceptance.** Boots against a fake `/tools`; `/chat` 401 without the service token; a second `/chat` with a different
@@ -804,3 +884,4 @@ Record the outputs in the ledger Notes.
 |---|---|---|
 | 1 | 2026-10-30 | Initial plan: 5 library tasks, 13 VIC tasks, 5 infra tasks. |
 | 2 | 2026-10-30 | Section 3.6: how to run the loop from the VS Code extension; `--add-dir` is optional and CLI-only. |
+| 3 | 2026-10-30 | Added J6 (tracing init race found in V1); V1 re-queued as `todo` depending on J6; J5 depends on J6. Folded reviewer follow-ups into J3 (no headers in errors), J4 (no zod `instanceof`), J5 (server re-exports, tracing docs), V9 (use J6 helpers, flush on SIGTERM). |
