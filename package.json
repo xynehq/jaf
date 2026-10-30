@@ -4,6 +4,9 @@
   "description": "Juspay Agent Framework - A purely functional agent framework with immutable state and composable tools",
   "type": "module",
   "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=22.12"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -105,6 +108,7 @@
     "test:with-db": "pnpm run test:db:start && pnpm test; pnpm run test:db:stop",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
+    "check:dist": "node scripts/check-dist.mjs",
     "prepublishOnly": "pnpm run lint && pnpm run test && pnpm run build",
     "prepare": "pnpm run build",
     "version": "pnpm run build && git add -A",

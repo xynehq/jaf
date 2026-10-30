@@ -12,6 +12,7 @@ import {
   getA2ACapabilities,
   connectToA2AAgent,
 } from '../client.js';
+import { isMainScript } from '../../utils/is-main-script.js';
 
 // Pure function to demonstrate basic client usage
 export const demonstrateBasicUsage = async (serverUrl: string = 'http://localhost:3000') => {
@@ -301,7 +302,7 @@ export const runInteractiveDemo = async (serverUrl: string = 'http://localhost:3
 };
 
 // Run demonstrations if this file is executed directly
-if (typeof require !== 'undefined' && require.main === module) {
+if (isMainScript('a2a/examples/client-example')) {
   const serverUrl = process.argv[2] || 'http://localhost:3000';
   
   runAllDemonstrations(serverUrl)

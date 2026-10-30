@@ -1,4 +1,4 @@
-import { Message, TraceId } from '../../core/types';
+import { Message, TraceId } from '../../core/types.js';
 import {
   MemoryProvider,
   ConversationMemory,
@@ -11,7 +11,7 @@ import {
   createMemoryNotFoundError,
   createMemoryStorageError,
   ConversationStatus
-} from '../types';
+} from '../types.js';
 import { safeConsole } from '../../utils/logger.js';
 
 // PostgreSQL client interface - compatible with pg, postgres.js, etc.

@@ -21,7 +21,8 @@ import {
   FunctionToolConfig,
   ToolSource,
   ToolParameterType
-} from '../types';
+} from '../types.js';
+import { evaluateMathExpression } from '../../utils/safe-math.js';
 
 // ========== Tool Creation ==========
 
@@ -594,10 +595,6 @@ export const createEchoTool = (): Tool => {
 };
 
 export const createCalculatorTool = (): Tool => {
-  // Import safe math evaluator
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { evaluateMathExpression } = require('../../utils/safe-math');
-  
   return createFunctionTool({
     name: 'calculator',
     description: 'Performs safe mathematical calculations',

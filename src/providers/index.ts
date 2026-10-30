@@ -1,11 +1,11 @@
 // Public provider entrypoint: re-export provider modules
 // This backs the `@juspay-jaf/jaf/providers` subpath export declared in package.json
 
-export * from './model';
-export * from './mcp';
-export * from './generic-openai';
-export * from './schema';
-export * from './remote-tools';
+export * from './model.js';
+export * from './mcp.js';
+export * from './generic-openai.js';
+export * from './schema.js';
+export * from './remote-tools.js';
 export {
   createAiSdkProvider,
   type AiSdkFunctionTool,
@@ -13,4 +13,4 @@ export {
   type AiSdkChatRequest,
   type AiSdkChatResponse,
   type AiSdkClient,
-} from './ai-sdk';
+} from './ai-sdk.js';

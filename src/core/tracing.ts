@@ -2,6 +2,7 @@ import tunnel from 'tunnel';
 import http from 'http';
 import https from 'https';
 import { TraceEvent, TraceId, createTraceId } from './types.js';
+import { appendFileSync } from 'node:fs';
 
 // Optional OpenTelemetry imports - use dynamic imports for ESM compatibility
 let trace: any;
@@ -404,9 +405,7 @@ export class FileTraceCollector implements TraceCollector {
     };
     
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const fs = require('fs');
-      fs.appendFileSync(this.filePath, JSON.stringify(logEntry) + '\n');
+      appendFileSync(this.filePath, JSON.stringify(logEntry) + '\n');
     } catch (error) {
       console.error('Failed to write trace to file:', error);
     }

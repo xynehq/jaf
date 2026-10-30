@@ -87,7 +87,7 @@ export async function run<Ctx, Out>(
 
     if (config.approvalStorage) {
       safeConsole.log(`[JAF:ENGINE] Loading approvals for runId ${stateWithMemory.runId}`);
-      const { loadApprovalsIntoState } = await import('./state');
+      const { loadApprovalsIntoState } = await import('./state.js');
       stateWithMemory = await loadApprovalsIntoState(stateWithMemory, config);
     }
 
@@ -1598,7 +1598,7 @@ async function executeToolCalls<Ctx>(
           safeConsole.log(`[JAF:ENGINE] Tool ${toolCall.function.name}` );
         } else {
           toolResultObj = toolResult;
-          const { toolResultToString } = await import('./tool-results');
+          const { toolResultToString } = await import('./tool-results.js');
           resultString = toolResultToString(toolResult);
           safeConsole.log(`[JAF:ENGINE] Tool ${toolCall.function.name} `);
         }

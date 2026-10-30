@@ -1,4 +1,4 @@
-import { RunState, Interruption, RunConfig } from './types';
+import { RunState, Interruption, RunConfig } from './types.js';
 import { safeConsole } from '../utils/logger.js';
 
 export async function approve<Ctx>(

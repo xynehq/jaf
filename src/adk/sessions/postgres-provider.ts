@@ -13,6 +13,7 @@ import {
 } from '../types.js';
 import { createSession } from './index.js';
 import { safeConsole } from '../../utils/logger.js';
+import { optionalRequire } from '../../utils/optional-require.js';
 
 // Helper type for PostgreSQL client
 type PgPool = any; // Will be properly typed when pg is added
@@ -49,8 +50,7 @@ export const createPostgresSessionProvider = (config: PostgresConfig): SessionPr
   // Require real PostgreSQL - no fallback
   try {
     // Dynamic import to avoid breaking if pg not installed
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { Pool } = require('pg');
+    const { Pool } = optionalRequire('pg');
     pool = new Pool({
       connectionString: config.connectionString,
       max: config.poolSize || 10,

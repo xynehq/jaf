@@ -14,8 +14,9 @@ import {
   ValidationResult,
   throwSessionError,
   createSessionError
-} from '../types';
+} from '../types.js';
 import { safeConsole } from '../../utils/logger.js';
+import { optionalRequire } from '../../utils/optional-require.js';
 
 // ========== Session Creation ==========
 
@@ -115,8 +116,7 @@ export const createMockRedisSessionProvider = (config: MockRedisConfig): Session
   // Try to use real Redis if available
   try {
     // Dynamic import to avoid breaking if ioredis not installed
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const Redis = require('ioredis');
+    const Redis = optionalRequire('ioredis');
     redis = new Redis({
       host: config.host,
       port: config.port,

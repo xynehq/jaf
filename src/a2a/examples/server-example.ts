@@ -8,6 +8,8 @@ import { startA2AServer } from '../server.js';
 import type { A2AServerConfig } from '../types.js';
 import { createA2AAgent, createA2ATool } from '../agent.js';
 import { z } from 'zod';
+import { evaluateMathExpression } from '../../utils/safe-math.js';
+import { isMainScript } from '../../utils/is-main-script.js';
 
 // Create a simple calculator agent
 const createCalculatorAgent = () => createA2AAgent({
@@ -26,8 +28,6 @@ const createCalculatorAgent = () => createA2AAgent({
       execute: async ({ expression, showSteps }) => {
         try {
           // Use safe math evaluator instead of eval
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
-          const { evaluateMathExpression } = require('../../utils/safe-math');
           const result = evaluateMathExpression(expression);
           
           if (showSteps) {
@@ -228,7 +228,7 @@ export {
 };
 
 // Run if this file is executed directly
-if (typeof require !== 'undefined' && require.main === module) {
+if (isMainScript('a2a/examples/server-example')) {
   main().catch((error) => {
     console.error('Fatal error:', error);
     process.exit(1);

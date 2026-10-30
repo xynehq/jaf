@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { MemoryConfig } from '../memory/types';
-import type { ApprovalStorage } from '../memory/approval-storage';
+import { MemoryConfig } from '../memory/types.js';
+import type { ApprovalStorage } from '../memory/approval-storage.js';
 
 export type TraceId = string & { readonly _brand: 'TraceId' };
 export type RunId = string & { readonly _brand: 'RunId' };
@@ -103,7 +103,7 @@ export type Tool<A, Ctx> = {
   readonly execute: (
     args: A,
     context: Readonly<Ctx>,
-  ) => Promise<string | import('./tool-results').ToolResult>;
+  ) => Promise<string | import('./tool-results.js').ToolResult>;
   readonly needsApproval?:
     | boolean
     | ((
@@ -499,16 +499,16 @@ export type RunConfig<Ctx> = {
   }) => void | Promise<void>;
   readonly onAfterToolExecution?: (
     toolName: string,
-    result: string | import('./tool-results').ToolResult,
+    result: string | import('./tool-results.js').ToolResult,
     context: {
       toolCall: ToolCall;
       args: any;
       state: RunState<Ctx>;
       agentName: string;
       executionTime: number;
-      status: string | import('./tool-results').ToolResult;
+      status: string | import('./tool-results.js').ToolResult;
     }
-  ) => Promise<string|  import('./tool-results').ToolResult | null> ;
+  ) => Promise<string|  import('./tool-results.js').ToolResult | null> ;
   readonly memory?: MemoryConfig;
   readonly conversationId?: string;
   readonly approvalStorage?: ApprovalStorage;

@@ -13,6 +13,7 @@ import {
 } from '../types.js';
 import { createSession } from './index.js';
 import { safeConsole } from '../../utils/logger.js';
+import { optionalRequire } from '../../utils/optional-require.js';
 
 // Helper type for Redis client
 type RedisClient = any; // Will be properly typed when ioredis is added
@@ -32,8 +33,7 @@ export const createRedisSessionProvider = (config: RedisConfig): SessionProvider
   // Require real Redis - no fallback
   try {
     // Dynamic import to avoid breaking if ioredis not installed
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const Redis = require('ioredis');
+    const Redis = optionalRequire('ioredis');
     redis = new Redis({
       host: config.host,
       port: config.port,

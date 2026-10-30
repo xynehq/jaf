@@ -4,14 +4,16 @@
  * Example demonstrating how to use the Graphviz visualization functionality
  */
 
-import { Agent, Tool, RunnerConfig } from '../adk/types';
-import { createRunnerConfig } from '../adk/runners';
-import { createInMemorySessionProvider } from '../adk/sessions';
+import { Agent, Tool, RunnerConfig } from '../adk/types.js';
+import { createRunnerConfig } from '../adk/runners/index.js';
+import { createInMemorySessionProvider } from '../adk/sessions/index.js';
 import { 
   generateAgentVisualization, 
   generateToolVisualization, 
   generateRunnerGraphPng 
-} from '../adk/runners';
+} from '../adk/runners/index.js';
+import { evaluateMathExpression } from '../utils/safe-math.js';
+import { isMainScript } from '../utils/is-main-script.js';
 
 // ========== Example Agent and Tools ==========
 
@@ -30,8 +32,6 @@ const exampleCalculatorTool: Tool = {
     const expression = params.expression as string;
     try {
       // Use safe math evaluator instead of eval
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { evaluateMathExpression } = require('../utils/safe-math');
       const result = evaluateMathExpression(expression);
       return {
         success: true,
@@ -267,6 +267,6 @@ export const quickStartVisualization = async (
 
 // ========== CLI Integration ==========
 
-if (require.main === module) {
+if (isMainScript('visualization/example')) {
   runVisualizationExamples().catch(console.error);
 }

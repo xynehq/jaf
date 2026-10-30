@@ -2,7 +2,7 @@
  * Test Database Setup Utilities
  */
 
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
 import { Pool } from 'pg';
 
 export interface TestDatabaseClients {

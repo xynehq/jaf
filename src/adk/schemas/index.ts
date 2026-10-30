@@ -12,10 +12,10 @@ import {
   ValidationError,
   throwValidationError,
   createValidationError
-} from '../types';
+} from '../types.js';
 
 // Re-export createValidationError for external use
-export { createValidationError } from '../types';
+export { createValidationError } from '../types.js';
 
 // ========== Schema Validator Creation ==========
 

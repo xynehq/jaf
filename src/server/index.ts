@@ -1,6 +1,6 @@
-import { createJAFServer } from './server';
-import { ServerConfig } from './types';
-import { Agent, RunConfig } from '../core/types';
+import { createJAFServer } from './server.js';
+import { ServerConfig } from './types.js';
+import { Agent, RunConfig } from '../core/types.js';
 
 /**
  * Start a development server for testing agents locally (functional approach)
@@ -75,7 +75,7 @@ export async function runServer<Ctx>(
 }
 
 
-export { createJAFServer } from './server';
+export { createJAFServer } from './server.js';
 // runServer is exported above
 export type { 
   ServerConfig, 
@@ -83,4 +83,4 @@ export type {
   ChatResponse, 
   AgentListResponse, 
   HealthResponse 
-} from './types';
+} from './types.js';
