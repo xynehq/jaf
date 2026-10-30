@@ -1,7 +1,7 @@
 # VIC / JAF Sandbox Split: Implementation Plan
 
 ```
-plan_version: 4
+plan_version: 5
 plan_updated: 2026-10-30
 copies (must be byte-identical at every commit):
   jaf:              VIC_SANDBOX_SPLIT_PLAN.md   branch feat/vic-sandbox-split   base main          (55edcf5)
@@ -575,7 +575,11 @@ Inventory on this branch: 21 directory-style imports in `src/index.ts`, `src/adk
 runs the procedure below. After publishing, the human sets `done` with the published version and dist-tag in Notes, in
 both plan copies, and commits both.
 
-Human publish procedure (from `jaf`, on `feat/vic-sandbox-split`, clean tree):
+Release ownership: the plan owner has no npm publish rights. When J5 reaches `review`, push the branch
+(`git push -u origin feat/vic-sandbox-split`; the loop itself never pushes) and hand the release to an npm org owner,
+who runs the procedure below from that branch, or from `main` after merging it, in which case `--no-git-checks` is not needed.
+
+Publish procedure (from `jaf`, on `feat/vic-sandbox-split`, clean tree):
 1. `npm login` with an account that is a member of the `juspay-jaf` npm org with publish rights; `npm whoami`.
 2. `pnpm install && pnpm build && node scripts/check-dist.mjs && bash scripts/check-pack.sh`.
 3. `prepublishOnly` runs lint, tests and build. The tests need the local databases: `pnpm run test:db:start`, then
@@ -951,3 +955,4 @@ Record the outputs in the ledger Notes.
 | 2 | 2026-10-30 | Section 3.6: how to run the loop from the VS Code extension; `--add-dir` is optional and CLI-only. |
 | 3 | 2026-10-30 | Added J6 (tracing init race found in V1); V1 re-queued as `todo` depending on J6; J5 depends on J6. Folded reviewer follow-ups into J3 (no headers in errors), J4 (no zod `instanceof`), J5 (server re-exports, tracing docs), V9 (use J6 helpers, flush on SIGTERM). J6 is ordered before J3 so V1 can resume while J3 runs. |
 | 4 | 2026-10-30 | J5 found `dist/` unloadable by plain Node (pre-existing, also in published 0.1.46). Decision (b): added J7 (native ESM build, missing subpath index files, no runtime `require`), J5 re-queued on J7 with the human publish procedure; V9 states the runner module format. |
+| 5 | 2026-10-30 | J5: release is performed by an npm org owner from the pushed branch; plan owner has no publish rights. |
