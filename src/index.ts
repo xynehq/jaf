@@ -9,6 +9,7 @@ export * from './core/websearch';
 export * from './providers/model';
 export * from './providers/generic-openai';
 export * from './providers/schema';
+export * from './providers/remote-tools';
 // export * from './providers/mcp'; // Commented out for test compatibility
 
 export * from './policies/validation';

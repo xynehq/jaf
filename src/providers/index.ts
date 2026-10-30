@@ -5,6 +5,7 @@ export * from './model';
 export * from './mcp';
 export * from './generic-openai';
 export * from './schema';
+export * from './remote-tools';
 export {
   createAiSdkProvider,
   type AiSdkFunctionTool,
