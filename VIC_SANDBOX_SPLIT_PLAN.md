@@ -266,7 +266,7 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | J4 | jaf | 1 | Export `jsonSchemaToZod` and `zodSchemaToJsonSchema` | – | todo | |
 | J3 | jaf | 1 | Remote tool helper `discoverRemoteTools` | J4 | todo | |
 | J5 | jaf | 5 | Docs, version bump, publish | J1, J2, J3, J4 | todo | publish step is human |
-| V1 | agentic-commerce | 2 | Dependency: `@xynehq/jaf@0.1.18` → linked `@juspay-jaf/jaf` | – | todo | |
+| V1 | agentic-commerce | 2 | Dependency: `@xynehq/jaf@0.1.18` → linked `@juspay-jaf/jaf` | – | in_progress | |
 | V2 | agentic-commerce | 2 | `shared` package: types, context schemas, prompt helpers, contracts, logger | V1 | todo | |
 | V3 | agentic-commerce | 2 | Tool registry and catalog | V2, J4 | todo | |
 | V5 | agentic-commerce | 2 | Run-token store | V2 | todo | |
