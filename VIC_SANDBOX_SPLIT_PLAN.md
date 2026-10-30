@@ -1,7 +1,7 @@
 # VIC / JAF Sandbox Split: Implementation Plan
 
 ```
-plan_version: 1
+plan_version: 2
 plan_updated: 2026-10-30
 copies (must be byte-identical at every commit):
   jaf:              VIC_SANDBOX_SPLIT_PLAN.md   branch feat/vic-sandbox-split   base main          (55edcf5)
@@ -237,11 +237,18 @@ Record `review: <rounds> rounds, <verdict>` and the commit sha in the ledger Not
 
 ### 3.6 Running the loop
 
+Open a session in the repo whose tasks you want to run (`jaf` for `J*`, `agentic-commerce` for `V*` and `I*`),
+pick the implementer model, then start the loop:
+
 ```
-# in jaf (library tasks) or in agentic-commerce (VIC, runner and infra tasks):
-claude --add-dir ../<sibling-repo>         # the loop must be able to write the sibling's plan copy
-/loop /split-next                          # self-paced; one task per iteration; stops itself when nothing is ready
+/model opus            # or sonnet; the reviewer is always spawned as Fable by the command itself
+/loop /split-next      # self-paced; one task per iteration; stops itself when nothing is ready
 ```
+
+The loop touches the sibling repo only through shell commands (`diff`, `cp`, `git -C`, `pnpm build`), never
+through file-edit tools, so no extra working directory is required. In the VS Code extension, approve the
+permission prompt the first time a command reaches `../<sibling>`. In the CLI you may pass
+`claude --add-dir ../<sibling-repo>` to avoid the prompt; `/add-dir` does not exist in the extension.
 
 Start with the `jaf` loop (J1, J2, J4 are independent and unblock everything else), then run the
 `agentic-commerce` loop. The loop reports when the next ready task lives in the other repo.
@@ -796,3 +803,4 @@ Record the outputs in the ledger Notes.
 | plan_version | date | change |
 |---|---|---|
 | 1 | 2026-10-30 | Initial plan: 5 library tasks, 13 VIC tasks, 5 infra tasks. |
+| 2 | 2026-10-30 | Section 3.6: how to run the loop from the VS Code extension; `--add-dir` is optional and CLI-only. |
