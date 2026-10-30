@@ -1,7 +1,7 @@
 # VIC / JAF Sandbox Split: Implementation Plan
 
 ```
-plan_version: 3
+plan_version: 4
 plan_updated: 2026-10-30
 copies (must be byte-identical at every commit):
   jaf:              VIC_SANDBOX_SPLIT_PLAN.md   branch feat/vic-sandbox-split   base main          (55edcf5)
@@ -266,7 +266,8 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | J4 | jaf | 1 | Export `jsonSchemaToZod` and `zodSchemaToJsonSchema` | – | done | commit `J4:` (git log --grep '^J4:'), review: 1 rounds, APPROVE. Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED). Exports verified from built dist via tsx. For J3: jsonSchemaToZod throws TypeError on malformed schemas (non-array `required` or `enum`), so validate catalog `parameters` or catch per entry. For J5: its Verify `node -e require('./dist/index.js')` fails on main too (type:module + extensionless imports, ERR_MODULE_NOT_FOUND); verify via tsx or fix emit. |
 | J6 | jaf | 1 | Tracing: OpenTelemetry collector independent of module load order | – | done | unblocks V1. commit `J6:` (git log --grep '^J6:'), review: 2 rounds, APPROVE. Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED). Beyond spec: collect() binds the tracer lazily (closes a one-microtask drop window at readiness), shutdownOpenTelemetry() logs and resolves on flush errors, JAF_OTEL_PENDING_MAX falls back to 1000 if invalid. Known limits: replayed spans get replay-time start times; call shutdownOpenTelemetry() once at exit (re-setup afterwards is not supported); clear() does not purge the pending buffer. |
 | J3 | jaf | 1 | Remote tool helper `discoverRemoteTools` | J4 | done | commit `J3:` (git log --grep '^J3:'), review: 2 rounds, APPROVE (r1 blocking fixed: transport error messages quoted invalid header values, now only error name + cause.code). Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED). Also: only the 5 ToolResultStatus values pass through unchanged; a bad entry schema fails the whole catalog with INVALID_CATALOG naming the id; baseUrl trailing slash trimmed for GET and POST. For V3: tools with z.record / additionalProperties-only params lose all args through jsonSchemaToZod (strips to {}), so give every tool explicit properties or extend the converter; non-object params are sent wrapped as {value}. For V4: every non-success ToolResult must carry `error`; 4xx bodies become model-visible (details.body), so never echo headers or the request body. |
-| J5 | jaf | 5 | Docs, version bump, publish | J1, J2, J3, J4, J6 | blocked | publish step is human. BLOCKED before implementation: Verify `node -e "require('./dist/index.js')"` cannot pass. package.json is `type: module` (commit e05de49) and tsconfig (module es2020, moduleResolution node) emits extensionless relative imports, so plain Node fails with ERR_MODULE_NOT_FOUND (dist/core/types) on main too; npm shows published 0.1.46 is also `type: module`, so it very likely has the same defect; consumers only work through tsx/bundlers. Human decision: (a) amend J5 Verify to check exports via tsx or an ESM import with bundler resolution (as done in J4) and publish 0.2.0 with the same limitation; (b) add a J task before J5 to make dist loadable by Node (emit `.js` extensions: moduleResolution node16/nodenext + import specifiers, or a post-build rewrite) and keep J5 Verify, switched to `await import()` since `require` of ESM needs Node >= 22; (c) drop `type: module` and emit CommonJS. Recommendation: (b), a 0.2.0 that Node cannot load is a broken release. |
+| J7 | jaf | 1 | Build output loadable by plain Node (native ESM) | – | todo | decision (b) for J5 |
+| J5 | jaf | 5 | Docs, version bump, publish | J1, J2, J3, J4, J6, J7 | todo | publish step is human (procedure in the J5 spec). Was blocked: dist not loadable by plain Node; decision (b) taken in plan v4, J7 added. |
 | V1 | agentic-commerce | 2 | Dependency: `@xynehq/jaf@0.1.18` → linked `@juspay-jaf/jaf` | J6 | in_progress | Was blocked on the jaf OTEL init race (review r1); decision (a) taken in plan v3: J6 added, V1 re-queued. Partial work already committed in vic 67ae193b (link, import rewrite, tsconfig preserve/bundler, onEvent strips run_end.data.finalState): resume from it, do not redo. Carry forward, non-blocking: link bypasses root fastify/@fastify/cors overrides (jaf ships fastify 4.29.1, cors 9.0.1) so a jaf bump is needed before V13; zod is the same version but two physical copies (J4/V3 must not use instanceof); Docker image unbuildable until V13; tsc emit now ESM (unused). |
 | V2 | agentic-commerce | 2 | `shared` package: types, context schemas, prompt helpers, contracts, logger | V1 | todo | |
 | V3 | agentic-commerce | 2 | Tool registry and catalog | V2, J4 | todo | |
@@ -513,6 +514,55 @@ inside `jest.isolateModules` and construct the collector in the same synchronous
 `initOtelModules` cannot settle before that turn ends, so the pending path is exercised deterministically. Restore
 `process.env` in `afterEach`. No network beyond `127.0.0.1`.
 
+### J7. Build output loadable by plain Node (native ESM)
+
+**Why.** `package.json` is `type: module` (commit e05de49) but `tsconfig.json` uses `module: es2020` and
+`moduleResolution: node`, so `dist/` contains extensionless and directory-style relative imports that Node's ESM loader
+rejects (`ERR_MODULE_NOT_FOUND` for `dist/core/types` from `dist/index.js`, on `main` too). Published 0.1.46 has the same
+defect; consumers only work through tsx or a bundler. The sandbox image (I1) starts the runner with plain `node`, and V13
+switches VIC to the published package, so this must be fixed before J5 publishes 0.2.0. Found while starting J5.
+
+Inventory on this branch: 21 directory-style imports in `src/index.ts`, `src/adk/index.ts`, `src/adk/runners/index.ts`,
+`src/visualization/index.ts`, `src/visualization/example.ts`; roughly 90 extensionless relative specifiers in about 20 files;
+`require()` at runtime in `src/core/tracing.ts` (near 408), `src/adk/index.ts` (near 471), `src/adk/tools/index.ts` (near 599),
+`src/adk/artifacts/index.ts` (near 170 and 295); `require.main === module` in `src/visualization/example.ts` (reachable from
+`@juspay-jaf/jaf/visualization`) and `src/a2a/examples/*.ts` (reachable from `@juspay-jaf/jaf/a2a`); `exports` keys `./core`,
+`./memory`, `./policies` with no `src/<dir>/index.ts` behind them. No JSON imports.
+
+**Files.** `jaf:tsconfig.json`, `jaf:package.json`, the source files above plus every file tsc flags, new `jaf:src/core/index.ts`,
+`jaf:src/memory/index.ts`, `jaf:src/policies/index.ts`, new `jaf:scripts/check-dist.mjs`, new `jaf:scripts/check-pack.sh`.
+
+**Changes.**
+1. `tsconfig.json`: `"module": "nodenext"`, `"moduleResolution": "nodenext"`; leave every other option. tsc now rejects
+   extensionless relative specifiers under `type: module`; use its error list as the worklist.
+2. Codemod every relative `import … from`, `export … from` and `import()` specifier under `src/` (tests excluded): a file
+   becomes `./x.js`, a directory becomes `./x/index.js`. Do not touch package specifiers. Jest's `moduleNameMapper` already
+   strips `.js`, so tests need no change.
+3. Remove runtime `require()`: `tracing.ts` → `import { appendFileSync } from 'node:fs'`; the two `safe-math` sites → a static
+   `import { evaluateMathExpression } from '<rel>/utils/safe-math.js'` (if that creates an import cycle, use
+   `createRequire(import.meta.url)` instead and say so in Notes); `artifacts/index.ts` → `const require = createRequire(import.meta.url)`
+   at module top so `ioredis` and `pg` stay optional, lazily loaded drivers.
+4. Examples: replace `require.main === module` with `process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href`
+   (`pathToFileURL` from `node:url`) in `src/visualization/example.ts` and `src/a2a/examples/*.ts`. No other behaviour change.
+5. Add `src/core/index.ts`, `src/memory/index.ts`, `src/policies/index.ts` that re-export the modules of their directory
+   (mirror what `src/index.ts` already re-exports from those directories; `typesVersions` in `package.json` already advertises them).
+6. `package.json`: add `"engines": { "node": ">=22.12" }` (first line with unflagged `require(esm)`, which the `require`
+   condition of `exports` relies on). Keep `exports` as is. Add `"check:dist": "node scripts/check-dist.mjs"`.
+7. `scripts/check-dist.mjs`: for every key of `package.json` `exports`, `await import()` the `import` target and
+   `createRequire(import.meta.url)()` the `require` target; assert the root exposes `createJAFServer`, `discoverRemoteTools`,
+   `jsonSchemaToZod`, `zodSchemaToJsonSchema`, `ensureOtelReady`, `createOpenTelemetryTraceCollector`, `shutdownOpenTelemetry`.
+   Exit non-zero on any failure. `scripts/check-pack.sh`: `pnpm pack` into a temp dir, `npm init -y` there, `npm i <tgz>`, then
+   `node -e "import('@juspay-jaf/jaf')"` and `node -e "import('@juspay-jaf/jaf/server')"`; clean up.
+
+**Acceptance.**
+- `pnpm build && node scripts/check-dist.mjs` passes under plain Node 24 with no tsx on the path.
+- `bash scripts/check-pack.sh` passes (the packed tarball loads from an empty project).
+- `grep -rnE "\brequire\(" src --include='*.ts' | grep -v __tests__ | grep -v createRequire` prints nothing.
+- `pnpm lint` passes; `pnpm test` unchanged except the known local PostgreSQL failure.
+- `pnpm typecheck` in `vic` still passes against the linked build (V1 moved it to `moduleResolution: bundler`, which accepts `.js` specifiers in `.d.ts`).
+
+**Verify.** `pnpm typecheck && pnpm lint && pnpm test; pnpm build && node scripts/check-dist.mjs && bash scripts/check-pack.sh`.
+
 ### J5. Docs, version bump, publish
 
 **Files.** `jaf:docs/server-api.md`, `jaf:docs/tools.md`, `jaf:README.md`, `jaf:package.json`.
@@ -521,11 +571,23 @@ inside `jest.isolateModules` and construct the collector in the same synchronous
 (remote tools, with the VIC-style example), J4, and J6 (`ensureOtelReady`, `createOpenTelemetryTraceCollector`,
 `shutdownOpenTelemetry`, `JAF_OTEL_PENDING_MAX`) in `docs/tracing.md`. Re-export `AgentRegistry` and
 `AgentRegistrySource` from `src/server/index.ts` (J2 follow-up). Bump version `0.1.46 → 0.2.0`. Run `pnpm build` and confirm
-`dist/` exports the new symbols. **Publishing is a human step**: set the task to `review` with the note
-"ready to publish", stop the loop, and a human runs `pnpm publish --access public`. After publishing, the human sets
-`done` with the published version in Notes.
+`dist/` exports the new symbols. **Publishing is a human step**: set the task to `review` with the note "ready to publish", stop the loop, and a human
+runs the procedure below. After publishing, the human sets `done` with the published version and dist-tag in Notes, in
+both plan copies, and commits both.
 
-**Verify.** `pnpm build && node -e "const j=require('./dist/index.js'); for (const s of ['discoverRemoteTools','jsonSchemaToZod','zodSchemaToJsonSchema']) if(!j[s]) throw new Error(s)"`.
+Human publish procedure (from `jaf`, on `feat/vic-sandbox-split`, clean tree):
+1. `npm login` with an account that is a member of the `juspay-jaf` npm org with publish rights; `npm whoami`.
+2. `pnpm install && pnpm build && node scripts/check-dist.mjs && bash scripts/check-pack.sh`.
+3. `prepublishOnly` runs lint, tests and build. The tests need the local databases: `pnpm run test:db:start`, then
+   `pnpm test`, then `pnpm run test:db:stop`. If Docker is unavailable, run `pnpm lint && pnpm build` by hand and publish
+   with `--ignore-scripts`.
+4. `pnpm publish --access public --tag next --no-git-checks --dry-run` and check the file list is `dist`, `README.md`, `LICENSE`.
+   `--no-git-checks` is required because the branch is not `main`. Never use `pnpm version`: the `postversion` script pushes.
+5. `pnpm publish --access public --tag next --no-git-checks` (add `--otp <code>` if the account has 2FA). `0.2.0` lands under
+   dist-tag `next`; `latest` stays `0.1.46` for other consumers until I5 passes, then `npm dist-tag add @juspay-jaf/jaf@0.2.0 latest`.
+6. Verify from an empty directory: `npm init -y && npm i @juspay-jaf/jaf@next && node -e "import('@juspay-jaf/jaf').then(m=>console.log(Object.keys(m).length))"`.
+
+**Verify.** `pnpm build && node scripts/check-dist.mjs && bash scripts/check-pack.sh` (J7 provides both scripts).
 
 ### V1. Dependency: `@xynehq/jaf@0.1.18` → linked `@juspay-jaf/jaf`
 
@@ -721,6 +783,9 @@ No import of `createJAFServer` remains under `vic:JAF/src`.
 `@aws-sdk/client-bedrock-runtime`, `@aws-sdk/credential-providers`, `@smithy/node-http-handler`, `dotenv`, `zod`, `tsx`.
 **Forbidden**: `playwright`, `@playwright/mcp`, `@modelcontextprotocol/sdk`, `mcp-remote`, `axios`, `tunnel`, `https-proxy-agent`.
 
+**Module format.** `type: module` in `package.json`, `module`/`moduleResolution` `nodenext`, `.js` on every relative
+specifier, same rules as J7, so the compiled runner starts with plain `node dist/server.js` as I1 requires.
+
 **`src/server.ts`.**
 - Config: `RUNNER_PORT` (3001), `RUNNER_SERVICE_TOKEN`, `VIC_TOOLS_URL`, `VIC_SERVICE_TOKEN`, `BEDROCK_*`, `AWS_REGION`, `LANGFUSE_*`,
   `ADDITIONAL_ALLOWED_FIELDS_JAF`. Fail fast when any of the first four is missing.
@@ -885,3 +950,4 @@ Record the outputs in the ledger Notes.
 | 1 | 2026-10-30 | Initial plan: 5 library tasks, 13 VIC tasks, 5 infra tasks. |
 | 2 | 2026-10-30 | Section 3.6: how to run the loop from the VS Code extension; `--add-dir` is optional and CLI-only. |
 | 3 | 2026-10-30 | Added J6 (tracing init race found in V1); V1 re-queued as `todo` depending on J6; J5 depends on J6. Folded reviewer follow-ups into J3 (no headers in errors), J4 (no zod `instanceof`), J5 (server re-exports, tracing docs), V9 (use J6 helpers, flush on SIGTERM). J6 is ordered before J3 so V1 can resume while J3 runs. |
+| 4 | 2026-10-30 | J5 found `dist/` unloadable by plain Node (pre-existing, also in published 0.1.46). Decision (b): added J7 (native ESM build, missing subpath index files, no runtime `require`), J5 re-queued on J7 with the human publish procedure; V9 states the runner module format. |
