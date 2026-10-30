@@ -1,7 +1,7 @@
 # VIC / JAF Sandbox Split: Implementation Plan
 
 ```
-plan_version: 5
+plan_version: 6
 plan_updated: 2026-10-30
 copies (must be byte-identical at every commit):
   jaf:              VIC_SANDBOX_SPLIT_PLAN.md   branch feat/vic-sandbox-split   base main          (55edcf5)
@@ -199,7 +199,9 @@ Cross-repo dependencies are normal; the loop in one repo waits for the other rep
 VIC tasks consume library changes before they are published. Task V1 links the library locally
 (`"@juspay-jaf/jaf": "link:../../jaf"` from `vic:JAF/package.json`, same from `vic:jaf-runner/package.json`).
 Whenever a `J*` task lands, run `pnpm build` in `jaf` before verifying a `V*` task. Task V13 replaces the link
-with the published version.
+with a git-hosted dependency on a pushed commit of `feat/vic-sandbox-split` (decision D5): pnpm fetches the commit
+tarball from codeload.github.com, runs the library's `prepare` build at install time, and pins commit and integrity in
+the lockfile. An npm publish (J8) is optional and not on the critical path.
 
 ### 3.5 Review protocol (Fable 5.1)
 
@@ -267,7 +269,9 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | J6 | jaf | 1 | Tracing: OpenTelemetry collector independent of module load order | – | done | unblocks V1. commit `J6:` (git log --grep '^J6:'), review: 2 rounds, APPROVE. Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED). Beyond spec: collect() binds the tracer lazily (closes a one-microtask drop window at readiness), shutdownOpenTelemetry() logs and resolves on flush errors, JAF_OTEL_PENDING_MAX falls back to 1000 if invalid. Known limits: replayed spans get replay-time start times; call shutdownOpenTelemetry() once at exit (re-setup afterwards is not supported); clear() does not purge the pending buffer. |
 | J3 | jaf | 1 | Remote tool helper `discoverRemoteTools` | J4 | done | commit `J3:` (git log --grep '^J3:'), review: 2 rounds, APPROVE (r1 blocking fixed: transport error messages quoted invalid header values, now only error name + cause.code). Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED). Also: only the 5 ToolResultStatus values pass through unchanged; a bad entry schema fails the whole catalog with INVALID_CATALOG naming the id; baseUrl trailing slash trimmed for GET and POST. For V3: tools with z.record / additionalProperties-only params lose all args through jsonSchemaToZod (strips to {}), so give every tool explicit properties or extend the converter; non-object params are sent wrapped as {value}. For V4: every non-success ToolResult must carry `error`; 4xx bodies become model-visible (details.body), so never echo headers or the request body. |
 | J7 | jaf | 1 | Build output loadable by plain Node (native ESM) | – | done | decision (b) for J5. commit `J7:` (git log --grep '^J7:'), review: 2 rounds, APPROVE. Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED). check-dist: all 10 exports load via import and require on Node 24; check-pack passes; vic jaf-agent-standalone typecheck passes. Deviations: ts-jest compiles to CommonJS where `import.meta` is TS1343, so `createRequire(import.meta.url)` lives in src/utils/optional-require.ts and the main-module check in src/utils/is-main-script.ts (exact realpath match of argv[1] vs package-relative path; r1 caught a basename-only false positive); jest.config.cjs maps both to jest.esm-shims.cjs. Also converted requires missing from the inventory: adk/sessions (ioredis, pg), safe-math in 3 example files, require.main in adk/examples; ioredis nodenext typing in streaming/providers/redis.ts and test-utils/db-setup.ts. For J5: adk/examples/streaming-example.ts and adk/sessions/examples/session-provider-usage.ts keep a pre-existing `import.meta.url === file://argv[1]` guard (could use isMainScript); dist/test-utils ships as dead code (tsconfig excludes only *.test.ts). |
-| J5 | jaf | 5 | Docs, version bump, publish | J1, J2, J3, J4, J6, J7 | review | ready to publish. commit `J5:` (git log --grep '^J5:'), version 0.2.0, review: 1 rounds, APPROVE (doc inaccuracies from the review fixed). Verify passed: build, check-dist (10 exports, import and require), check-pack; tarball = package.json, dist, README.md, LICENSE; tests unchanged (only the local PostgreSQL failure). Human next: `git push -u origin feat/vic-sandbox-split`, then an npm org owner runs the publish procedure in the J5 spec (dist-tag next), then sets `done` with version and dist-tag in both plan copies. Before retagging latest: tsconfig should exclude src/test-utils (dist/test-utils ships as dead code). For V6/V7: replay works because the engine only writes string content today; store only what fullMessageSchema accepts. |
+| J5 | jaf | 5 | Docs, version bump, publish | J1, J2, J3, J4, J6, J7 | done | ready to publish. commit `J5:` (git log --grep '^J5:'), version 0.2.0, review: 1 rounds, APPROVE (doc inaccuracies from the review fixed). Verify passed: build, check-dist (10 exports, import and require), check-pack; tarball = package.json, dist, README.md, LICENSE; tests unchanged (only the local PostgreSQL failure). Human next: `git push -u origin feat/vic-sandbox-split`, then an npm org owner runs the publish procedure in the J5 spec (dist-tag next), then sets `done` with version and dist-tag in both plan copies. Before retagging latest: tsconfig should exclude src/test-utils (dist/test-utils ships as dead code). For V6/V7: replay works because the engine only writes string content today; store only what fullMessageSchema accepts. Plan v6: done criterion changed, the npm publish is now J8 (human-only); V13 consumes the pushed commit from GitHub. The J5 commit 9d3f0d6 must be pushed before V13 starts. |
+| J9 | jaf | 5 | Compatibility with VIC's pnpm overrides (fastify 5, cors 11, uuid 11, mathjs 15); exclude test-utils from dist | J5 | todo | |
+| J8 | jaf | 5 | npm publish 0.2.0 by an npm org owner (optional) | J5 | blocked | human-only, nothing depends on it; procedure in the J5 spec; the human sets `done` with version and dist-tag |
 | V1 | agentic-commerce | 2 | Dependency: `@xynehq/jaf@0.1.18` → linked `@juspay-jaf/jaf` | J6 | done | commit 67ae193b (code) + this commit (verification), review: 2 rounds, APPROVE (r1 REQUEST_CHANGES: finalState leak fixed in onEvent; OTEL race fixed upstream by J6). Link kept (pnpm ls: single zod 3.25.76). JAF/tsconfig moved to module preserve / moduleResolution bundler (jaf is type:module with extensionless .d.ts re-exports; tsx-only runtime). Step 4: tracer initialized after buffering, one /chat -> one OTLP POST (4286 B) to a 127.0.0.1 recorder; Bedrock call failed on an invalid local AWS token (spans still exported). Carry forward, non-blocking: link bypasses root fastify/@fastify/cors overrides (jaf ships fastify 4.29.1, cors 9.0.1), jaf bump needed before V13; two physical zod copies (no instanceof in J4/V3); Docker image unbuildable until V13; tsc emit now ESM (unused). See V7 Notes for two gateway requirements found in review. |
 | V2 | agentic-commerce | 2 | `shared` package: types, context schemas, prompt helpers, contracts, logger | V1 | done | commit f71bf788, review: 2 rounds, APPROVE (r1 blocking: AvailableMerchantSchema.merchantId was nativeEnum, real Ardra ids are any non-empty string; now z.custom<MerchantId> non-empty string). Deviations: kms moves all 4 functions (decryptKms needs decryptKmsWithRegion); findMerchant and DiscoveryMerchantPromptMeta now exported; logger gets a ReturnType<typeof createLogger> annotation (TS4094); AvailableMerchantSchema is new; RunRecordSchema.context is AgentContextSchema.partial() (V7 stores sanitizeAgentContext output), not 2.6's full AgentContext; ToolCatalogSchema has a unique-id .refine (ZodEffects: no .shape/.extend for V3/V4/V9); needsApproval optional in the entry schema (V3 should always emit it). shared is CJS built to dist like turing; root typecheck builds it (stale shared/dist runs stale code under tsx). JAF/src/types.ts shim now has import side effects (logger, kms client). Sandbox env needs DEFAULT_ADDRESS if prompts use withDefaultAddress (I4/V9). Lockfile: transitive @types/node re-resolved to 24.19.2 (dedupe side effect). V12 should drop the shims. |
 | V3 | agentic-commerce | 2 | Tool registry and catalog | V2, J4 | done | commit `V3:` (git log --grep '^V3:'), review: 1 round, APPROVE. 136 entries from 37 modules, version 86521328b53ae93e, 0 needsApproval. tools/tools.ts excluded (barrel re-exporting wildHoney tool objects; including it duplicates them and adds 3 colliding names); a test enforces registered iff a module exports a tool. dump-catalog.ts takes an optional outFile (tool modules log to stdout while loading). Verify glob must be quoted from the repo root under zsh. CARRY-FORWARD, blocks V10/I5 (human/plan decision): jaf zodSchemaToJsonSchema emits 'Unsupported schema type' string placeholders for 61 fields in 39 tools (ZodDefault, ZodEffects, ZodNullable, ZodNativeEnum, ZodUnion, ZodLiteral, ZodAny, ZodPipeline); VIC's bedrock converter today yields 30. Behind J3 stubs: empikShoppingTools.update_cart_empik.items (required, ZodEffects over array) rejects every call; numeric quantity/limit fields with .default() are rejected. Needs a new J task extending zodSchemaToJsonSchema and jsonSchemaToZod symmetrically, plus a zero-placeholder test over the real catalog, before V10. Non-blocking: getCatalog() returns a shared mutable object (consider freezing); unquoted ** in the test script only matches one directory level under sh. Pre-existing, for V4/I4: deliverooShoppingTools.login_user takes password as an LLM argument, so it transits the sandbox and /tools/:id/call args. jaf dist at verification time included J7 work in progress. |
@@ -280,7 +284,7 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | V10 | agentic-commerce | 4 | Migrate agents and prompts to the runner | V9, V3 | todo | From V3: do not start until jaf zodSchemaToJsonSchema/jsonSchemaToZod are lossless for the catalog (see V3 Notes); needs a new J task (human/plan decision). |
 | V11 | agentic-commerce | 4 | Bash tool in the runner | V9 | todo | attach to agents: human decision, see D3 |
 | V12 | agentic-commerce | 5 | Clean `vic:JAF/` of runtime code | V8, V10 | todo | |
-| V13 | agentic-commerce | 5 | Switch to the published library version | J5, V10, V11 | todo | |
+| V13 | agentic-commerce | 5 | Switch to the library's GitHub commit (git-hosted dependency) | J5, J9, V10, V11 | todo | |
 | I1 | agentic-commerce | 6 | Dockerfile: `vic` and `sandbox` targets | V8, V9 | todo | From V2: the vic image must build shared (pnpm --filter @agentic-commerce/vic-shared run build) and copy shared/dist + shared/node_modules, since JAF resolves it via dist; keep pnpm symlinks so turing stays a single instance (findMerchant reads turing ALS through shared). |
 | I2 | agentic-commerce | 6 | nginx and start script | V8 | todo | |
 | I4 | agentic-commerce | 6 | Environment split and secret guard | V8, V9 | todo | |
@@ -571,15 +575,11 @@ Inventory on this branch: 21 directory-style imports in `src/index.ts`, `src/adk
 (remote tools, with the VIC-style example), J4, and J6 (`ensureOtelReady`, `createOpenTelemetryTraceCollector`,
 `shutdownOpenTelemetry`, `JAF_OTEL_PENDING_MAX`) in `docs/tracing.md`. Re-export `AgentRegistry` and
 `AgentRegistrySource` from `src/server/index.ts` (J2 follow-up). Bump version `0.1.46 → 0.2.0`. Run `pnpm build` and confirm
-`dist/` exports the new symbols. **Publishing is a human step**: set the task to `review` with the note "ready to publish", stop the loop, and a human
-runs the procedure below. After publishing, the human sets `done` with the published version and dist-tag in Notes, in
-both plan copies, and commits both.
-
-Release ownership: the plan owner has no npm publish rights. When J5 reaches `review`, push the branch
-(`git push -u origin feat/vic-sandbox-split`; the loop itself never pushes) and hand the release to an npm org owner,
-who runs the procedure below from that branch, or from `main` after merging it, in which case `--no-git-checks` is not needed.
-
-Publish procedure (from `jaf`, on `feat/vic-sandbox-split`, clean tree):
+`dist/` exports the new symbols. **Done criterion (plan v6).** J5 is `done` when the docs and version bump are reviewed and the J5 commit is on
+`origin/feat/vic-sandbox-split`; the human pushes, the loop never does. VIC consumes that commit directly from GitHub
+(V13, decision D5), so the npm publish is **not** on the critical path. It is task J8, performed by an npm org owner,
+using the procedure below (from `jaf` on `feat/vic-sandbox-split` with a clean tree, or from `main` after merging, in
+which case `--no-git-checks` is not needed):
 1. `npm login` with an account that is a member of the `juspay-jaf` npm org with publish rights; `npm whoami`.
 2. `pnpm install && pnpm build && node scripts/check-dist.mjs && bash scripts/check-pack.sh`.
 3. `prepublishOnly` runs lint, tests and build. The tests need the local databases: `pnpm run test:db:start`, then
@@ -592,6 +592,42 @@ Publish procedure (from `jaf`, on `feat/vic-sandbox-split`, clean tree):
 6. Verify from an empty directory: `npm init -y && npm i @juspay-jaf/jaf@next && node -e "import('@juspay-jaf/jaf').then(m=>console.log(Object.keys(m).length))"`.
 
 **Verify.** `pnpm build && node scripts/check-dist.mjs && bash scripts/check-pack.sh` (J7 provides both scripts).
+
+### J9. Compatibility with VIC's pnpm overrides
+
+**Why.** V13 installs the library as a git-hosted dependency inside the VIC workspace, where the root `pnpm.overrides`
+rewrite the library's own dependency versions: `fastify ^4.29.1 → ^5.12.7`, `@fastify/cors ^9.0.1 → ^11.0.0`,
+`uuid ^9.0.0 → ^11.1.1`, `mathjs ^14.6.0 → ^15.2.0`, `ai → 5.0.222`, `zod → 3.25.76`, `@opentelemetry/api → 1.9.0`.
+Through `link:` (V1) these did not apply to the library; through a git dependency they do. The library has to work and be
+tested under those versions. Also from the J5 review: `dist/test-utils` ships because `src/test-utils` is in the build.
+
+**Files.** `jaf:package.json`, `jaf:pnpm-lock.yaml`, `jaf:tsconfig.json`, `jaf:src/server/server.ts` and whatever tsc or the
+tests flag, `jaf:docs/server-api.md` only if behaviour changes.
+
+**Changes.**
+1. Bump in `package.json`: `fastify` `^5.12.7`, `@fastify/cors` `^11.0.0`, `uuid` `^11.1.1`, `mathjs` `^15.2.0`; `pnpm install`.
+   Fix what breaks: Fastify 5 renamed and removed request/reply APIs (for example `request.routerPath` → `request.routeOptions.url`),
+   changed some hook and plugin signatures, and `@fastify/cors` 11 option names; the `ajv.customOptions` block and `app.inject`
+   are unchanged. Keep behaviour identical; no new features.
+2. `tsconfig.json`: exclude `src/test-utils/**` from the build so it no longer ships in `dist/`; keep it available to jest.
+3. Prove it under VIC's overrides: in a scratch directory create a package.json with the exact `pnpm.overrides` block from
+   `vic:package.json` and `"@juspay-jaf/jaf": "github:xynehq/jaf#<J9 commit sha>"`, add the matching `onlyBuiltDependencies`
+   entry to a `pnpm-workspace.yaml` there (see V13 step 3), run `pnpm install` with pnpm 10.34.9, then with plain Node
+   `import('@juspay-jaf/jaf')`, call `createJAFServer` with a stub model provider and one agent, and `app.inject('/health')`.
+   This requires the J9 commit to be pushed first; if it is not, run the scratch check against a local tarball from
+   `pnpm pack` with the same overrides and say so in Notes.
+
+**Acceptance.** `pnpm ls fastify @fastify/cors uuid mathjs --depth 0` shows 5.x, 11.x, 11.x, 15.x; `pnpm typecheck && pnpm lint && pnpm test`
+pass with the known PostgreSQL exception; `node scripts/check-dist.mjs` and `bash scripts/check-pack.sh` pass; `dist/test-utils`
+does not exist after `pnpm build`; the scratch check in step 3 returns 200 from `/health`.
+
+**Verify.** `pnpm typecheck && pnpm lint && pnpm test; pnpm build && node scripts/check-dist.mjs && bash scripts/check-pack.sh && test ! -d dist/test-utils`.
+
+### J8. npm publish 0.2.0 by an npm org owner (optional, human-only)
+
+Nothing in this plan depends on J8. It stays `blocked` so the loop never picks it. An npm org owner runs the publish
+procedure in the J5 spec from the pushed branch (or `main` after merging), with `--tag next`, then sets this row to `done`
+with the version and dist-tag in Notes in both plan copies. Promote to `latest` only after I5 passes.
 
 ### V1. Dependency: `@xynehq/jaf@0.1.18` → linked `@juspay-jaf/jaf`
 
@@ -870,12 +906,38 @@ Do not delete untracked files.
 
 **Verify.** `pnpm typecheck`; `grep -rhoE "from '@juspay-jaf/jaf[^']*'" JAF/src | sort -u`.
 
-### V13. Switch to the published library version
+### V13. Switch to the library's GitHub commit (git-hosted dependency)
 
-**Changes.** After J5 is `done`, replace `link:../../jaf` in `vic:JAF/package.json` and `vic:jaf-runner/package.json` with
-`"@juspay-jaf/jaf": "<published version from J5 Notes>"`; `pnpm install`; commit the lockfile.
+**Why.** Decision D5: no npm publish rights on the team, so VIC installs the library straight from a pushed commit.
+pnpm fetches `https://codeload.github.com/xynehq/jaf/tar.gz/<sha>`, installs the library's devDependencies, runs its
+`prepare` script (`tsc`), keeps only the `files` of the package (`dist`, `README.md`, `LICENSE`, `package.json`), and pins
+the tarball with an integrity hash in `pnpm-lock.yaml`. No `git` binary is needed. Verified 2026-10-30 against fc18c84.
 
-**Acceptance.** Fresh `pnpm install --frozen-lockfile` succeeds; `pnpm typecheck` passes; no `link:` remains.
+**Changes.**
+1. `SHA` = the full 40-character commit of J9 as it exists on `origin/feat/vic-sandbox-split`. Confirm with
+   `git -C ../jaf fetch origin && git -C ../jaf merge-base --is-ancestor <SHA> origin/feat/vic-sandbox-split`. If the commit is
+   not on origin, set `blocked` with the note "push required" and stop; the human pushes.
+2. In `vic:JAF/package.json` and `vic:jaf-runner/package.json`: `"@juspay-jaf/jaf": "github:xynehq/jaf#<SHA>"`. Always a full
+   SHA, never a branch name, so builds are reproducible.
+3. `vic:pnpm-workspace.yaml`: add
+   ```yaml
+   onlyBuiltDependencies:
+     - "@juspay-jaf/jaf@https://codeload.github.com/xynehq/jaf/tar.gz/<SHA>"
+   ```
+   pnpm 10 refuses the bare package name for git-hosted packages, so this entry changes with every bump. Keep any entries
+   that `pnpm approve-builds` already added.
+4. `pnpm install` at the `vic` root; commit `pnpm-lock.yaml`. Then `pnpm ls zod fastify --depth 10 --filter jaf-agent-standalone`:
+   one zod, fastify 5.x for the library (the root override now applies; J9 made that safe).
+5. Remove every `link:` entry and any `file:` tarball left from V1.
+
+**Bumping later.** Change the SHA in the two `package.json` files and the allowlist entry, run `pnpm install`, commit the lockfile.
+If the repository ever becomes private, the builder needs a token: use `git+https://<token>@github.com/xynehq/jaf.git#<SHA>`
+from a build secret instead of the `github:` shorthand.
+
+**Acceptance.** In a fresh clone, `pnpm install --frozen-lockfile` succeeds with outbound HTTPS only; from `vic:JAF` and from
+`vic:jaf-runner`, `node -e "import('@juspay-jaf/jaf').then(m => console.log(Object.keys(m).length))"` prints a count under plain
+Node; `pnpm typecheck` passes; the VIC gateway and the runner boot together and one `/chat` round-trip succeeds; no `link:`
+remains anywhere in the workspace.
 
 ### I1. Dockerfile: `vic` and `sandbox` targets
 
@@ -885,6 +947,8 @@ Add target `sandbox`: builder builds `turing`, `shared`, `jaf-runner`; runtime f
 `bash coreutils` only, no npm/corepack (same removal as today), non-root `appuser`, copies only `jaf-runner`, `shared`, `turing`
 and their pruned `node_modules`, `ENV NODE_ENV=production BASH_WORKSPACE_ROOT=/workspace`, `VOLUME /workspace`,
 `CMD ["node", "dist/server.js"]`, `HEALTHCHECK` on `/health`.
+Both builders install the library from codeload.github.com (V13): CI must allow outbound HTTPS to github.com and
+codeload.github.com during `pnpm install`; no `git` binary is required; the library's `prepare` build runs inside the builder.
 
 **Acceptance.** `docker build --target vic .` and `docker build --target sandbox .` succeed; the sandbox image contains no
 `playwright` directory and no `chromium`; `docker run sandbox node -e "require('/app/jaf-runner/dist/server.js')"` is not required.
@@ -944,6 +1008,7 @@ Record the outputs in the ledger Notes.
 | D2 | In-cluster auth bypass (`isInternalCall`) | Kept at the gateway only, enabled by `GATEWAY_INTERNAL_HOST` (default: the current `agentic-commerce.ardra.svc.cluster.local`). Never on the sandbox. | user |
 | D3 | Which agents get the Bash tool | None by default. | user |
 | D4 | LLM credentials in the sandbox | Bedrock called directly from the sandbox with AWS credentials (as today). Routing via LiteLLM in VIC is a later change. | user |
+| D5 | How VIC obtains the library | pnpm git-hosted dependency on a pushed commit of `feat/vic-sandbox-split` (`github:xynehq/jaf#<sha>` plus the `onlyBuiltDependencies` entry), built at install by `prepare`. npm publish is optional (J8). Verified 2026-10-30 against fc18c84 with pnpm 10.34.9; the repo is public, so no credentials are needed. | user (decided 2026-10-30) |
 
 ---
 
@@ -956,3 +1021,4 @@ Record the outputs in the ledger Notes.
 | 3 | 2026-10-30 | Added J6 (tracing init race found in V1); V1 re-queued as `todo` depending on J6; J5 depends on J6. Folded reviewer follow-ups into J3 (no headers in errors), J4 (no zod `instanceof`), J5 (server re-exports, tracing docs), V9 (use J6 helpers, flush on SIGTERM). J6 is ordered before J3 so V1 can resume while J3 runs. |
 | 4 | 2026-10-30 | J5 found `dist/` unloadable by plain Node (pre-existing, also in published 0.1.46). Decision (b): added J7 (native ESM build, missing subpath index files, no runtime `require`), J5 re-queued on J7 with the human publish procedure; V9 states the runner module format. |
 | 5 | 2026-10-30 | J5: release is performed by an npm org owner from the pushed branch; plan owner has no publish rights. |
+| 6 | 2026-10-30 | D5: VIC consumes the library from GitHub (V13 rewritten), npm publish moved to optional human-only J8, J5 done criterion = reviewed and pushed. Added J9 (compatibility with VIC's pnpm overrides, which `link:` did not apply but a git dependency does; exclude `src/test-utils` from dist). I1 notes the builder needs HTTPS to codeload.github.com. |
