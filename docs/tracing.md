@@ -130,6 +130,13 @@ process.on('SIGTERM', async () => {
 });
 ```
 
+| API | Purpose |
+|---|---|
+| `ensureOtelReady(): Promise<boolean>` | Resolves once the optional modules finished loading; `true` when tracing is available. |
+| `createOpenTelemetryTraceCollector(serviceName?, langfuseCredentials?)` | Awaits `ensureOtelReady()`, then constructs the collector. |
+| `shutdownOpenTelemetry(): Promise<void>` | Flushes and stops the SDK; always resolves (flush errors are logged). Call it once, at process exit. |
+| `JAF_OTEL_PENDING_MAX` (env) | Maximum events buffered per collector before the modules are ready (default 1000). |
+
 ### Local Development with Jaeger
 
 Run Jaeger locally for trace visualization:

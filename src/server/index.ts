@@ -79,6 +79,8 @@ export { createJAFServer } from './server.js';
 // runServer is exported above
 export type { 
   ServerConfig, 
+  AgentRegistry, 
+  AgentRegistrySource, 
   ChatRequest, 
   ChatResponse, 
   AgentListResponse, 

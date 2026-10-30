@@ -93,7 +93,9 @@ agent existence check, and the `RunConfig` passed to the engine, which always re
 for the next request without restarting the server; a run in progress keeps its snapshot.
 
 ```typescript
-let current: ReadonlyMap<string, Agent<Ctx, any>> = buildAgents();
+import type { AgentRegistry } from '@juspay-jaf/jaf';
+
+let current: AgentRegistry<Ctx> = buildAgents();
 
 createJAFServer({
   runConfig: { agentRegistry: () => current, modelProvider },
@@ -200,7 +202,8 @@ curl -X POST http://localhost:3000/chat \
 **Request Schema:**
 ```typescript
 interface ChatRequest {
-  messages: HttpMessage[];          // Required: Conversation messages
+  messages: ChatMessage[];          // Required: Conversation messages (may be a full transcript, see below)
+                                   // ChatMessage is ChatRequest['messages'][number]; it is not exported by name
   agentName: string;               // Required: Target agent name
   context?: any;                   // Optional: Agent context
   maxTurns?: number;              // Optional: Override max turns
@@ -210,14 +213,44 @@ interface ChatRequest {
     autoStore?: boolean;          // Default: true
     maxMessages?: number;         // Optional: Memory limit
     compressionThreshold?: number; // Optional: Compression trigger
+    storeOnCompletion?: boolean;  // Optional: Store only when the run completes
   };
+  approvals?: ApprovalMessage[];  // Optional: HITL decisions for pending tool calls
 }
 
-interface HttpMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
+type ChatMessage =
+  | { role: 'user' | 'system'; content: string; attachments?: Attachment[] }   // system is sent to the model as user
+  | { role: 'assistant'; content: string; attachments?: Attachment[];
+      tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[] }
+  | { role: 'tool'; content: string; tool_call_id?: string };
+
+interface Attachment {
+  kind: 'image' | 'document' | 'file';
+  mimeType?: string;
+  name?: string;
+  url?: string;
+  data?: string;
+  format?: string;
+}
+
+interface ApprovalMessage {
+  type: 'approval';
+  sessionId: string;
+  toolCallId: string;
+  approved: boolean;
+  additionalContext?: Record<string, any>;
 }
 ```
+
+**Replaying a full transcript.** `messages` may carry the whole conversation, including assistant
+`tool_calls` and `tool` results (`tool_call_id`), exactly as returned in `data.messages`. They reach the
+model unchanged, so a caller that stores the transcript itself (no `defaultMemoryProvider`) can send it back on
+every request and the agent continues from previous tool results. To resume a tool call that is waiting for
+approval, send the transcript including the assistant message that holds the pending `tool_calls` (the latest
+assistant message whose calls have no `tool` result yet), plus an `approvals` entry for its `toolCallId`; the
+engine then executes (or rejects) the call before calling the model.
+Anyone who can call `/chat` can replay tool calls and approve them, so put the endpoint behind authentication
+when tools have side effects.
 
 **Response (non-streaming):**
 ```json

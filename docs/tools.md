@@ -1048,6 +1048,22 @@ const agent: Agent<MyContext, string> = {
 };
 ```
 
+### Schema conversion
+
+The catalog carries JSON Schema; both directions are exported for building and consuming catalogs:
+
+```typescript
+import { zodSchemaToJsonSchema, jsonSchemaToZod } from '@juspay-jaf/jaf';
+
+const json = zodSchemaToJsonSchema(myTool.schema.parameters); // server side: publish in the catalog
+const zod = jsonSchemaToZod(json);                            // client side: validate arguments
+```
+
+Supported: objects (required/optional properties), strings (incl. `enum`), numbers, booleans and arrays.
+`zodSchemaToJsonSchema` keeps `.describe()` text on string fields only. Records convert zod → JSON only:
+an object schema with just `additionalProperties` (a top-level `z.record` or a record field) converts back to
+an empty `z.object({})`, which strips its entries, so give every tool parameter object explicit `properties`.
+
 ### Errors
 
 - `discoverRemoteTools` / `fetchRemoteToolCatalog` throw `RemoteToolsError` with `code`:
