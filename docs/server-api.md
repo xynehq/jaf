@@ -396,6 +396,9 @@ Remove conversation from memory.
 curl -X DELETE http://localhost:3000/conversations/demo-conversation-1
 ```
 
+Send no body and no `Content-Type: application/json` header: since 0.2.0 (Fastify 5) a request with that
+content type and an empty body is rejected with `400 FST_ERR_CTP_EMPTY_JSON_BODY` before the handler runs.
+
 **Response:**
 ```json
 {
