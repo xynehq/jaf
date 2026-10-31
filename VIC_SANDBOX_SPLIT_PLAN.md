@@ -1,7 +1,7 @@
 # VIC / JAF Sandbox Split: Implementation Plan
 
 ```
-plan_version: 11
+plan_version: 12
 plan_updated: 2026-10-30
 copies (must be byte-identical at every commit):
   jaf:              VIC_SANDBOX_SPLIT_PLAN.md   branch feat/vic-sandbox-split   base main          (55edcf5)
@@ -313,7 +313,8 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | I2 | agentic-commerce | 6 | nginx and start script | V8 | done | From V7 review (pre-existing, medium): nginx `proxy_set_header Host $host` relays the client Host; authenticateRequest skips Ardra when host == GATEWAY_INTERNAL_HOST, so `Host: agentic-commerce.ardra.svc.cluster.local` plus any x-session-id cookie runs non-GENIUS agents unauthenticated; the same host drives getArdraBaseUrl (VIC posts the caller's cookie to https://<client Host>/ardra/). Set a fixed Host in nginx or key the bypass off a dedicated internal listener. From V8: start.sh must treat a VIC exit as fatal (today the backgrounded tsx can die while nginx stays up and HEALTHCHECK probes only /api/health, so the container stays healthy with a dead VIC); consider probing :3001/health. D2 confirmed 2026-10-31: keep `proxy_set_header Host $host` and the bypass exactly as today; the fixed-Host / internal-listener fix is OUT OF SCOPE for this plan (possible follow-up). I2 done: commit I2: nginx 404s for /tools, /conversations, /approvals and a fatal VIC exit (git log --grep '^I2:'); review: 2 rounds, APPROVE (round 1 APPROVE with a non-blocking race fixed in round 2: wait -n missed a VIC killed by a signal during the startup sleep; start.sh now polls kill -0 on VIC and nginx, then waits on the dead one). Host-header directives untouched (D2). start.sh: a VIC or nginx exit stops the container (exit = VIC status, or 1); agentic exit stays non-fatal as before; JAF_PID renamed VIC_PID. HEALTHCHECK also probes :3001/health. Verified with podman: nginx -t ok; via :8080 /tools, /tools/x, /conversations/abc, /approvals -> 404, /health 200; :3002/tools 200 with the token; VIC SIGKILL during or after startup -> 137, VIC exit 1 -> 1, nginx death -> 1, podman stop -> 0. Open, non-blocking: the fatal path's `wait` after kill is unbounded (same shape as the pre-existing trap; an I3 liveness probe covers a hang); nginx `upstream jaf` keeps its old name. |
 | I4 | agentic-commerce | 6 | Environment split and secret guard | V8, V9 | done | From V6: Redis holding vic:transcript:* is VIC-only; transcripts keep tool_call arguments for TRANSCRIPT_TTL_S (e.g. deliverooShoppingTools.login_user password), consider redaction. From V7 review: GATEWAY_INTERNAL_HOST must never be set to a publicly reachable host (that disables Ardra auth); see I2 Notes for the pre-existing Host-header bypass. From V8: VIC refuses to start without SANDBOX_URL, SANDBOX_SERVICE_TOKEN and VIC_SERVICE_TOKEN; the deployment env must provide them. From V9: runner env needs VIC_TOOL_TIMEOUT_MS matching VIC's (the stub waits that +10 s); with KMS_ENCRYPTED_LANGFUSE=true the sandbox role needs kms:Decrypt on the Langfuse key only; jaf's tracing exporter honours HTTP(S)_PROXY, so keep proxy vars out of the sandbox env. From V15 review: transcripts in Redis are keyed by an unauthenticated client-chosen id (see V15 Notes); decide on scoping before production. From V11: everything in the sandbox env is readable by Bash commands via /proc/1/environ once the tool is attached (D3). From V17: runner .env.example gains IDOSELL_MCP_ENDPOINT (optional; default https://megadron.pl/mcp.php as in VIC; envGuard pattern does not match it). A malformed value now fails at vic-shared import in VIC and the runner (fail fast). I4 done: commit I4: env split (.env.example for VIC and the runner) and the runner's secret guard (git log --grep '^I4:'); review: 2 rounds, APPROVE (round 1 APPROVE with three non-blocking findings, all applied and re-approved in round 2). Guard: jaf-runner/src/envGuard.ts, called first in startRunner (after dotenv, before loadConfig); prints names only; empty string counts as set. D4 (Bedrock direct): LITELLM_* forbidden. Deviations from the spec pattern: (a) names ending _BEDROCK_MODEL or _MAX_TOKENS are exempt, since ^AXS_/^OBENAN_ otherwise refuse the runner's own AXS_BEDROCK_MODEL, AXS_MAX_TOKENS, OBENAN_BEDROCK_MODEL; (b) also forbidden: ALL_PROXY and lowercase http(s)_proxy/all_proxy (jaf tracing exporter and curl honour them), _PRIVATE_KEY$, _AUTH_KEY$, _PASSWORD$, ^REDIS_URL$ (TAP_PRIVATE_KEY, SPOTLIGHT_AUTH_KEY/BASIC_AUTH_PASSWORD and the Redis URL were not caught by the plan's list). Verified: runner suite 33/33, tsc clean; env -i boot with OBENAN_BEARER_TOKEN + https_proxy exits 1 naming both, value never printed; clean boot /health 200; every name in jaf-runner/.env.example passes (0/69); 22 of 73 VIC names are refused. |
 | I3 | agentic-commerce | 6 | Build pipeline and deployment manifests | I1 | review | k8s apply is human From V9: with VIC_TOOLS_URL load-balanced across VIC pods, a rolling VIC deploy that changes the catalog gives intermittent 503 (runner VERSION_MISMATCH) until all pods agree; point it at a stable target or accept the window. From V11: readOnlyRootFilesystem is required (Bash commands could otherwise rewrite /app/jaf-runner/dist); the sandbox NetworkPolicy bounds Bash egress (/dev/tcp and node are available to commands). From V13: CI/build egress must allow codeload.github.com and cdn.sheetjs.com in addition to the npm registry. manifests ready. I3: commit I3: build and push both images, example sandbox manifests (git log --grep '^I3:'); review: 2 rounds, APPROVE (round 1 REQUEST_CHANGES: the VIC_TOOLS_URL comment claimed a stable target; fixed with the real preconditions). Status stays review until a human applies the manifests in the deploy repo and sets done. Makefile: build = --target vic; build-sandbox/push-sandbox via SANDBOX_IMAGE_NAME (default agentic-commerce-sandbox) instead of overriding IMAGE_NAME; release builds and pushes both. Jenkinsfile builds and pushes both in the existing stages. deploy/sandbox: Deployment (runtimeClassName <gvisor>, non-root 1001, readOnlyRootFilesystem, caps dropped, emptyDir /workspace and /tmp, /health probes, terminationGracePeriodSeconds 210, automountServiceAccountToken false since IRSA projects its own token, enableServiceLinks false), Service (jaf-sandbox:3001 and agentic-commerce-tools:3002), NetworkPolicy (ingress from VIC pods only; egress DNS, VIC tools, Bedrock/STS/KMS VPC-endpoint CIDRs and Langfuse on 443; STS and KMS added beyond the spec because IRSA and KMS_ENCRYPTED_LANGFUSE need them). Verified: make -n release; sandbox image runs --read-only with tmpfs /workspace and /tmp and all caps dropped (/health 200, /app EROFS); manifests parse (no cluster or validator available here: pulling kubeconform was not permitted). For the deployer: with more than one VIC replica, VIC needs REDIS_URL (in-memory run tokens otherwise give 401 on other pods); a catalog-changing rolling VIC deploy may give /chat 503 until pods agree; 3002 is reachable cluster-wide (follow-up: VIC-side ingress policy keeping 8080 open); building both images roughly doubles CI build time (a shared base stage would help). |
-| I5 | agentic-commerce | 6 | End-to-end smoke | V12, V13, I1, I2, I4 | blocked | BLOCKED on credentials (human). Commit I5: smoke script and VIC_TOOLS_URL example fix (git log --grep '^I5:'); not yet reviewed (review when unblocked). Added scripts/smoke-split.sh (steps 1-7; default 1 2 3 4 6; steps 5 and 7 need the manual setup described in its header). Local run 2026-10-31 (VIC and runner from source, env -i, random tokens, GATEWAY_INTERNAL_HOST bypass instead of a staging Ardra session, ports 39601-39603): step 1 PASS (both /health 200); step 2 status 200 and keys success, data.{conversationId,executionTimeMs,messages,outcome,runId,traceId,turnCount} as before the split, but outcome error ModelBehaviorError; step 3 PASS for events (stream_start, run_start, agent_processing, turn_start, llm_call_start, run_end, stream_end) and transcript replay (second turn has 2 user messages), outcome error; step 4 status 200, outcome error, no TOOL_CALL (the model never ran); step 6 PASS (envGuard 5/5, gateway chat.test 32/32, runner app.test 13/13, tool server without a token 401); steps 5 and 7 not run. Found and fixed: VIC_TOOLS_URL must end in /tools (jaf's remote-tools client GETs the URL as given and POSTs <url>/<id>/call; the runner's app.test uses http://vic:3002/tools); the I4 runner .env.example and the I3 deployment.yaml had it without /tools (catalog GET 404, every /chat 503). Both corrected in the I5 commit. Needed to unblock: (1) valid Bedrock credentials on the machine running the smoke (aws sts get-caller-identity fails with InvalidClientTokenId here; the developer JAF/.env has no AWS keys); (2) either a staging Ardra host plus an x-session-id cookie (SMOKE_HOST/SMOKE_SESSION_ID), or confirm that the local GATEWAY_INTERNAL_HOST bypass is acceptable for the smoke; (3) Korio and Shopify merchant settings for steps 4 and 7 (none in JAF/.env); (4) plan owner: step 5 says /agents lists the new tool, but /agents lists only tools an agent picks, so a dummy tool must also be added to an agent's pick list in jaf-runner (a runner change, not VIC-only); confirm or relax to checking the catalog version change. Note: JAF/.env holds ANTHROPIC/OPENAI/GOOGLE/BROWSERBASE API keys and LITELLM_*, which the I4 guard refuses, so the runner cannot share that file; give it its own env (jaf-runner/.env.example). |
+| V18 | agentic-commerce | 4 | Runner: LiteLLM provider for local development (D4 amendment) and `GET /catalog` | V9, I4 | todo | From the I5 block: the smoke machine has LiteLLM, not Bedrock. Production stays Bedrock (D4); the I3 manifests never set `RUNNER_LLM_PROVIDER`. |
+| I5 | agentic-commerce | 6 | End-to-end smoke | V12, V13, I1, I2, I4, V18 | todo | UNBLOCKED by plan v12 (2026-10-31, D12): (1) LLM through the runner's LiteLLM path (V18, `RUNNER_LLM_PROVIDER=litellm`); (2) local mode with the `GATEWAY_INTERNAL_HOST` bypass, no Ardra; (3) step 4 uses `IdoSellAgent` (public MCP endpoint, no credential, no browser); step 7 needs Ardra's merchant list and is staging-only: record it as not run locally and leave it to a human with a staging session; (4) step 5 checks the catalog version (VIC `/tools` before and after, runner `/catalog` after the `/chat`), not `/agents`; (5) the runner has its own `jaf-runner/.env`, never `JAF/.env`. Minimum env in the spec. Previously: BLOCKED on credentials (human). Commit I5: smoke script and VIC_TOOLS_URL example fix (git log --grep '^I5:'); not yet reviewed (review when unblocked). Added scripts/smoke-split.sh (steps 1-7; default 1 2 3 4 6; steps 5 and 7 need the manual setup described in its header). Local run 2026-10-31 (VIC and runner from source, env -i, random tokens, GATEWAY_INTERNAL_HOST bypass instead of a staging Ardra session, ports 39601-39603): step 1 PASS (both /health 200); step 2 status 200 and keys success, data.{conversationId,executionTimeMs,messages,outcome,runId,traceId,turnCount} as before the split, but outcome error ModelBehaviorError; step 3 PASS for events (stream_start, run_start, agent_processing, turn_start, llm_call_start, run_end, stream_end) and transcript replay (second turn has 2 user messages), outcome error; step 4 status 200, outcome error, no TOOL_CALL (the model never ran); step 6 PASS (envGuard 5/5, gateway chat.test 32/32, runner app.test 13/13, tool server without a token 401); steps 5 and 7 not run. Found and fixed: VIC_TOOLS_URL must end in /tools (jaf's remote-tools client GETs the URL as given and POSTs <url>/<id>/call; the runner's app.test uses http://vic:3002/tools); the I4 runner .env.example and the I3 deployment.yaml had it without /tools (catalog GET 404, every /chat 503). Both corrected in the I5 commit. Needed to unblock: (1) valid Bedrock credentials on the machine running the smoke (aws sts get-caller-identity fails with InvalidClientTokenId here; the developer JAF/.env has no AWS keys); (2) either a staging Ardra host plus an x-session-id cookie (SMOKE_HOST/SMOKE_SESSION_ID), or confirm that the local GATEWAY_INTERNAL_HOST bypass is acceptable for the smoke; (3) Korio and Shopify merchant settings for steps 4 and 7 (none in JAF/.env); (4) plan owner: step 5 says /agents lists the new tool, but /agents lists only tools an agent picks, so a dummy tool must also be added to an agent's pick list in jaf-runner (a runner change, not VIC-only); confirm or relax to checking the catalog version change. Note: JAF/.env holds ANTHROPIC/OPENAI/GOOGLE/BROWSERBASE API keys and LITELLM_*, which the I4 guard refuses, so the runner cannot share that file; give it its own env (jaf-runner/.env.example). |
 
 ---
 
@@ -1275,10 +1276,12 @@ timeouts. `start.sh` (generated in the Dockerfile) no longer starts JAF.
   `SANDBOX_URL`, `SANDBOX_SERVICE_TOKEN`, `VIC_SERVICE_TOKEN`, `VIC_TOOLS_PORT`, `RUN_TOKEN_TTL_MS`, `VIC_TOOL_TIMEOUT_MS`, `TRANSCRIPT_*`).
 - `vic:jaf-runner/.env.example`: `RUNNER_PORT`, `RUNNER_SERVICE_TOKEN`, `VIC_TOOLS_URL`, `VIC_SERVICE_TOKEN`, `BEDROCK_*`, every
   `*_BEDROCK_MODEL` and `*_MAX_TOKENS`, `AWS_REGION`, `LANGFUSE_*`, `KMS_ENCRYPTED_LANGFUSE`, `ADDITIONAL_ALLOWED_FIELDS_JAF`,
-  `BASH_*`, `IDOSELL_MCP_ENDPOINT` (V17; optional, not a secret). No `HTTP_PROXY`/`HTTPS_PROXY`.
+  `BASH_*`, `IDOSELL_MCP_ENDPOINT` (V17; optional, not a secret), `RUNNER_LLM_PROVIDER` + `LITELLM_URL`/`LITELLM_API_KEY`/`LITELLM_MODEL`
+  (V18; local development only). No `HTTP_PROXY`/`HTTPS_PROXY`.
 - Runner startup guard (`vic:jaf-runner/src/envGuard.ts`): refuse to start if any variable matching
   `/_CLIENT_SECRET$|_BEARER_TOKEN$|_API_KEY$|^SHOPIFY_UCP_|^AXS_|^OBENAN_|^QAPI_|^LITELLM_|^HTTPS?_PROXY$/` is set, except `LITELLM_*` is
-  allowed only if decision D4 routes the LLM through LiteLLM. Print the offending names, never the values.
+  allowed only if decision D4 routes the LLM through LiteLLM (V18: exactly `LITELLM_URL`, `LITELLM_API_KEY`, `LITELLM_MODEL`, and only
+  when `RUNNER_LLM_PROVIDER=litellm`). Print the offending names, never the values.
 
 **Acceptance.** Test: guard throws for `OBENAN_BEARER_TOKEN=x`; passes for a clean environment.
 
@@ -1291,19 +1294,80 @@ as VIC; egress only to the Bedrock endpoints, the VIC tool-server Service, the L
 `emptyDir` at `/workspace`; `runtimeClassName` placeholder for gVisor. The real deploy repo is outside this plan: applying
 manifests is a **human** step; set `review` with the note "manifests ready" when done.
 
+### V18. Runner: LiteLLM provider for local development (D4 amendment) and `GET /catalog`
+
+**Files.** `vic:jaf-runner/src/config.ts`, new `vic:jaf-runner/src/providers/modelProvider.ts` (+ test), `vic:jaf-runner/src/server.ts`,
+`vic:jaf-runner/src/envGuard.ts` (+ test), `vic:jaf-runner/src/app.ts` (+ test), `vic:jaf-runner/.env.example`.
+
+**Why.** The I5 smoke runs on a developer machine that has no Bedrock credentials but has a LiteLLM endpoint and key. Production
+stays Bedrock, called directly from the sandbox (D4). Step 5 of the smoke must see which catalog version the runner holds; jaf's
+`/health` body is fixed, so the runner gets a one-field route of its own.
+
+**Changes.**
+1. `config.ts`: `RunnerConfig` gains `llmProvider: 'bedrock' | 'litellm'` (from `RUNNER_LLM_PROVIDER`, default `bedrock`; any other
+   value throws), `litellmUrl?: string`, `litellmApiKey?: string`, `litellmModel?: string` (from `LITELLM_URL`, `LITELLM_API_KEY`,
+   `LITELLM_MODEL`). With `litellm`, `LITELLM_URL` is required.
+2. New `providers/modelProvider.ts`: `createModelProvider(config): { getCompletion }`. `bedrock`: `makeBedrockProvider(config.awsRegion)`
+   as today. `litellm`: `makeLiteLLMProvider(config.litellmUrl, config.litellmApiKey ?? 'anything')` from `@juspay-jaf/jaf`; when
+   `litellmModel` is set, wrap it with the exported pure `withModelName(provider, name)`, which calls the inner `getCompletion` with
+   `{ ...agent, modelConfig: { ...agent.modelConfig, name } }` (the agents' Bedrock model ids mean nothing to LiteLLM). Either way
+   only `getCompletion` is exposed, so `withAddressGuard` keeps applying (V9). `server.ts` calls it instead of `makeBedrockProvider`
+   and logs the provider name, never the key.
+3. `envGuard.ts`: `forbiddenEnvNames(env)` (and so `assertSandboxEnv`) exempts exactly `LITELLM_URL`, `LITELLM_API_KEY`, `LITELLM_MODEL`
+   when `env.RUNNER_LLM_PROVIDER === 'litellm'`; everything else is unchanged, so a production sandbox (which never sets the switch)
+   still refuses every `LITELLM_*` and every `*_API_KEY`.
+4. `app.ts`: `GET /catalog` → `200 { version: catalog.version() ?? null }`, behind the Bearer token like every non-health route; the
+   preHandler's `ensureCatalog` runs for it as for the other routes (without the version header it fetches only when nothing is loaded).
+5. `.env.example`: a block `# --- LLM provider ---` with `RUNNER_LLM_PROVIDER=bedrock` and the comment that `litellm` is for local
+   development and the I5 smoke only (production: Bedrock, D4; the I3 manifests never set it), then `LITELLM_URL=`, `LITELLM_API_KEY=`,
+   `LITELLM_MODEL=` (a model that supports tool calls). D3 applies: the key is readable by Bash commands once that tool is attached.
+
+**Acceptance.**
+(a) `loadConfig`: default `bedrock`; `RUNNER_LLM_PROVIDER=litellm` without `LITELLM_URL` throws naming it; with it the config carries
+url, key and model; `RUNNER_LLM_PROVIDER=foo` throws.
+(b) guard: `{ RUNNER_LLM_PROVIDER: 'litellm', LITELLM_URL, LITELLM_API_KEY, LITELLM_MODEL }` passes; the same three names without the
+switch are refused (the existing forbidden-family test keeps `LITELLM_URL`); `LITELLM_OTHER` is refused even with the switch.
+(c) `withModelName`: the inner provider receives `modelConfig.name === name` with the other `modelConfig` fields and the rest of the
+agent unchanged, and its result is returned as is; `createModelProvider` for `bedrock` returns an object with only `getCompletion`.
+(d) `GET /catalog` without a token 401; with the token and a fake VIC catalog of version `v1`, `{ version: 'v1' }`; after a `/chat`
+carrying `x-tool-catalog-version: v2` while the fake VIC serves `v2`, `{ version: 'v2' }`.
+(e) With `RUNNER_LLM_PROVIDER=litellm LITELLM_URL=http://127.0.0.1:9` the runner starts and `/health` is 200 (no model call at startup).
+
+**Verify.** as V9: `pnpm --filter @agentic-commerce/jaf-runner typecheck && pnpm --filter @agentic-commerce/jaf-runner test`.
+
 ### I5. End-to-end smoke
 
 **Changes.** `vic:scripts/smoke-split.sh` running against a local VIC (`pnpm --filter @agentic-commerce/vic dev`) and runner
-(`pnpm --filter @agentic-commerce/jaf-runner dev`) with the staging Ardra and Bedrock credentials from the developer's `.env`:
+(`pnpm --filter @agentic-commerce/jaf-runner dev`) in **local mode** (D12): no Ardra, `SMOKE_HOST` equal to VIC's
+`GATEWAY_INTERNAL_HOST` (a name that resolves nowhere, e.g. `vic.internal.test`), the LLM through the runner's LiteLLM path (V18).
+Each process has its own env file: `JAF/.env` for VIC, `jaf-runner/.env` for the runner (never `JAF/.env`: the I4 guard refuses its
+keys). Minimum env, nothing else needed (the loop's 2026-10-31 run started both with `env -i` and these):
+- VIC: `JAF_PORT=3001`, `VIC_TOOLS_PORT=3002`, `SANDBOX_URL=http://127.0.0.1:3101`, `SANDBOX_SERVICE_TOKEN=<random>`,
+  `VIC_SERVICE_TOKEN=<random>`, `GATEWAY_INTERNAL_HOST=vic.internal.test`.
+- runner: `RUNNER_PORT=3101`, `RUNNER_SERVICE_TOKEN=<VIC's SANDBOX_SERVICE_TOKEN>`, `VIC_TOOLS_URL=http://127.0.0.1:3002/tools`,
+  `VIC_SERVICE_TOKEN=<VIC's>`, `RUNNER_LLM_PROVIDER=litellm`, `LITELLM_URL`, `LITELLM_API_KEY`, `LITELLM_MODEL` (tool-calling model).
+  `LANGFUSE_*` optional (the runner only warns).
+- script: `VIC_URL`, `RUNNER_URL`, `VIC_TOOLS_URL`, `RUNNER_SERVICE_TOKEN`, `VIC_SERVICE_TOKEN` (step 5 reads VIC's `/tools`),
+  `SMOKE_HOST`, `VIC_LOG`, `RUNNER_LOG`.
+Steps:
 1. `/health` on both.
 2. Non-stream `/chat` to `PreDiscoveryAgent` with a greeting → 200, JSON shape identical to today (compare keys).
 3. Stream `/chat` → events include `stream_start` … `run_end` … `stream_end`; transcript stored (second turn replays it).
-4. A tool-calling turn (e.g. a Korio search) → the VIC log shows `/tools/:id/call` and the model's answer reflects the result.
-5. Catalog change: add a dummy tool file, restart VIC only, send `/chat` → runner log shows one re-fetch and `/agents` lists the new tool.
+4. A tool-calling turn → the VIC log shows `/tools/:id/call` and the model's answer reflects the result. Default
+   `SMOKE_TOOL_AGENT=IdoSellAgent`, `SMOKE_TOOL_PROMPT` a catalog search: the IdoSell MCP endpoint has a public default and the
+   search needs no credential, merchant list or browser. Korio stays selectable but needs Playwright's chromium installed for VIC.
+5. Catalog change, checked by version (a VIC-only tool is picked by no agent, so `/agents` cannot show it): record VIC's `/tools`
+   version (`SMOKE_CATALOG_VERSION_BEFORE`), add a dummy tool module to VIC (one file exporting one tool, listed in
+   `TOOL_MODULES`), restart VIC only, then the script asserts: VIC's `/tools` version differs from the recorded one and lists
+   `SMOKE_NEW_TOOL`; `/chat` is 200; the runner's `/catalog` (V18) now reports VIC's new version. Remove the dummy tool afterwards.
 6. I4 guard and V7 context assertions re-run in this environment.
 7. A Shopify MCP turn with a merchant switch (V16): the VIC log shows the patch and the next tool call uses the new merchant.
+   Staging only: the merchant list comes from Ardra (`getDiscoveryMerchantsForPrompt` when `context.multiRegionSupportEnabled`),
+   and Shopify's tools derive `catalogUrl` from it, so local mode cannot run it. The script prints SKIPPED unless `SMOKE_HOST` is a
+   staging Ardra host with `SMOKE_SESSION_ID`; the ledger records it as a human follow-up. V16's unit tests cover the patch path.
 GENIUS agents (`AnalyticsOrchestratorAgent` and its sub-agents) are out of scope for the smoke until section 8.1 is done (D9).
-Record the outputs in the ledger Notes.
+Record the outputs in the ledger Notes, step 7 as not run locally. Acceptance: steps 1–6 pass in local mode with `outcome.status`
+`completed` in steps 2–4.
 
 ---
 
@@ -1314,7 +1378,7 @@ Record the outputs in the ledger Notes.
 | D1 | Where the full transcript lives | VIC-owned Redis (`REDIS_URL`), in-memory for local dev. Ardra keeps receiving USER/SYSTEM text via `sendChatMessageAsync`. | user |
 | D2 | In-cluster auth bypass (`isInternalCall`) | Kept at the gateway only, enabled by `GATEWAY_INTERNAL_HOST` (default: the current `agentic-commerce.ardra.svc.cluster.local`). Never on the sandbox. Confirmed 2026-10-31: the Host-header match stays exactly as today; no hardening in this plan. The header is client-controlled (nginx forwards `Host $host`), so a shared-secret header for in-cluster callers is a possible follow-up outside this plan. | user (decided 2026-10-31) |
 | D3 | Which agents get the Bash tool | None by default. | user |
-| D4 | LLM credentials in the sandbox | Bedrock called directly from the sandbox with AWS credentials (as today). Routing via LiteLLM in VIC is a later change. | user |
+| D4 | LLM credentials in the sandbox | Bedrock called directly from the sandbox with AWS credentials (as today). Routing via LiteLLM in VIC is a later change. Amended 2026-10-31 (V18): for local development and the I5 smoke the runner may call a LiteLLM endpoint instead (`RUNNER_LLM_PROVIDER=litellm` with `LITELLM_URL`/`LITELLM_API_KEY`/`LITELLM_MODEL`, the three then exempt from the I4 guard). Production is unchanged: the switch defaults to `bedrock` and the I3 manifests never set it. | user |
 | D5 | How VIC obtains the library | pnpm git-hosted dependency on a pushed commit of `feat/vic-sandbox-split` (`github:xynehq/jaf#<sha>` plus the `onlyBuiltDependencies` entry), built at install by `prepare`. npm publish is optional (J8). Verified 2026-10-30 against fc18c84 with pnpm 10.34.9; the repo is public, so no credentials are needed. | user (decided 2026-10-30) |
 | D6 | A `/chat` context missing `sessionId`, `conversationId` or `referenceId` | Run as today, never reject: `SandboxContextSchema` makes the three ids optional (2.5); when the app sent no conversationId the gateway mints `conv-<uuid>` for the run, keeps no transcript and sends no Ardra USER/SYSTEM message (today JAF mints one and the Ardra calls are skipped); `authenticateRequest` gets `null` for a missing id. Implemented by V14. Plan v8: each of the three pre-split uses keeps its own source field (history by the top-level id, Ardra messages by the context id), see the V15 table. | user (decided 2026-10-31) |
 | D7 | Lossy tool schemas in the sandbox (V3 carry-forward) | Option (a): make jaf's `zodSchemaToJsonSchema` / `jsonSchemaToZod` lossless for the VIC catalog (J10) and gate V10 on it; the stubs must accept everything the real zod schema accepts, VIC re-validates on `/tools/:id/call`. Option (b), shipping the placeholder stubs, was rejected because `update_cart_empik` and numeric `.default()` fields would fail in the sandbox. | user (decided 2026-10-31) |
@@ -1322,6 +1386,7 @@ Record the outputs in the ledger Notes.
 | D9 | GENIUS (orchestrator and agents-as-tools) gaps found while reviewing V10 | Deferred to section 8.1, to be picked up with the next GENIUS change after the split is complete. Until then the GENIUS agents move with the rest but are not expected to work in the sandbox; I5 excludes them. | user (decided 2026-10-31) |
 | D10 | Transcript key not bound to the session (V15 review) | Deferred to section 8.2: Redis is not in use yet, so the store is per pod as before the split. Revisit when Redis is adopted. | user (decided 2026-10-31) |
 | D11 | Prompts that read VIC-process state (Tortli cart, IdoSell URL) | Tortli: VIC computes the cart summary; the gateway seeds it per request in `context.toolState` and Tortli tools refresh it through V16's `contextPatch`, so every model call's prompt shows the live cart as today. IdoSell: the endpoint constants move to vic-shared and `IDOSELL_MCP_ENDPOINT` joins the runner env (same default), rather than reading the merchant list, whose `websiteUrl` need not equal the MCP origin. Task V17; V10 depends on it. | user (decided 2026-10-31) |
+| D12 | Smoke (I5) scope on the developer machine | Local mode: the `GATEWAY_INTERNAL_HOST` bypass instead of a staging Ardra session; step 4 through `IdoSellAgent` (public MCP endpoint, no credential or browser) instead of Korio; step 5 proves the no-restart tool discovery by catalog version (VIC `/tools` before and after, runner `/catalog` after the `/chat`) rather than by `/agents`, which lists only tools an agent picks; step 7 (Shopify merchant switch) needs Ardra's merchant list and stays a staging-only human step; the runner keeps its own env file. | user (decided 2026-10-31) |
 
 ---
 
@@ -1340,6 +1405,7 @@ Record the outputs in the ledger Notes.
 | 9 | 2026-10-31 | D8: added V16 (run-scoped tool state for Shopify MCP); V10 back to `todo` depending on V16, steps 6–7 added; 2.4 `metadata.contextPatch` and 2.6 `toolState`. D9/D10: new section 8 (deferred follow-ups, not in the ledger) holds the GENIUS orchestrator items and the transcript-key scoping; I5 excludes GENIUS. |
 | 10 | 2026-10-31 | D8 amended from the V16 report: the Shopify agent reads the run's saved merchant first (V10 step 6 rewritten, test added). |
 | 11 | 2026-10-31 | D11: added V17 (Tortli cart summary seeded per request and refreshed via contextPatch; IdoSell constants in vic-shared, `IDOSELL_MCP_ENDPOINT` in the runner env); V10 back to `todo` depending on V17, steps 8–9 added; 2.5 `toolState`, 2.6 `tortliCartSummary`; I4 env list. |
+| 12 | 2026-10-31 | I5 unblocked: D4 amended (LiteLLM in the runner for local development), D12 (local smoke mode; IdoSell for step 4; catalog version for step 5; step 7 staging-only); added V18 (`RUNNER_LLM_PROVIDER`, `GET /catalog`); I5 spec gains the minimum env and depends on V18; I4 env list and guard note. |
 
 ---
 
