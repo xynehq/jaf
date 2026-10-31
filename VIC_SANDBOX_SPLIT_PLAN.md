@@ -1,7 +1,7 @@
 # VIC / JAF Sandbox Split: Implementation Plan
 
 ```
-plan_version: 9
+plan_version: 10
 plan_updated: 2026-10-30
 copies (must be byte-identical at every commit):
   jaf:              VIC_SANDBOX_SPLIT_PLAN.md   branch feat/vic-sandbox-split   base main          (55edcf5)
@@ -1094,8 +1094,12 @@ whose `context` contains `password` is rejected with 400.
    `listPayments`, `createPayout`, `approvePayout`, …) become catalog ids like the rest.
 5. `buildAgents(set)` constructs the registry from all `create*Agent()` factories currently listed in `startJAFServer()`;
    keep the same commented-out set commented out. Startup asserts every id exists in `set.byId`.
-6. `agents/shopifyMCPAgent.ts`: keep its `getContextValue` / `setContextValue` calls unchanged (`@agentic-commerce/turing` is a
-   runner dependency); V16 feeds `merchantId` and `addressSelected` back into the runner's request context after a switch.
+6. `agents/shopifyMCPAgent.ts`: keep its `getContextValue` / `setContextValue` calls (`@agentic-commerce/turing` is a runner
+   dependency) with one change (D8 amendment): `effectiveMerchantId = getContextValue<string>('merchantId') || ctx.merchantId || ''`,
+   the run's saved merchant first, then the app's. After an in-run switch the prompt and VIC's tools then name the same
+   merchant (V16 feeds `merchantId` and `addressSelected` back into the runner's request context). A new `/chat` request
+   starts from the app's `context.merchantId` as today. Test: with `merchantId: 'm2'` in the request context and
+   `state.context.merchantId = 'm1'`, `instructions(state)` names m2's merchant; with an empty request context it names m1's.
 7. GENIUS: `analyticsOrchestratorAgent.ts`, `allAnalyticsOrchestratorSubAgents.ts` and `tools/agentsAsTools/*` move exactly like
    the others (sub-agent tools become catalog ids) but are not exercised and not expected to work until section 8.1 (D9).
 
@@ -1244,7 +1248,7 @@ Record the outputs in the ledger Notes.
 | D5 | How VIC obtains the library | pnpm git-hosted dependency on a pushed commit of `feat/vic-sandbox-split` (`github:xynehq/jaf#<sha>` plus the `onlyBuiltDependencies` entry), built at install by `prepare`. npm publish is optional (J8). Verified 2026-10-30 against fc18c84 with pnpm 10.34.9; the repo is public, so no credentials are needed. | user (decided 2026-10-30) |
 | D6 | A `/chat` context missing `sessionId`, `conversationId` or `referenceId` | Run as today, never reject: `SandboxContextSchema` makes the three ids optional (2.5); when the app sent no conversationId the gateway mints `conv-<uuid>` for the run, keeps no transcript and sends no Ardra USER/SYSTEM message (today JAF mints one and the Ardra calls are skipped); `authenticateRequest` gets `null` for a missing id. Implemented by V14. Plan v8: each of the three pre-split uses keeps its own source field (history by the top-level id, Ardra messages by the context id), see the V15 table. | user (decided 2026-10-31) |
 | D7 | Lossy tool schemas in the sandbox (V3 carry-forward) | Option (a): make jaf's `zodSchemaToJsonSchema` / `jsonSchemaToZod` lossless for the VIC catalog (J10) and gate V10 on it; the stubs must accept everything the real zod schema accepts, VIC re-validates on `/tools/:id/call`. Option (b), shipping the placeholder stubs, was rejected because `update_cart_empik` and numeric `.default()` fields would fail in the sandbox. | user (decided 2026-10-31) |
-| D8 | Shopify MCP per-run state between agent and tools | Option (a), VIC-side: tools derive merchant values from the merchant id and VIC's merchant list; the tool server persists an allow-list of five keys a tool sets into the run record and returns them as `metadata.contextPatch`; the runner applies the patch to its request context. The sandbox never sends merchant values to VIC. Task V16; V10 depends on it. | user (decided 2026-10-31) |
+| D8 | Shopify MCP per-run state between agent and tools | Option (a), VIC-side: tools derive merchant values from the merchant id and VIC's merchant list; the tool server persists an allow-list of five keys a tool sets into the run record and returns them as `metadata.contextPatch`; the runner applies the patch to its request context. The sandbox never sends merchant values to VIC. Task V16; V10 depends on it. Amended 2026-10-31 after V16: the Shopify agent reads the run's saved merchant before the app's (V10 step 6), so prompt and tools stay in step after an in-run switch. Before the split both silently reverted to the app's merchant at the next model call; reproducing that would need a sandbox-to-VIC merchant channel, which D8 excludes, and the alternative (agent unchanged) leaves prompt and tools on different merchants. | user (decided 2026-10-31) |
 | D9 | GENIUS (orchestrator and agents-as-tools) gaps found while reviewing V10 | Deferred to section 8.1, to be picked up with the next GENIUS change after the split is complete. Until then the GENIUS agents move with the rest but are not expected to work in the sandbox; I5 excludes them. | user (decided 2026-10-31) |
 | D10 | Transcript key not bound to the session (V15 review) | Deferred to section 8.2: Redis is not in use yet, so the store is per pod as before the split. Revisit when Redis is adopted. | user (decided 2026-10-31) |
 
@@ -1263,6 +1267,7 @@ Record the outputs in the ledger Notes.
 | 7 | 2026-10-31 | D2 confirmed as is (no Host-header hardening in this plan). D6: a context missing sessionId/conversationId/referenceId runs as today instead of V7's 400; 2.5 makes the ids optional, 2.2 states the gateway always sends a conversationId; added V14 (ledger after V8, depends on V7) and a V10 note. |
 | 8 | 2026-10-31 | D7: added J10 (lossless schema conversion, jaf); V10 back to `todo` depending on J10, acceptance gains the zero-placeholder catalog check. V15 added (conversationId source parity, depends on V14); 2.2 and D6 amended. I2 spec and notes: keep `Host` handling as today (D2). |
 | 9 | 2026-10-31 | D8: added V16 (run-scoped tool state for Shopify MCP); V10 back to `todo` depending on V16, steps 6–7 added; 2.4 `metadata.contextPatch` and 2.6 `toolState`. D9/D10: new section 8 (deferred follow-ups, not in the ledger) holds the GENIUS orchestrator items and the transcript-key scoping; I5 excludes GENIUS. |
+| 10 | 2026-10-31 | D8 amended from the V16 report: the Shopify agent reads the run's saved merchant first (V10 step 6 rewritten, test added). |
 
 ---
 
