@@ -1,7 +1,7 @@
 # VIC / JAF Sandbox Split: Implementation Plan
 
 ```
-plan_version: 7
+plan_version: 8
 plan_updated: 2026-10-30
 copies (must be byte-identical at every commit):
   jaf:              VIC_SANDBOX_SPLIT_PLAN.md   branch feat/vic-sandbox-split   base main          (55edcf5)
@@ -110,9 +110,9 @@ Body is the existing JAF `ChatRequest` with two differences enforced by this pla
 }
 ```
 
-`conversationId` is always set, both top-level and as `context.conversationId`: the app's, or one the gateway mints
-when the app sent none (D6). The runner's `getCallMeta` copies `context.conversationId` into `call.conversationId`,
-which the tool server compares with the run record (V4).
+`conversationId` is always set, both top-level and as `context.conversationId`, each from its pre-split source (the
+V15 table) and minted (`conv-<uuid>`) when the app sent none (D6). The runner's `getCallMeta` copies
+`context.conversationId` into `call.conversationId`, which the tool server compares with the run record (V4).
 
 Response: unchanged JAF `ChatResponse` (non-stream) or the unchanged JAF SSE event stream (stream). VIC stores
 `data.messages` (non-stream) or `run_end.data.finalState.messages` (stream) as the new transcript.
@@ -281,6 +281,7 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | J7 | jaf | 1 | Build output loadable by plain Node (native ESM) | – | done | decision (b) for J5. commit `J7:` (git log --grep '^J7:'), review: 2 rounds, APPROVE. Pre-existing failure: adk artifacts PostgreSQL test (ECONNREFUSED). check-dist: all 10 exports load via import and require on Node 24; check-pack passes; vic jaf-agent-standalone typecheck passes. Deviations: ts-jest compiles to CommonJS where `import.meta` is TS1343, so `createRequire(import.meta.url)` lives in src/utils/optional-require.ts and the main-module check in src/utils/is-main-script.ts (exact realpath match of argv[1] vs package-relative path; r1 caught a basename-only false positive); jest.config.cjs maps both to jest.esm-shims.cjs. Also converted requires missing from the inventory: adk/sessions (ioredis, pg), safe-math in 3 example files, require.main in adk/examples; ioredis nodenext typing in streaming/providers/redis.ts and test-utils/db-setup.ts. For J5: adk/examples/streaming-example.ts and adk/sessions/examples/session-provider-usage.ts keep a pre-existing `import.meta.url === file://argv[1]` guard (could use isMainScript); dist/test-utils ships as dead code (tsconfig excludes only *.test.ts). |
 | J5 | jaf | 5 | Docs, version bump, publish | J1, J2, J3, J4, J6, J7 | done | ready to publish. commit `J5:` (git log --grep '^J5:'), version 0.2.0, review: 1 rounds, APPROVE (doc inaccuracies from the review fixed). Verify passed: build, check-dist (10 exports, import and require), check-pack; tarball = package.json, dist, README.md, LICENSE; tests unchanged (only the local PostgreSQL failure). Human next: `git push -u origin feat/vic-sandbox-split`, then an npm org owner runs the publish procedure in the J5 spec (dist-tag next), then sets `done` with version and dist-tag in both plan copies. Before retagging latest: tsconfig should exclude src/test-utils (dist/test-utils ships as dead code). For V6/V7: replay works because the engine only writes string content today; store only what fullMessageSchema accepts. Plan v6: done criterion changed, the npm publish is now J8 (human-only); V13 consumes the pushed commit from GitHub. The J5 commit 9d3f0d6 must be pushed before V13 starts. |
 | J9 | jaf | 5 | Compatibility with VIC's pnpm overrides (fastify 5, cors 11, uuid 11, mathjs 15); exclude test-utils from dist | J5 | done | commit `J9:` (git log --grep '^J9:'), review: 1 rounds, APPROVE. No source change needed. Resolved fastify 5.12.7, @fastify/cors 11.3.1, uuid 11.1.1, mathjs 15.2.0; typecheck, lint, check-dist, check-pack pass; tests unchanged (only the local PostgreSQL failure); dist/test-utils gone. Step 3 ran on the FALLBACK (J9 commit not pushed when verified): pnpm pack tarball installed with pnpm 10.34.9 under vic's exact pnpm.overrides (zod 3.25.76, ai 5.0.222, @opentelemetry/api 1.9.0 too); plain Node createJAFServer: /health 200, /chat 200. Behaviour change (documented in server-api.md): DELETE with Content-Type application/json and empty body now 400 FST_ERR_CTP_EMPTY_JSON_BODY. Follow-ups outside J9: docs/deployment.md still says Fastify 4.x; @types/uuid is redundant; src/test-utils/db-setup.ts has no importers. Push J9 before V13 (V13 step 1 needs the SHA on origin). |
+| J10 | jaf | 5 | Lossless schema conversion for the VIC tool catalog (`zodSchemaToJsonSchema` / `jsonSchemaToZod`) | J4 | todo | Unblocks V10 (V3 carry-forward, decision D7). |
 | J8 | jaf | 5 | npm publish 0.2.0 by an npm org owner (optional) | J5 | blocked | human-only, nothing depends on it; procedure in the J5 spec; the human sets `done` with version and dist-tag |
 | V1 | agentic-commerce | 2 | Dependency: `@xynehq/jaf@0.1.18` → linked `@juspay-jaf/jaf` | J6 | done | commit 67ae193b (code) + this commit (verification), review: 2 rounds, APPROVE (r1 REQUEST_CHANGES: finalState leak fixed in onEvent; OTEL race fixed upstream by J6). Link kept (pnpm ls: single zod 3.25.76). JAF/tsconfig moved to module preserve / moduleResolution bundler (jaf is type:module with extensionless .d.ts re-exports; tsx-only runtime). Step 4: tracer initialized after buffering, one /chat -> one OTLP POST (4286 B) to a 127.0.0.1 recorder; Bedrock call failed on an invalid local AWS token (spans still exported). Carry forward, non-blocking: link bypasses root fastify/@fastify/cors overrides (jaf ships fastify 4.29.1, cors 9.0.1), jaf bump needed before V13; two physical zod copies (no instanceof in J4/V3); Docker image unbuildable until V13; tsc emit now ESM (unused). See V7 Notes for two gateway requirements found in review. |
 | V2 | agentic-commerce | 2 | `shared` package: types, context schemas, prompt helpers, contracts, logger | V1 | done | commit f71bf788, review: 2 rounds, APPROVE (r1 blocking: AvailableMerchantSchema.merchantId was nativeEnum, real Ardra ids are any non-empty string; now z.custom<MerchantId> non-empty string). Deviations: kms moves all 4 functions (decryptKms needs decryptKmsWithRegion); findMerchant and DiscoveryMerchantPromptMeta now exported; logger gets a ReturnType<typeof createLogger> annotation (TS4094); AvailableMerchantSchema is new; RunRecordSchema.context is AgentContextSchema.partial() (V7 stores sanitizeAgentContext output), not 2.6's full AgentContext; ToolCatalogSchema has a unique-id .refine (ZodEffects: no .shape/.extend for V3/V4/V9); needsApproval optional in the entry schema (V3 should always emit it). shared is CJS built to dist like turing; root typecheck builds it (stale shared/dist runs stale code under tsx). JAF/src/types.ts shim now has import side effects (logger, kms client). Sandbox env needs DEFAULT_ADDRESS if prompts use withDefaultAddress (I4/V9). Lockfile: transitive @types/node re-resolved to 24.19.2 (dedupe side effect). V12 should drop the shims. |
@@ -291,13 +292,14 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | V7 | agentic-commerce | 3 | Gateway `/chat` | V3, V5, V6, J1 | done | From V1 review r2: (1) the app-facing SSE run_end now carries data.finalState (full context incl. card/password and the transcript): the gateway must strip finalState before forwarding to the app while storing finalState.messages; (2) after J1, client-supplied assistant tool_calls / tool messages plus approvals make the engine execute tools before any model call: the gateway must accept from the app only the new user message (and approvals checked against VIC-owned pending interruptions), never app-supplied tool or tool_calls messages. (3) from V2: toSandboxContext throws a ZodError when sessionId, conversationId or referenceId is missing (2.5 keeps them required; today such requests run): catch it and answer 400, not 500. (4) from V5: map run-store errors to 503 (not 500); populate only the 2.6 contextValues keys (Redis strips unknown keys, in-memory keeps them). (5) from V6: bound replayed history at a user-message boundary (whole turns, default ~50 messages like today's memory.maxMessages) so tool_calls stay paired; validate data.messages per role against jaf fullMessageSchema before transcriptStore.set (a bad stored transcript would 400 every later turn); consider per-conversation serialization (last write wins); keep conversationId bound to the authenticated session (no tenant scoping in the store). (6) from V4: populate requestContext.host, x-request-id and external-request-id in the run record as createJAFRequestContext does today (isInternalCall and other tools read getContextValue('host')); delete the run token when /chat ends (as specified). DONE: commit `V7:` (git log --grep '^V7:'), review: 1 round (resumed once after a reviewer rate limit), APPROVE. Notes (1)-(6) implemented. D2: ardraUtils reads GATEWAY_INTERNAL_HOST per call (default unchanged). Parity kept: onSend headers and SYSTEM message on every JSON /chat reply incl. rejections; streams carry only the four upstream SSE headers. Mirror of jaf fullMessageSchema is local (not exported by jaf). Follow-ups, non-blocking: transcript-store failure after a successful non-stream run returns 503 (the turn's tools already ran; log and return 200 instead); transcript stored for every 200 incl. error/max_turns (today only 'completed'); sandbox 401/403 forwarded verbatim (map to 503); mid-stream failure ends without stream_end; boundHistory returns [] when the tail has no user message; Fastify JSON body-schema validation not reproduced (bad bodies cost an Ardra auth call and get 400 'Invalid request'); SANDBOX_CONTEXT_INVALID log lacks agent/conversation ids. |
 | V8 | agentic-commerce | 3 | VIC bootstrap: replace `JAF/src/server.ts` | V4, V7 | done | From V5: add an ioredis 'error' listener that logs only e.message via jafLog, consider tighter maxRetriesPerRequest/connectTimeout for the gateway budget, and close the run store (sweep timer, Redis quit) on shutdown (RunStore has no close() yet). Same for the transcript store (V6): error listener, close/quit on shutdown. From V4: add app.setErrorHandler on the tool server with a generic body (503 for run-store failures, 500 otherwise) and log e.message via jafLog; today Fastify's default 500 echoes e.g. 'connect ECONNREFUSED <redis host:port>' and the J3 stub forwards that body to the model; also covers non-serialisable tool results. Body parsing runs before the token check (unauthenticated 400/413/415/414); add a preParsing auth hook if wanted. DONE: commit `V8:` (git log --grep '^V8:'), review: 1 round, APPROVE. Gateway app keeps the pre-split Fastify settings (logger, 50 MB bodyLimit, @fastify/cors ^11.3.1 with the same options). Notes applied: gateway/redis.ts connectRedis (error listener logs message only, maxRetriesPerRequest 2, connectTimeout 2000), close() on both stores, tool-server setErrorHandler with generic bodies and 503 on run-store failure. Not done: optional tool-server preParsing auth hook. Non-blocking: the withContext listener wrapper is installed after listen (same as before; chat.ts falls back to its own context); Fastify-generated replies and /health lack the old onSend cache headers; uncaughtException/unhandledRejection still exit 0 (parity). |
 | V14 | agentic-commerce | 3 | Gateway parity for a context missing sessionId, conversationId or referenceId (D6) | V7 | done | Replaces the 400 that V7 note (3) introduced; today such requests run (D6). From V9 review: jaf-runner/src/app.test.ts asserts a context of only {sessionId} -> 400 (update with D6); the runner's getCallMeta sends conversationId undefined for an id-less context, which VIC's ToolCallRequestSchema (call.conversationId min 1) rejects, so every tool call of such a run would fail. DONE: commit `V14:` (git log --grep '^V14:'), review: 1 round, APPROVE. Parity confirmed against jaf 0.1.18 (it minted conv-<uuid> the same way). The runner test in jaf-runner/src/app.test.ts now asserts a wrongly typed conversationId -> 400 (V9 Note). Non-blocking: a body with only a top-level conversationId (no context.conversationId) now runs under a minted id with no transcript and no SYSTEM (spec step 2/3), while admit's rejections still send SYSTEM under the top-level id (pre-split onSend fallback); confirm the app always sets context.conversationId. No test shows the data.conversationId the app gets back for an id-less run (fake sandbox hard-codes it). |
+| V15 | agentic-commerce | 3 | Gateway: conversationId source parity (history keyed by the top-level id as JAF's memory was) | V14 | todo | From V14 review (non-blocking): a body with only a top-level conversationId ran under a minted id with no history. |
 | V9 | agentic-commerce | 4 | `jaf-runner` package scaffold | V2, J2, J3 | done | From V4: the J3 stub's default timeoutMs (120 s) is below VIC_TOOL_TIMEOUT_MS (180 s); set the stub timeout above VIC's, or the stub gives up while VIC still runs the tool. DONE: commit `V9:` (git log --grep '^V9:'), review: 2 rounds, APPROVE (r1 blocking: POST /chat?x=1 skipped the SandboxContext check; fixed by matching on the path; r1 non-blocking fixed: engine gets parsed.data so nested unknown keys are dropped, tests use a free port because jaf maps port 0 to 3000, engines.node >=22.12.0). Choices: RUNNER_PORT optional (default 3001); BEDROCK_MODEL default kept from pre-split; bedrock-provider COPIED (tortliAgent still imports the VIC copy) with the tunnel proxy path removed; availableMerchants also put in the turing context so withAddressGuard works; Langfuse creds passed explicitly ('' when missing); withContext wrapper installed before listen; plain `node dist/server.js` verified. Non-blocking, deferred: bearer check runs after body parsing (parity); the catalog GET shares the 190 s stub timeout (a hanging VIC /tools stalls /chat); /agents/:name/chat is dead in the runner (jaf inject forwards no headers). |
-| V10 | agentic-commerce | 4 | Migrate agents and prompts to the runner | V9, V3 | blocked | From V3: do not start until jaf zodSchemaToJsonSchema/jsonSchemaToZod are lossless for the catalog (see V3 Notes); needs a new J task (human/plan decision). D6: the SandboxContext ids are optional; prompts and agents must tolerate an undefined conversationId/referenceId exactly as today's `Partial<AgentContext>` callers do. From V9: build each agent's tools inside buildAgents(set) with pickTools(set, ids), never catalog.pick at run time (keeps the J2 per-run snapshot). From V14 review: consider requiring conversationId at the runner boundary (2.2 says the gateway always sends one); a context without it makes every tool call 400 at VIC. BLOCKED (loop, 2026-10-31, before implementation): needs the human/plan decision from V3: add a jaf task that makes zodSchemaToJsonSchema/jsonSchemaToZod lossless for the VIC catalog (ZodDefault, ZodEffects, ZodNullable, ZodNativeEnum, ZodUnion, ZodLiteral, ZodAny, ZodPipeline; zero 'Unsupported schema type' placeholders over the real catalog), make V10 depend on it, and set V10 back to todo. Alternative: accept the lossy stubs and set V10 todo (update_cart_empik and numeric quantity fields would fail validation in the sandbox). V11 and I2 are ready meanwhile. |
+| V10 | agentic-commerce | 4 | Migrate agents and prompts to the runner | V9, V3, J10 | todo | From V3: do not start until jaf zodSchemaToJsonSchema/jsonSchemaToZod are lossless for the catalog (see V3 Notes); needs a new J task (human/plan decision). D6: the SandboxContext ids are optional; prompts and agents must tolerate an undefined conversationId/referenceId exactly as today's `Partial<AgentContext>` callers do. From V9: build each agent's tools inside buildAgents(set) with pickTools(set, ids), never catalog.pick at run time (keeps the J2 per-run snapshot). From V14 review: consider requiring conversationId at the runner boundary (2.2 says the gateway always sends one); a context without it makes every tool call 400 at VIC. BLOCKED (loop, 2026-10-31, before implementation): needs the human/plan decision from V3: add a jaf task that makes zodSchemaToJsonSchema/jsonSchemaToZod lossless for the VIC catalog (ZodDefault, ZodEffects, ZodNullable, ZodNativeEnum, ZodUnion, ZodLiteral, ZodAny, ZodPipeline; zero 'Unsupported schema type' placeholders over the real catalog), make V10 depend on it, and set V10 back to todo. Alternative: accept the lossy stubs and set V10 todo (update_cart_empik and numeric quantity fields would fail validation in the sandbox). V11 and I2 are ready meanwhile. UNBLOCKED by plan v8 (2026-10-31, D7): option (a) taken, J10 added and V10 depends on it; acceptance gains the zero-placeholder check over the real catalog. Optional, not required: once J10 is built, `jaf-runner/src/providers/bedrock-provider.ts` may build its Bedrock tool specs with jaf's `zodSchemaToJsonSchema` (the model then sees 30 fewer placeholders than today); if done, record it in Notes. |
 | V11 | agentic-commerce | 4 | Bash tool in the runner | V9 | todo | attach to agents: human decision, see D3 |
 | V12 | agentic-commerce | 5 | Clean `vic:JAF/` of runtime code | V8, V10 | todo | From V9: delete JAF/src/providers/bedrock-provider.ts (the runner has its own copy) once tortliAgent has moved. |
 | V13 | agentic-commerce | 5 | Switch to the library's GitHub commit (git-hosted dependency) | J5, J9, V10, V11 | todo | |
 | I1 | agentic-commerce | 6 | Dockerfile: `vic` and `sandbox` targets | V8, V9 | todo | From V2: the vic image must build shared (pnpm --filter @agentic-commerce/vic-shared run build) and copy shared/dist + shared/node_modules, since JAF resolves it via dist; keep pnpm symlinks so turing stays a single instance (findMerchant reads turing ALS through shared). From V9: the sandbox image gets jaf's own deps transitively, including tunnel (jaf core/tracing.ts, providers/model.ts) and @modelcontextprotocol/sdk, although jaf-runner lists neither; tsx is a runtime dependency per spec (prune if wanted). Runner starts with plain `node dist/server.js` (Node >=22.12). |
-| I2 | agentic-commerce | 6 | nginx and start script | V8 | todo | From V7 review (pre-existing, medium): nginx `proxy_set_header Host $host` relays the client Host; authenticateRequest skips Ardra when host == GATEWAY_INTERNAL_HOST, so `Host: agentic-commerce.ardra.svc.cluster.local` plus any x-session-id cookie runs non-GENIUS agents unauthenticated; the same host drives getArdraBaseUrl (VIC posts the caller's cookie to https://<client Host>/ardra/). Set a fixed Host in nginx or key the bypass off a dedicated internal listener. From V8: start.sh must treat a VIC exit as fatal (today the backgrounded tsx can die while nginx stays up and HEALTHCHECK probes only /api/health, so the container stays healthy with a dead VIC); consider probing :3001/health. |
+| I2 | agentic-commerce | 6 | nginx and start script | V8 | todo | From V7 review (pre-existing, medium): nginx `proxy_set_header Host $host` relays the client Host; authenticateRequest skips Ardra when host == GATEWAY_INTERNAL_HOST, so `Host: agentic-commerce.ardra.svc.cluster.local` plus any x-session-id cookie runs non-GENIUS agents unauthenticated; the same host drives getArdraBaseUrl (VIC posts the caller's cookie to https://<client Host>/ardra/). Set a fixed Host in nginx or key the bypass off a dedicated internal listener. From V8: start.sh must treat a VIC exit as fatal (today the backgrounded tsx can die while nginx stays up and HEALTHCHECK probes only /api/health, so the container stays healthy with a dead VIC); consider probing :3001/health. D2 confirmed 2026-10-31: keep `proxy_set_header Host $host` and the bypass exactly as today; the fixed-Host / internal-listener fix is OUT OF SCOPE for this plan (possible follow-up). |
 | I4 | agentic-commerce | 6 | Environment split and secret guard | V8, V9 | todo | From V6: Redis holding vic:transcript:* is VIC-only; transcripts keep tool_call arguments for TRANSCRIPT_TTL_S (e.g. deliverooShoppingTools.login_user password), consider redaction. From V7 review: GATEWAY_INTERNAL_HOST must never be set to a publicly reachable host (that disables Ardra auth); see I2 Notes for the pre-existing Host-header bypass. From V8: VIC refuses to start without SANDBOX_URL, SANDBOX_SERVICE_TOKEN and VIC_SERVICE_TOKEN; the deployment env must provide them. From V9: runner env needs VIC_TOOL_TIMEOUT_MS matching VIC's (the stub waits that +10 s); with KMS_ENCRYPTED_LANGFUSE=true the sandbox role needs kms:Decrypt on the Langfuse key only; jaf's tracing exporter honours HTTP(S)_PROXY, so keep proxy vars out of the sandbox env. |
 | I3 | agentic-commerce | 6 | Build pipeline and deployment manifests | I1 | todo | k8s apply is human From V9: with VIC_TOOLS_URL load-balanced across VIC pods, a rolling VIC deploy that changes the catalog gives intermittent 503 (runner VERSION_MISMATCH) until all pods agree; point it at a stable target or accept the window. |
 | I5 | agentic-commerce | 6 | End-to-end smoke | V12, V13, I1, I2, I4 | todo | |
@@ -634,6 +636,67 @@ does not exist after `pnpm build`; the scratch check in step 3 returns 200 from 
 
 **Verify.** `pnpm typecheck && pnpm lint && pnpm test; pnpm build && node scripts/check-dist.mjs && bash scripts/check-pack.sh && test ! -d dist/test-utils`.
 
+### J10. Lossless schema conversion for the VIC tool catalog
+
+**Files.** `jaf:src/providers/schema.ts`, `jaf:src/providers/model.ts` (one guard), `jaf:src/__tests__/schema-roundtrip.test.ts`
+(extend), new `jaf:src/__tests__/schema-catalog-fixture.test.ts`.
+
+**Why.** V3 found that `zodSchemaToJsonSchema` emits `{ type: 'string', description: 'Unsupported schema type' }` for 61
+fields in 39 VIC tools (ZodDefault, ZodEffects, ZodNullable, ZodNativeEnum, ZodUnion, ZodLiteral, ZodAny, ZodPipeline). The
+J3 stubs validate the model's arguments against `jsonSchemaToZod(parameters)`, so in the sandbox `update_cart_empik`
+(required `items`, a ZodEffects over an array) rejects every call and numeric fields with `.default()` reject numbers. VIC
+re-validates with the real zod schema on `/tools/:id/call` (V4, `tool.schema.parameters.safeParse`), so the stub must
+accept everything the original accepts; it need not reproduce refinements, transforms or defaults.
+
+**Changes, `zodSchemaToJsonSchema`.** Keep `_def.typeName` duck typing (J4 rule 4). Add these branches before the fallback:
+1. Wrappers, convert the inner schema: `ZodDefault` (`_def.innerType`, then add `default: _def.defaultValue()`),
+   `ZodEffects` (`_def.schema`), `ZodPipeline` (`_def.in`), `ZodBranded` (`_def.type`), `ZodReadonly` (`_def.innerType`),
+   `ZodCatch` (`_def.innerType`), `ZodLazy` (`_def.getter()`).
+2. `ZodNullable`: convert `_def.innerType`; if the result has a single string `type`, return it with `type: [that, 'null']`;
+   otherwise `{ anyOf: [inner, { type: 'null' }] }`.
+3. `ZodNativeEnum`: `values = Object.values(_def.values)`; when any value is a number keep only the numbers (TypeScript
+   numeric enums also list the member names). All strings: `{ type: 'string', enum }`; all numbers: `{ type: 'number', enum }`.
+4. `ZodUnion`, `ZodDiscriminatedUnion`: `{ anyOf: options.map(convert) }` (`_def.options` is an array, or a Map whose values are used).
+5. `ZodLiteral`: `{ type: typeof value, enum: [value] }`; `type` omitted when the value is `null`.
+6. `ZodAny`, `ZodUnknown`: `{}`.
+7. `ZodNumber`: `type: 'integer'` when `_def.checks` contains `{ kind: 'int' }`; `minimum` / `maximum` from `min` / `max` checks.
+8. `ZodTuple`: `{ type: 'array', items: { anyOf: items.map(convert) }, minItems: n, maxItems: n }`.
+9. Descriptions: every branch (not only `ZodString`) copies `_def.description` to `description` when present.
+10. The fallback stays `{ type: 'string', description: 'Unsupported schema type' }` for anything else, so `model.ts` can
+    still detect it.
+
+**Changes, `jsonSchemaToZod`.** Symmetric and permissive: `.optional()` for keys not in `required`; never apply `default`,
+refinements or transforms.
+1. `type` as an array: `z.union` of the converted non-`'null'` members (a single member stands alone), `.nullable()` when
+   `'null'` is present.
+2. `anyOf` / `oneOf`: `z.union` of the converted members; a member `{ type: 'null' }` becomes `.nullable()` on the rest;
+   one remaining member stands alone.
+3. `enum` without `type: 'string'`, or with any non-string value: `z.union` of `z.literal(v)`; a one-element `enum` is `z.literal(v)`.
+4. `type: 'integer'`: `z.number().int()`; `minimum` / `maximum`: `.min()` / `.max()`.
+5. `const`: `z.literal`. `{}` and any schema without `type`, `enum`, `anyOf`, `oneOf` or `const`: `z.any()` (today's fallback).
+6. `type: 'object'` with `additionalProperties` as a schema and no `properties`: `z.record(convert(additionalProperties))`.
+   Existing `.optional()` and `.describe()` handling unchanged.
+
+**Changes, `model.ts`.** `shouldFallbackToJsonObject` also returns true when the root schema's `type` is not `'object'`
+(an `{}` root from a `z.any()` output codec must not be sent as a strict `json_schema`).
+
+**Acceptance.**
+1. Round-trip property in `schema-roundtrip.test.ts`: for each construct above, `stub = jsonSchemaToZod(zodSchemaToJsonSchema(s))`
+   accepts every listed input that `s` accepts; for `ZodNullable`, `ZodLiteral`, `ZodNativeEnum`, `ZodUnion` and object
+   `required`, the listed invalid inputs are rejected by both.
+2. Fixture test modelled on the V3 findings (shapes copied from `vic:JAF/src/tools/`, not imported): required
+   `items: z.array(z.object({ productId: z.string(), quantity: z.number().int().min(1) })).refine(a => a.length > 0)`;
+   `quantity: z.number().int().min(1).default(1)`; `limit: z.number().default(10)`; `z.string().nullable()`; a `z.nativeEnum`;
+   `z.union([z.literal('a'), z.literal('b')])`; `z.any()`; `z.string().pipe(z.coerce.number())`; `z.string().transform(s => s.trim())`.
+   Assert `JSON.stringify(zodSchemaToJsonSchema(fixture))` does not contain `Unsupported schema type`, and that the stub
+   accepts `{ items: [{ productId: 'p', quantity: 2 }] }`, `{ quantity: 3 }`, `{ limit: 5 }`, a `null` for the nullable field
+   and `'42'` for the pipeline field, and rejects `{ items: 'x' }`.
+3. The J4 round-trip test and the MCP tests pass unchanged; for `z.object({ a: z.string().describe('x'), b: z.number().optional() })`
+   the output equals today's byte for byte (already supported shapes do not change).
+4. Notes record which constructs needed `anyOf` (OpenAI strict mode and Bedrock both accept it; V10 verifies the real catalog).
+
+**Verify.** `pnpm typecheck && pnpm lint && pnpm test && pnpm build && node scripts/check-dist.mjs`.
+
 ### J8. npm publish 0.2.0 by an npm org owner (optional, human-only)
 
 Nothing in this plan depends on J8. It stays `blocked` so the loop never picks it. An npm org owner runs the publish
@@ -867,6 +930,44 @@ the cookie value.
 
 **Verify.** as V3.
 
+### V15. Gateway: conversationId source parity
+
+**Files.** `vic:JAF/src/gateway/chat.ts`, `vic:JAF/src/gateway/chat.test.ts`.
+
+**Why.** Before the split three sources were in play and VIC never copied one into another: the JAF server keyed memory by
+the top-level `body.conversationId` (minting `conv-<uuid>` when absent, and echoing it back as `data.conversationId`); the
+preHandler sent the USER message to Ardra under `context.conversationId` only; the onSend hook sent the SYSTEM message under
+`context.conversationId || body.conversationId`. V14 keys everything by `context.conversationId`, so an app that sends only
+the top-level id now loses its history (V14 Notes). Nobody has confirmed which field the app sends, so the gateway
+reproduces each rule.
+
+**Changes.** With `contextId = sanitizedContext.conversationId`, `topLevelId = body.conversationId` when it is a non-empty
+string, and one `` mintedId = `conv-${randomUUID()}` `` per request:
+
+| Use | Pre-split source | Gateway value |
+|---|---|---|
+| Transcript `get` / `set` key | JAF memory: top-level `body.conversationId` | `topLevelId ?? contextId`; neither: no history, nothing stored |
+| Sandbox `context.conversationId` and `RunRecord.conversationId` (tool-call check, V4) | `body.context.conversationId` | `contextId ?? topLevelId ?? mintedId` |
+| Sandbox top-level `conversationId` (echoed to the app as `data.conversationId`) | top-level `body.conversationId` or JAF-minted | `topLevelId ?? mintedId` |
+| USER `sendChatMessageAsync` | `context.conversationId` | `contextId`; none: skipped (unchanged) |
+| SYSTEM `sendChatMessageAsync`, run path and `admit` rejections | `context.conversationId \|\| body.conversationId` | `contextId ?? topLevelId`; none: skipped |
+| `authenticateRequest` | `context.conversationId ?? null` | unchanged |
+
+`RunRecord.context` stays `sanitizedContext` untouched, so VIC tools keep seeing the app's `context.conversationId` (or
+`undefined`) exactly as today. Nothing else in V7/V14 changes.
+
+**Acceptance.** Fake-sandbox tests, non-stream and stream, asserting the sandbox body, the transcript store calls, the Ardra
+calls and the run record:
+(a) only top-level `c1`: transcript under `c1`; sandbox `context.conversationId` and top-level both `c1`; no USER; SYSTEM under `c1`.
+(b) `context.conversationId = 'c2'` and top-level `c1`: transcript under `c1`; sandbox `context.conversationId` `c2`,
+top-level `c1`; USER and SYSTEM under `c2`; `authenticateRequest` called with `'c2'`; `RunRecord.conversationId === 'c2'`.
+(c) only `context.conversationId = 'c2'`: transcript under `c2`; sandbox `context.conversationId` `c2`; top-level a fresh
+`conv-` id; USER and SYSTEM under `c2`.
+(d) neither: no transcript calls; sandbox `context.conversationId` and top-level the same `conv-` id; no USER or SYSTEM.
+Every existing V7 and V14 test passes (V14's tests for (d) are unchanged; its test for (c) is updated only for the top-level value).
+
+**Verify.** as V3.
+
 ### V9. `jaf-runner` package scaffold
 
 **Files.** new `vic:jaf-runner/` (package `@agentic-commerce/jaf-runner`), `vic:pnpm-workspace.yaml`, root typecheck scripts.
@@ -924,7 +1025,9 @@ whose `context` contains `password` is rejected with 400.
 5. `buildAgents(set)` constructs the registry from all `create*Agent()` factories currently listed in `startJAFServer()`;
    keep the same commented-out set commented out. Startup asserts every id exists in `set.byId`.
 
-**Acceptance.** `jaf-runner` typecheck passes; startup against the real VIC `/tools` (V8 running) succeeds with the same agent
+**Acceptance.** After `pnpm build` in `../jaf` (J10 included), `tsx src/tools-server/dump-catalog.ts <out>` in `vic:JAF`
+produces a dump with zero occurrences of `Unsupported schema type` (record the field count that changed in Notes);
+`jaf-runner` typecheck passes; startup against the real VIC `/tools` (V8 running) succeeds with the same agent
 names as today's `/agents` output; `git diff --stat` shows prompt strings unchanged apart from the lines above
 (reviewer samples 5 agents).
 
@@ -1009,7 +1112,9 @@ codeload.github.com during `pnpm install`; no `git` binary is required; the libr
 
 ### I2. nginx and start script
 
-**Changes.** `vic:nginx.conf`: `/` keeps proxying to 3001 (now the gateway); add `location /tools { return 404; }` and
+**Changes.** `vic:nginx.conf`: `/` keeps proxying to 3001 (now the gateway); keep `proxy_set_header Host $host` and every
+other header directive exactly as today (D2: the Host-header bypass stays as is; do not add a fixed Host or an internal
+listener); add `location /tools { return 404; }` and
 `location /conversations { return 404; }` and `location /approvals { return 404; }` as defence in depth; keep the SSE-relevant
 timeouts. `start.sh` (generated in the Dockerfile) no longer starts JAF.
 
@@ -1061,7 +1166,8 @@ Record the outputs in the ledger Notes.
 | D3 | Which agents get the Bash tool | None by default. | user |
 | D4 | LLM credentials in the sandbox | Bedrock called directly from the sandbox with AWS credentials (as today). Routing via LiteLLM in VIC is a later change. | user |
 | D5 | How VIC obtains the library | pnpm git-hosted dependency on a pushed commit of `feat/vic-sandbox-split` (`github:xynehq/jaf#<sha>` plus the `onlyBuiltDependencies` entry), built at install by `prepare`. npm publish is optional (J8). Verified 2026-10-30 against fc18c84 with pnpm 10.34.9; the repo is public, so no credentials are needed. | user (decided 2026-10-30) |
-| D6 | A `/chat` context missing `sessionId`, `conversationId` or `referenceId` | Run as today, never reject: `SandboxContextSchema` makes the three ids optional (2.5); when the app sent no conversationId the gateway mints `conv-<uuid>` for the run, keeps no transcript and sends no Ardra USER/SYSTEM message (today JAF mints one and the Ardra calls are skipped); `authenticateRequest` gets `null` for a missing id. Implemented by V14. | user (decided 2026-10-31) |
+| D6 | A `/chat` context missing `sessionId`, `conversationId` or `referenceId` | Run as today, never reject: `SandboxContextSchema` makes the three ids optional (2.5); when the app sent no conversationId the gateway mints `conv-<uuid>` for the run, keeps no transcript and sends no Ardra USER/SYSTEM message (today JAF mints one and the Ardra calls are skipped); `authenticateRequest` gets `null` for a missing id. Implemented by V14. Plan v8: each of the three pre-split uses keeps its own source field (history by the top-level id, Ardra messages by the context id), see the V15 table. | user (decided 2026-10-31) |
+| D7 | Lossy tool schemas in the sandbox (V3 carry-forward) | Option (a): make jaf's `zodSchemaToJsonSchema` / `jsonSchemaToZod` lossless for the VIC catalog (J10) and gate V10 on it; the stubs must accept everything the real zod schema accepts, VIC re-validates on `/tools/:id/call`. Option (b), shipping the placeholder stubs, was rejected because `update_cart_empik` and numeric `.default()` fields would fail in the sandbox. | user (decided 2026-10-31) |
 
 ---
 
@@ -1076,3 +1182,4 @@ Record the outputs in the ledger Notes.
 | 5 | 2026-10-30 | J5: release is performed by an npm org owner from the pushed branch; plan owner has no publish rights. |
 | 6 | 2026-10-30 | D5: VIC consumes the library from GitHub (V13 rewritten), npm publish moved to optional human-only J8, J5 done criterion = reviewed and pushed. Added J9 (compatibility with VIC's pnpm overrides, which `link:` did not apply but a git dependency does; exclude `src/test-utils` from dist). I1 notes the builder needs HTTPS to codeload.github.com. |
 | 7 | 2026-10-31 | D2 confirmed as is (no Host-header hardening in this plan). D6: a context missing sessionId/conversationId/referenceId runs as today instead of V7's 400; 2.5 makes the ids optional, 2.2 states the gateway always sends a conversationId; added V14 (ledger after V8, depends on V7) and a V10 note. |
+| 8 | 2026-10-31 | D7: added J10 (lossless schema conversion, jaf); V10 back to `todo` depending on J10, acceptance gains the zero-placeholder catalog check. V15 added (conversationId source parity, depends on V14); 2.2 and D6 amended. I2 spec and notes: keep `Host` handling as today (D2). |
