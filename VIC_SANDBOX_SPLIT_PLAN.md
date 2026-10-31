@@ -1,7 +1,7 @@
 # VIC / JAF Sandbox Split: Implementation Plan
 
 ```
-plan_version: 8
+plan_version: 9
 plan_updated: 2026-10-30
 copies (must be byte-identical at every commit):
   jaf:              VIC_SANDBOX_SPLIT_PLAN.md   branch feat/vic-sandbox-split   base main          (55edcf5)
@@ -151,6 +151,9 @@ Status codes: `200` for every tool-level outcome including tool errors (the mode
 results); `401` missing/invalid service token or unknown/expired run token; `403` conversationId mismatch;
 `404` unknown tool id; `400` body does not match the request schema.
 
+`metadata.contextPatch` (V16): the run-scoped tool-state keys the tool changed (2.6 `toolState`); the runner applies them
+to its request context so the agent's next turn in the same run sees them.
+
 ### 2.5 SandboxContext
 
 `SandboxContextSchema = AgentContextSchema.omit({ password, davv, token, cardBin, cardLastFour, expiry,
@@ -173,6 +176,7 @@ type RunRecord = {
   requestContext: RequestContext;        // turing: x-request-id, external-request-id, flow-id, flow-type, path, method, host, business-id, user-id, message-number
   contextValues: { sessionId?: string; authToken?: string; businessId?: string; userId?: string; geniusEnabled?: boolean;
                    availableMerchants?: AvailableMerchant[]; xModule: string; xFeature?: string; isStreaming: boolean };
+  toolState?: { merchantId?: string; catalogUrl?: string; merchantName?: string; addressRequired?: boolean; addressSelected?: boolean }; // V16: set by tools, persisted per run
   createdAt: number; expiresAt: number;  // TTL = RUN_TOKEN_TTL_MS, default 900000
 };
 ```
@@ -293,8 +297,9 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | V8 | agentic-commerce | 3 | VIC bootstrap: replace `JAF/src/server.ts` | V4, V7 | done | From V5: add an ioredis 'error' listener that logs only e.message via jafLog, consider tighter maxRetriesPerRequest/connectTimeout for the gateway budget, and close the run store (sweep timer, Redis quit) on shutdown (RunStore has no close() yet). Same for the transcript store (V6): error listener, close/quit on shutdown. From V4: add app.setErrorHandler on the tool server with a generic body (503 for run-store failures, 500 otherwise) and log e.message via jafLog; today Fastify's default 500 echoes e.g. 'connect ECONNREFUSED <redis host:port>' and the J3 stub forwards that body to the model; also covers non-serialisable tool results. Body parsing runs before the token check (unauthenticated 400/413/415/414); add a preParsing auth hook if wanted. DONE: commit `V8:` (git log --grep '^V8:'), review: 1 round, APPROVE. Gateway app keeps the pre-split Fastify settings (logger, 50 MB bodyLimit, @fastify/cors ^11.3.1 with the same options). Notes applied: gateway/redis.ts connectRedis (error listener logs message only, maxRetriesPerRequest 2, connectTimeout 2000), close() on both stores, tool-server setErrorHandler with generic bodies and 503 on run-store failure. Not done: optional tool-server preParsing auth hook. Non-blocking: the withContext listener wrapper is installed after listen (same as before; chat.ts falls back to its own context); Fastify-generated replies and /health lack the old onSend cache headers; uncaughtException/unhandledRejection still exit 0 (parity). |
 | V14 | agentic-commerce | 3 | Gateway parity for a context missing sessionId, conversationId or referenceId (D6) | V7 | done | Replaces the 400 that V7 note (3) introduced; today such requests run (D6). From V9 review: jaf-runner/src/app.test.ts asserts a context of only {sessionId} -> 400 (update with D6); the runner's getCallMeta sends conversationId undefined for an id-less context, which VIC's ToolCallRequestSchema (call.conversationId min 1) rejects, so every tool call of such a run would fail. DONE: commit `V14:` (git log --grep '^V14:'), review: 1 round, APPROVE. Parity confirmed against jaf 0.1.18 (it minted conv-<uuid> the same way). The runner test in jaf-runner/src/app.test.ts now asserts a wrongly typed conversationId -> 400 (V9 Note). Non-blocking: a body with only a top-level conversationId (no context.conversationId) now runs under a minted id with no transcript and no SYSTEM (spec step 2/3), while admit's rejections still send SYSTEM under the top-level id (pre-split onSend fallback); confirm the app always sets context.conversationId. No test shows the data.conversationId the app gets back for an id-less run (fake sandbox hard-codes it). |
 | V15 | agentic-commerce | 3 | Gateway: conversationId source parity (history keyed by the top-level id as JAF's memory was) | V14 | done | From V14 review (non-blocking): a body with only a top-level conversationId ran under a minted id with no history. DONE: commit `V15:` (git log --grep '^V15:'), review: 1 round, APPROVE. resolveConversationIds in chat.ts implements the table; both ids count only as non-empty strings (spec applies that to the top-level id only; with context.conversationId '' the spec letter would 400 every tool call). The V14 'no conversationId' test's input lost its top-level id (it is now case (d); assertions unchanged). For the human: (1) spec inaccuracy: a STREAMED run with only a top-level id now sends a SYSTEM message under it; pre-split streams sent SYSTEM only from onEvent with the context id (onSend never fired for streams), so either accept the unification or split the SYSTEM source for streams; (2) SECURITY, parity by design (D6/v8): the transcript key is the client-chosen top-level conversationId, never authenticated; any session can replay and overwrite another conversation's history by sending its id; worse than pre-split because the store is shared Redis across pods; cheap fix: scope the key by authData.userId/businessId or require top-level == context when both are set. Nits: mint() also runs in case (a); helper return type not readonly; the fake sandbox hard-codes conv-1 so the echoed data.conversationId is not asserted. |
+| V16 | agentic-commerce | 4 | Run-scoped tool state for Shopify MCP (D8) | V4, V5, V9 | todo | From the V10 block: the Shopify agent and its VIC tools share per-run state through the request context. |
 | V9 | agentic-commerce | 4 | `jaf-runner` package scaffold | V2, J2, J3 | done | From V4: the J3 stub's default timeoutMs (120 s) is below VIC_TOOL_TIMEOUT_MS (180 s); set the stub timeout above VIC's, or the stub gives up while VIC still runs the tool. DONE: commit `V9:` (git log --grep '^V9:'), review: 2 rounds, APPROVE (r1 blocking: POST /chat?x=1 skipped the SandboxContext check; fixed by matching on the path; r1 non-blocking fixed: engine gets parsed.data so nested unknown keys are dropped, tests use a free port because jaf maps port 0 to 3000, engines.node >=22.12.0). Choices: RUNNER_PORT optional (default 3001); BEDROCK_MODEL default kept from pre-split; bedrock-provider COPIED (tortliAgent still imports the VIC copy) with the tunnel proxy path removed; availableMerchants also put in the turing context so withAddressGuard works; Langfuse creds passed explicitly ('' when missing); withContext wrapper installed before listen; plain `node dist/server.js` verified. Non-blocking, deferred: bearer check runs after body parsing (parity); the catalog GET shares the 190 s stub timeout (a hanging VIC /tools stalls /chat); /agents/:name/chat is dead in the runner (jaf inject forwards no headers). |
-| V10 | agentic-commerce | 4 | Migrate agents and prompts to the runner | V9, V3, J10 | blocked | From V3: do not start until jaf zodSchemaToJsonSchema/jsonSchemaToZod are lossless for the catalog (see V3 Notes); needs a new J task (human/plan decision). D6: the SandboxContext ids are optional; prompts and agents must tolerate an undefined conversationId/referenceId exactly as today's `Partial<AgentContext>` callers do. From V9: build each agent's tools inside buildAgents(set) with pickTools(set, ids), never catalog.pick at run time (keeps the J2 per-run snapshot). From V14 review: consider requiring conversationId at the runner boundary (2.2 says the gateway always sends one); a context without it makes every tool call 400 at VIC. BLOCKED (loop, 2026-10-31, before implementation): needs the human/plan decision from V3: add a jaf task that makes zodSchemaToJsonSchema/jsonSchemaToZod lossless for the VIC catalog (ZodDefault, ZodEffects, ZodNullable, ZodNativeEnum, ZodUnion, ZodLiteral, ZodAny, ZodPipeline; zero 'Unsupported schema type' placeholders over the real catalog), make V10 depend on it, and set V10 back to todo. Alternative: accept the lossy stubs and set V10 todo (update_cart_empik and numeric quantity fields would fail validation in the sandbox). V11 and I2 are ready meanwhile. UNBLOCKED by plan v8 (2026-10-31, D7): option (a) taken, J10 added and V10 depends on it; acceptance gains the zero-placeholder check over the real catalog. Optional, not required: once J10 is built, `jaf-runner/src/providers/bedrock-provider.ts` may build its Bedrock tool specs with jaf's `zodSchemaToJsonSchema` (the model then sees 30 fewer placeholders than today); if done, record it in Notes. BLOCKED (loop, 2026-10-31, before implementation; jaf rebuilt with J10): the spec does not cover a per-run state channel between the Shopify MCP agent and its VIC tools. Survey of everything moving: agents import only pure helpers from VIC (constructSwitchMerchantInfo, buildDiscoveryMerchantPromptMeta, hasDeliveryAddress, getDefaultAddress, all in vic-shared) and read turing context keys availableMerchants (step 2 covers it), addressSelected and merchantId. The channel: (1) agents/shopifyMCPAgent.ts instructions() derives merchantId, catalogUrl (websiteUrl), addressRequired, addressSelected from context.merchantId + availableMerchants + address and setContextValue()s them; tools/shopifyMCPShoppingTools.ts (VIC) reads catalogUrl, merchantId, addressRequired, addressSelected via getContextValue; (2) its switch-merchant tool setContextValue()s merchantId, catalogUrl, merchantName, addressRequired, addressSelected, which the agent's next turn and later tool calls of the same run read. Today one request ALS carries both directions. After the split the agent writes into the sandbox ALS and every VIC tool call gets a fresh copy of the run record's contextValues (V4), so Shopify MCP search gets catalogUrl undefined and an in-run merchant switch is lost. Other agents: addressSelected is only ever set by Shopify code, so their getContextValue('addressSelected') ?? <address check> fallback behaves the same in the sandbox; flowInfoTool sets and restores xModule within one call (unaffected). Human decision needed: (a) VIC-side: shopifyMCPShoppingTools derives the four values itself from the tool context (record.context.merchantId, contextValues.availableMerchants, address), and the tool server persists an allow-list of keys a tool sets (merchantId, catalogUrl, merchantName, addressRequired, addressSelected) back into the run record so later calls of the same run see them; the agent's next-turn view of a switch needs the switch result in the tool output or a context patch (new task, touches V4/V5 files); (b) accept the regression for ShoppifyAgentMCP until a follow-up (it is in today's registry); (c) another design. Set V10 back to todo (with the chosen approach in its spec or a new task it depends on). I1, I2, I4 are ready meanwhile. |
+| V10 | agentic-commerce | 4 | Migrate agents and prompts to the runner | V9, V3, J10, V16 | todo | From V3: do not start until jaf zodSchemaToJsonSchema/jsonSchemaToZod are lossless for the catalog (see V3 Notes); needs a new J task (human/plan decision). D6: the SandboxContext ids are optional; prompts and agents must tolerate an undefined conversationId/referenceId exactly as today's `Partial<AgentContext>` callers do. From V9: build each agent's tools inside buildAgents(set) with pickTools(set, ids), never catalog.pick at run time (keeps the J2 per-run snapshot). From V14 review: consider requiring conversationId at the runner boundary (2.2 says the gateway always sends one); a context without it makes every tool call 400 at VIC. BLOCKED (loop, 2026-10-31, before implementation): needs the human/plan decision from V3: add a jaf task that makes zodSchemaToJsonSchema/jsonSchemaToZod lossless for the VIC catalog (ZodDefault, ZodEffects, ZodNullable, ZodNativeEnum, ZodUnion, ZodLiteral, ZodAny, ZodPipeline; zero 'Unsupported schema type' placeholders over the real catalog), make V10 depend on it, and set V10 back to todo. Alternative: accept the lossy stubs and set V10 todo (update_cart_empik and numeric quantity fields would fail validation in the sandbox). V11 and I2 are ready meanwhile. UNBLOCKED by plan v8 (2026-10-31, D7): option (a) taken, J10 added and V10 depends on it; acceptance gains the zero-placeholder check over the real catalog. Optional, not required: once J10 is built, `jaf-runner/src/providers/bedrock-provider.ts` may build its Bedrock tool specs with jaf's `zodSchemaToJsonSchema` (the model then sees 30 fewer placeholders than today); if done, record it in Notes. BLOCKED (loop, 2026-10-31, before implementation; jaf rebuilt with J10): the spec does not cover a per-run state channel between the Shopify MCP agent and its VIC tools. Survey of everything moving: agents import only pure helpers from VIC (constructSwitchMerchantInfo, buildDiscoveryMerchantPromptMeta, hasDeliveryAddress, getDefaultAddress, all in vic-shared) and read turing context keys availableMerchants (step 2 covers it), addressSelected and merchantId. The channel: (1) agents/shopifyMCPAgent.ts instructions() derives merchantId, catalogUrl (websiteUrl), addressRequired, addressSelected from context.merchantId + availableMerchants + address and setContextValue()s them; tools/shopifyMCPShoppingTools.ts (VIC) reads catalogUrl, merchantId, addressRequired, addressSelected via getContextValue; (2) its switch-merchant tool setContextValue()s merchantId, catalogUrl, merchantName, addressRequired, addressSelected, which the agent's next turn and later tool calls of the same run read. Today one request ALS carries both directions. After the split the agent writes into the sandbox ALS and every VIC tool call gets a fresh copy of the run record's contextValues (V4), so Shopify MCP search gets catalogUrl undefined and an in-run merchant switch is lost. Other agents: addressSelected is only ever set by Shopify code, so their getContextValue('addressSelected') ?? <address check> fallback behaves the same in the sandbox; flowInfoTool sets and restores xModule within one call (unaffected). Human decision needed: (a) VIC-side: shopifyMCPShoppingTools derives the four values itself from the tool context (record.context.merchantId, contextValues.availableMerchants, address), and the tool server persists an allow-list of keys a tool sets (merchantId, catalogUrl, merchantName, addressRequired, addressSelected) back into the run record so later calls of the same run see them; the agent's next-turn view of a switch needs the switch result in the tool output or a context patch (new task, touches V4/V5 files); (b) accept the regression for ShoppifyAgentMCP until a follow-up (it is in today's registry); (c) another design. Set V10 back to todo (with the chosen approach in its spec or a new task it depends on). I1, I2, I4 are ready meanwhile. UNBLOCKED by plan v9 (2026-10-31, D8): option (a) as task V16, V10 depends on it. D9: the GENIUS agents (AnalyticsOrchestratorAgent and its agentAsTool sub-agents) move with the rest but are not expected to work in the sandbox until section 8.1 is done. |
 | V11 | agentic-commerce | 4 | Bash tool in the runner | V9 | done | attach to agents: human decision, see D3 DONE: commit `V11:` (git log --grep '^V11:'), review: 2 rounds, APPROVE (r1 blocking: a setsid'd process holding the pipes defeated the timeout, demonstrated hang; fixed by destroying the pipes after the group kill; also fixed: group killed on close so background processes do not outlive the call, sweeper re-checks in-use before rm, byte cap backs off to a UTF-8 boundary). createBashTool is a factory, nothing at import, attached to no agent (D3). PRECONDITION FOR ATTACHING THE TOOL (D3, human): commands run as the runner uid in its PID namespace, so they can read /proc/1/environ (RUNNER_/VIC_SERVICE_TOKEN, AWS creds, Langfuse key), the runner's files (writable unless readOnlyRootFilesystem), every other conversation's workspace, possibly run tokens via /proc/<pid>/mem, and setsid-escaped processes outlive the call; needs an executor without secrets (sidecar sharing /workspace) or a per-call uid plus a PID namespace, and tini/shareProcessNamespace for zombies. Non-blocking: a chunk ending exactly at 32 KiB can still end in a broken UTF-8 byte (StringDecoder would fix); the setsid test probes python3 on the test PATH, not the tool's. |
 | V12 | agentic-commerce | 5 | Clean `vic:JAF/` of runtime code | V8, V10 | todo | From V9: delete JAF/src/providers/bedrock-provider.ts (the runner has its own copy) once tortliAgent has moved. |
 | V13 | agentic-commerce | 5 | Switch to the library's GitHub commit (git-hosted dependency) | J5, J9, V10, V11 | todo | |
@@ -968,6 +973,71 @@ Every existing V7 and V14 test passes (V14's tests for (d) are unchanged; its te
 
 **Verify.** as V3.
 
+### V16. Run-scoped tool state for Shopify MCP (D8)
+
+**Files.** `vic:shared/src/contracts.ts`, `vic:JAF/src/gateway/runStore.ts` (+ test), `vic:JAF/src/tools-server/server.ts`
+(+ test), `vic:JAF/src/tools/shopifyMCPShoppingTools.ts`, `vic:jaf-runner/src/catalog.ts` (+ test).
+
+**Why.** Today one request context carries state both ways between `vic:JAF/src/agents/shopifyMCPAgent.ts` and
+`vic:JAF/src/tools/shopifyMCPShoppingTools.ts`. The agent's `instructions()` derives `merchantId`, `catalogUrl`,
+`addressRequired` and `addressSelected` from `context.merchantId`, `availableMerchants` and the address, and
+`setContextValue`s them (lines 34–70); the tools read them with `getContextValue` (lines 493–496, 637–639, 727–739, 1383);
+the switch-merchant tool writes `merchantId`, `catalogUrl`, `merchantName`, `addressRequired`, `addressSelected` back
+(line 797), which later tool calls and the agent's next turn of the same run read. After the split the agent writes into
+the sandbox's context and every VIC tool call starts from a fresh copy of the run record (V4), so Shopify search runs with
+`catalogUrl` undefined and an in-run merchant switch is lost. `ShoppifyAgentMCP` is in today's registry.
+
+**Design (D8).** VIC derives; the sandbox never sends merchant values to VIC (a sandbox-chosen `catalogUrl` would redirect
+merchant traffic). Tool-to-tool state persists in the run record (`toolState`, 2.6). Tool-to-agent state travels back in
+`ToolResult.metadata.contextPatch` (2.4) and the runner applies it to its request context. Cross-turn behaviour is
+unchanged: a new `/chat` request starts from the app's `context.merchantId`, as today.
+
+**Changes.**
+1. `shared/src/contracts.ts`: `export const ToolStateSchema = z.object({ merchantId: z.string(), catalogUrl: z.string(),
+   merchantName: z.string(), addressRequired: z.boolean(), addressSelected: z.boolean() }).partial()`,
+   `export type ToolState`, `export const TOOL_STATE_KEYS = ['merchantId', 'catalogUrl', 'merchantName', 'addressRequired', 'addressSelected'] as const`.
+   `RunRecordSchema` gains `toolState: ToolStateSchema.optional()`.
+2. `gateway/runStore.ts`: `RunStore.patchToolState(token: string, patch: ToolState): Promise<void>`. In-memory: replace the
+   record with a frozen copy whose `toolState` is the shallow merge. Redis: `GET`, merge, `SET … KEEPTTL` (never extends the
+   expiry). Unknown or expired token: no-op.
+3. `tools-server/server.ts`, per call: `setContextValue({ ...record.contextValues, ...record.toolState })` before argument
+   validation. After `tool.execute` returns or throws, read each `TOOL_STATE_KEYS` entry with `getContextValue`; `changed` =
+   the keys whose value is defined and differs from `record.toolState?.[key]`, validated with `ToolStateSchema` (keys with
+   a wrong type are dropped and logged by name). If `changed` is non-empty: `await runStore.patchToolState(token, changed)`
+   (on failure log `TOOL_STATE_PATCH_FAILED` and continue) and return the result with
+   `metadata: { ...result.metadata, contextPatch: changed }`. Only these five keys travel; everything else a tool sets stays
+   per call as today.
+4. `tools/shopifyMCPShoppingTools.ts`: one helper `resolveShopifyState(context)` replaces the raw reads of `catalogUrl`,
+   `merchantId`, `addressRequired` and `addressSelected`:
+   `merchants = getContextValue<AvailableMerchant[]>('availableMerchants') ?? []`;
+   `merchantId = getContextValue<string>('merchantId') || context.merchantId || merchants.find(m => m.agentName === 'ShoppifyAgentMCP')?.merchantId || ''`;
+   `merchant = merchants.find(m => m.merchantId === merchantId)`;
+   `catalogUrl = getContextValue<string>('catalogUrl') ?? merchant?.websiteUrl ?? ''`;
+   `merchantName = getContextValue<string>('merchantName') ?? merchant?.merchantName ?? 'the merchant'`;
+   `addressRequired = getContextValue<boolean>('addressRequired') ?? (merchant?.addressRequired !== false)`;
+   `addressSelected = getContextValue<boolean>('addressSelected') ?? Boolean((context.address ?? '').trim() || (context.postalCode ?? '').trim())`.
+   This is the agent's derivation (`shopifyMCPAgent.ts` lines 34–62) with the persisted `toolState` taking precedence. The
+   switch tool's `setContextValue` block (line 797) stays as it is; step 3 picks it up. No prompt or tool-name change.
+5. `jaf-runner/src/catalog.ts`: `pickTools` wraps every stub:
+   `execute: async (args, ctx) => { const r = await stub.execute(args, ctx); const p = ToolStateSchema.safeParse((r as any)?.metadata?.contextPatch); if (p.success && Object.keys(p.data).length > 0) setContextValue(p.data); return r; }`.
+   `shopifyMCPAgent.ts` keeps reading `getContextValue('merchantId' | 'addressSelected')` in `instructions()` (V10 step 6),
+   so the next turn of the same run sees the switch as today.
+
+**Acceptance.** Tests:
+(a) tool server: a test tool that runs `setContextValue({ merchantId: 'm2', catalogUrl: 'https://b', unrelated: 1 })` →
+200 with `metadata.contextPatch` equal to `{ merchantId: 'm2', catalogUrl: 'https://b' }`; the run record's `toolState`
+equals it; a second call with the same token observes `getContextValue('merchantId') === 'm2'` before execution; a tool that
+sets `addressSelected: 'yes'` yields no patch for that key; a tool that sets nothing yields no `contextPatch`.
+(b) run store, in-memory and fake Redis: `patchToolState` merges, an unknown token is a no-op, `expiresAt`/TTL unchanged.
+(c) Shopify helper: `toolState` empty, `context.merchantId = 'm1'`, merchants `[m1: websiteUrl 'u1', addressRequired false]`
+→ `{ catalogUrl: 'u1', addressRequired: false, addressSelected: true }`; with `merchantId: 'm2'` present in the request
+context the result is m2's values.
+(d) runner: a fake catalog tool whose result carries `metadata.contextPatch: { merchantId: 'm2', bogus: 1 }` → afterwards
+`getContextValue('merchantId') === 'm2'` inside the same request context and no `bogus` key.
+(e) Workspace `pnpm typecheck`; V4, V5 and V9 tests unchanged.
+
+**Verify.** as V3; `pnpm --filter @agentic-commerce/jaf-runner test`.
+
 ### V9. `jaf-runner` package scaffold
 
 **Files.** new `vic:jaf-runner/` (package `@agentic-commerce/jaf-runner`), `vic:pnpm-workspace.yaml`, root typecheck scripts.
@@ -1024,6 +1094,10 @@ whose `context` contains `password` is rejected with 400.
    `listPayments`, `createPayout`, `approvePayout`, …) become catalog ids like the rest.
 5. `buildAgents(set)` constructs the registry from all `create*Agent()` factories currently listed in `startJAFServer()`;
    keep the same commented-out set commented out. Startup asserts every id exists in `set.byId`.
+6. `agents/shopifyMCPAgent.ts`: keep its `getContextValue` / `setContextValue` calls unchanged (`@agentic-commerce/turing` is a
+   runner dependency); V16 feeds `merchantId` and `addressSelected` back into the runner's request context after a switch.
+7. GENIUS: `analyticsOrchestratorAgent.ts`, `allAnalyticsOrchestratorSubAgents.ts` and `tools/agentsAsTools/*` move exactly like
+   the others (sub-agent tools become catalog ids) but are not exercised and not expected to work until section 8.1 (D9).
 
 **Acceptance.** After `pnpm build` in `../jaf` (J10 included), `tsx src/tools-server/dump-catalog.ts <out>` in `vic:JAF`
 produces a dump with zero occurrences of `Unsupported schema type` (record the field count that changed in Notes);
@@ -1153,6 +1227,8 @@ manifests is a **human** step; set `review` with the note "manifests ready" when
 4. A tool-calling turn (e.g. a Korio search) → the VIC log shows `/tools/:id/call` and the model's answer reflects the result.
 5. Catalog change: add a dummy tool file, restart VIC only, send `/chat` → runner log shows one re-fetch and `/agents` lists the new tool.
 6. I4 guard and V7 context assertions re-run in this environment.
+7. A Shopify MCP turn with a merchant switch (V16): the VIC log shows the patch and the next tool call uses the new merchant.
+GENIUS agents (`AnalyticsOrchestratorAgent` and its sub-agents) are out of scope for the smoke until section 8.1 is done (D9).
 Record the outputs in the ledger Notes.
 
 ---
@@ -1168,6 +1244,9 @@ Record the outputs in the ledger Notes.
 | D5 | How VIC obtains the library | pnpm git-hosted dependency on a pushed commit of `feat/vic-sandbox-split` (`github:xynehq/jaf#<sha>` plus the `onlyBuiltDependencies` entry), built at install by `prepare`. npm publish is optional (J8). Verified 2026-10-30 against fc18c84 with pnpm 10.34.9; the repo is public, so no credentials are needed. | user (decided 2026-10-30) |
 | D6 | A `/chat` context missing `sessionId`, `conversationId` or `referenceId` | Run as today, never reject: `SandboxContextSchema` makes the three ids optional (2.5); when the app sent no conversationId the gateway mints `conv-<uuid>` for the run, keeps no transcript and sends no Ardra USER/SYSTEM message (today JAF mints one and the Ardra calls are skipped); `authenticateRequest` gets `null` for a missing id. Implemented by V14. Plan v8: each of the three pre-split uses keeps its own source field (history by the top-level id, Ardra messages by the context id), see the V15 table. | user (decided 2026-10-31) |
 | D7 | Lossy tool schemas in the sandbox (V3 carry-forward) | Option (a): make jaf's `zodSchemaToJsonSchema` / `jsonSchemaToZod` lossless for the VIC catalog (J10) and gate V10 on it; the stubs must accept everything the real zod schema accepts, VIC re-validates on `/tools/:id/call`. Option (b), shipping the placeholder stubs, was rejected because `update_cart_empik` and numeric `.default()` fields would fail in the sandbox. | user (decided 2026-10-31) |
+| D8 | Shopify MCP per-run state between agent and tools | Option (a), VIC-side: tools derive merchant values from the merchant id and VIC's merchant list; the tool server persists an allow-list of five keys a tool sets into the run record and returns them as `metadata.contextPatch`; the runner applies the patch to its request context. The sandbox never sends merchant values to VIC. Task V16; V10 depends on it. | user (decided 2026-10-31) |
+| D9 | GENIUS (orchestrator and agents-as-tools) gaps found while reviewing V10 | Deferred to section 8.1, to be picked up with the next GENIUS change after the split is complete. Until then the GENIUS agents move with the rest but are not expected to work in the sandbox; I5 excludes them. | user (decided 2026-10-31) |
+| D10 | Transcript key not bound to the session (V15 review) | Deferred to section 8.2: Redis is not in use yet, so the store is per pod as before the split. Revisit when Redis is adopted. | user (decided 2026-10-31) |
 
 ---
 
@@ -1183,3 +1262,47 @@ Record the outputs in the ledger Notes.
 | 6 | 2026-10-30 | D5: VIC consumes the library from GitHub (V13 rewritten), npm publish moved to optional human-only J8, J5 done criterion = reviewed and pushed. Added J9 (compatibility with VIC's pnpm overrides, which `link:` did not apply but a git dependency does; exclude `src/test-utils` from dist). I1 notes the builder needs HTTPS to codeload.github.com. |
 | 7 | 2026-10-31 | D2 confirmed as is (no Host-header hardening in this plan). D6: a context missing sessionId/conversationId/referenceId runs as today instead of V7's 400; 2.5 makes the ids optional, 2.2 states the gateway always sends a conversationId; added V14 (ledger after V8, depends on V7) and a V10 note. |
 | 8 | 2026-10-31 | D7: added J10 (lossless schema conversion, jaf); V10 back to `todo` depending on J10, acceptance gains the zero-placeholder catalog check. V15 added (conversationId source parity, depends on V14); 2.2 and D6 amended. I2 spec and notes: keep `Host` handling as today (D2). |
+| 9 | 2026-10-31 | D8: added V16 (run-scoped tool state for Shopify MCP); V10 back to `todo` depending on V16, steps 6–7 added; 2.4 `metadata.contextPatch` and 2.6 `toolState`. D9/D10: new section 8 (deferred follow-ups, not in the ledger) holds the GENIUS orchestrator items and the transcript-key scoping; I5 excludes GENIUS. |
+
+---
+
+## 8. Deferred follow-ups (not in the ledger; the loop never picks from here)
+
+Items the owner has decided to do after the split is complete. Each is written so it can be turned into a ledger task
+later by copying it into section 5 and adding a row. Nothing in sections 4–5 depends on them.
+
+### 8.1 GENIUS: orchestrator and agents-as-tools (D9; pick up with the next GENIUS change)
+
+Found while reviewing V10 against `vic:JAF/src/agents/analyticsOrchestratorAgent.ts`, `allAnalyticsOrchestratorSubAgents.ts`,
+`tools/agentsAsTools/analyticsOrchestratorAgentSubAgents.ts` and jaf `src/core/agent-as-tool.ts`. What already works: the
+sub-agent runs in the runner process through `run()`, inherits the parent context (so the tool server's conversationId
+check passes), its catalog stubs read the run token from the request context the child shares, every sub-agent tool
+including `qApiCall` has its own catalog module, and events reach the trace collector. Until these items are done the
+GENIUS agents are not expected to work in the sandbox.
+
+- **G1 (jaf, server).** `src/server/server.ts` streaming loop (near line 563) breaks on the first `run_end`; `agentAsTool`
+  (`propagateEvents: 'summary'`) forwards the child's `run_end`, so a streamed run ends when the first sub-agent finishes.
+  Pre-existing. Fix: break only when `event.data.runId === runId`; still forward child `run_end` events. Test: a streaming
+  parent with one agentAsTool child yields two `run_end` events and the stream ends after the parent's.
+- **G2 (VIC, gateway).** `relayStream` stores the transcript and sends SYSTEM on every `run_end`; with sub-agents the
+  child's `finalState.messages` replaces the conversation transcript and, until G1, the parent's never arrives (history
+  corruption on the next turn; today the parent's background completion still wrote the right memory). Fix: capture
+  `stream_start.data.runId`; store and send SYSTEM only for the `run_end` with that `runId`; keep stripping `finalState` from
+  all of them. Decide at the same time the V15 reviewer's note: streams with only a top-level conversationId now send
+  SYSTEM under it, where the pre-split onEvent sent it only under the context id.
+- **G3 (VIC, runner).** `jaf-runner/src/app.ts` preHandler sets `business-id` / `user-id` only; today's server also set
+  `businessId` / `userId`, which `prompts/jusbizAnalyticsPrompt.ts` reads. Set both spellings.
+- **G4 (jaf, agent-as-tool).** `AnalyticsAgent` uses `memoryMode: 'inherit'`: today the child loaded the stored conversation
+  (previous turns, `memory.maxMessages`) ahead of its input; the runner has no memory provider, so the child sees only the
+  orchestrator's input. Option: when `memoryMode === 'inherit'` and `!parentConfig.memory?.provider`, seed
+  `childState.messages` with the parent's messages up to and including the last user message, then the input. Or accept.
+- **G5 (VIC, env).** Add `GENIUS_MODEL` to the sandbox variables in I4 (15 reads in the agents; it matches none of the
+  `*_BEDROCK_MODEL` / `*_MAX_TOKENS` patterns). `LITELLM_MODEL` appears only in a comment.
+
+### 8.2 Other deferred items
+
+- **T1 (VIC, gateway; D10).** The transcript key is the client-chosen conversationId and is never bound to the authenticated
+  session, so a session can overwrite another conversation's history by sending its id. Same class as before the split
+  while the store is in-memory per pod; wider with shared Redis. When Redis is adopted: prefix the key with the
+  authenticated business and user ids, or require the top-level id to equal the context id when both are present.
+- **T2 (VIC, nginx; D2).** Host-header bypass hardening (fixed Host or dedicated internal listener), see I2 Notes.
