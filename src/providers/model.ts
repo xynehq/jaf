@@ -3,7 +3,7 @@ import tunnel from 'tunnel';
 import { ModelProvider, Message, MessageContentPart, getTextContent, type RunState, type Agent, type RunConfig } from '../core/types.js';
 import { extractDocumentContent, isDocumentSupported, getDocumentDescription } from '../utils/document-processor.js';
 import { safeConsole, isVerboseLogging } from '../utils/logger.js';
-import { zodSchemaToJsonSchema } from './schema.js';
+import { UNSUPPORTED_SCHEMA_DESCRIPTION, zodSchemaToJsonSchema } from './schema.js';
 
 export { zodSchemaToJsonSchema } from './schema.js';
 
@@ -200,7 +200,6 @@ export const makeLiteLLMProvider = <Ctx>(
 
 const RESPONSE_SCHEMA_FALLBACK_NAME = 'jaf_output';
 const RESPONSE_SCHEMA_NAME_MAX_LENGTH = 64;
-const UNSUPPORTED_SCHEMA_DESCRIPTION = 'Unsupported schema type';
 
 function normalizeResponseSchemaName(name: string): string {
   const cleaned = name.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -210,10 +209,14 @@ function normalizeResponseSchemaName(name: string): string {
 }
 
 function shouldFallbackToJsonObject(schema: any): boolean {
-  return !!schema &&
-    typeof schema === 'object' &&
-    schema.type === 'string' &&
-    schema.description === UNSUPPORTED_SCHEMA_DESCRIPTION;
+  if (!schema || typeof schema !== 'object') {
+    return false;
+  }
+  if (schema.type === 'string' && schema.description === UNSUPPORTED_SCHEMA_DESCRIPTION) {
+    return true;
+  }
+  // A strict json_schema needs an object root; e.g. a z.any() codec converts to `{}`.
+  return schema.type !== 'object';
 }
 
 function buildResponseFormat(

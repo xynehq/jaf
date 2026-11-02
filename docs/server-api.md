@@ -72,10 +72,37 @@ interface ServerConfig<Ctx> {
   port?: number;                    // Default: 3000
   host?: string;                    // Default: '127.0.0.1'
   cors?: boolean;                   // Default: false
-  runConfig: RunConfig<Ctx>;        // Required: Framework run configuration
-  agentRegistry: Map<string, Agent<Ctx, any>>; // Required: Available agents
+  // Required: Framework run configuration. runConfig.agentRegistry is an AgentRegistrySource.
+  runConfig: Omit<RunConfig<Ctx>, 'agentRegistry'> & { agentRegistry: AgentRegistrySource<Ctx> };
+  agentRegistry?: AgentRegistrySource<Ctx>;    // Deprecated: legacy top-level registry
   defaultMemoryProvider?: MemoryProvider;      // Optional: Memory persistence
 }
+
+type AgentRegistry<Ctx> = ReadonlyMap<string, Agent<Ctx, any>>;
+type AgentRegistrySource<Ctx> =
+  | AgentRegistry<Ctx>
+  | (() => AgentRegistry<Ctx> | Promise<AgentRegistry<Ctx>>);
+```
+
+#### Dynamic agent registry
+
+`runConfig.agentRegistry` may be a function instead of a `Map`. The server calls it once per request
+(`/agents`, `/chat`, `/agents/:agentName/chat`) and uses the returned map for that whole request: the
+agent existence check, and the `RunConfig` passed to the engine, which always receives the resolved
+`ReadonlyMap`, never the function. Returning a new map from the function changes the available agents
+for the next request without restarting the server; a run in progress keeps its snapshot.
+
+```typescript
+import type { AgentRegistry } from '@juspay-jaf/jaf';
+
+let current: AgentRegistry<Ctx> = buildAgents();
+
+createJAFServer({
+  runConfig: { agentRegistry: () => current, modelProvider },
+});
+
+// later, e.g. after a tool catalog change:
+current = buildAgents();
 ```
 
 ### runServer Parameters
@@ -175,7 +202,8 @@ curl -X POST http://localhost:3000/chat \
 **Request Schema:**
 ```typescript
 interface ChatRequest {
-  messages: HttpMessage[];          // Required: Conversation messages
+  messages: ChatMessage[];          // Required: Conversation messages (may be a full transcript, see below)
+                                   // ChatMessage is ChatRequest['messages'][number]; it is not exported by name
   agentName: string;               // Required: Target agent name
   context?: any;                   // Optional: Agent context
   maxTurns?: number;              // Optional: Override max turns
@@ -185,14 +213,44 @@ interface ChatRequest {
     autoStore?: boolean;          // Default: true
     maxMessages?: number;         // Optional: Memory limit
     compressionThreshold?: number; // Optional: Compression trigger
+    storeOnCompletion?: boolean;  // Optional: Store only when the run completes
   };
+  approvals?: ApprovalMessage[];  // Optional: HITL decisions for pending tool calls
 }
 
-interface HttpMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
+type ChatMessage =
+  | { role: 'user' | 'system'; content: string; attachments?: Attachment[] }   // system is sent to the model as user
+  | { role: 'assistant'; content: string; attachments?: Attachment[];
+      tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[] }
+  | { role: 'tool'; content: string; tool_call_id?: string };
+
+interface Attachment {
+  kind: 'image' | 'document' | 'file';
+  mimeType?: string;
+  name?: string;
+  url?: string;
+  data?: string;
+  format?: string;
+}
+
+interface ApprovalMessage {
+  type: 'approval';
+  sessionId: string;
+  toolCallId: string;
+  approved: boolean;
+  additionalContext?: Record<string, any>;
 }
 ```
+
+**Replaying a full transcript.** `messages` may carry the whole conversation, including assistant
+`tool_calls` and `tool` results (`tool_call_id`), exactly as returned in `data.messages`. They reach the
+model unchanged, so a caller that stores the transcript itself (no `defaultMemoryProvider`) can send it back on
+every request and the agent continues from previous tool results. To resume a tool call that is waiting for
+approval, send the transcript including the assistant message that holds the pending `tool_calls` (the latest
+assistant message whose calls have no `tool` result yet), plus an `approvals` entry for its `toolCallId`; the
+engine then executes (or rejects) the call before calling the model.
+Anyone who can call `/chat` can replay tool calls and approve them, so put the endpoint behind authentication
+when tools have side effects.
 
 **Response (non-streaming):**
 ```json
@@ -337,6 +395,9 @@ Remove conversation from memory.
 ```bash
 curl -X DELETE http://localhost:3000/conversations/demo-conversation-1
 ```
+
+Send no body and no `Content-Type: application/json` header: since 0.2.0 (Fastify 5) a request with that
+content type and an empty body is rejected with `400 FST_ERR_CTP_EMPTY_JSON_BODY` before the handler runs.
 
 **Response:**
 ```json

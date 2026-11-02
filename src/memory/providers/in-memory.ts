@@ -1,4 +1,4 @@
-import { Message, TraceId } from '../../core/types';
+import { Message, TraceId } from '../../core/types.js';
 import {
   MemoryProvider,
   ConversationMemory,
@@ -9,7 +9,7 @@ import {
   createFailure,
   createMemoryNotFoundError,
   createMemoryStorageError
-} from '../types';
+} from '../types.js';
 import { safeConsole } from '../../utils/logger.js';
 
 /**

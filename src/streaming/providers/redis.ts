@@ -64,7 +64,8 @@ export async function createRedisStreamProvider(
   // Dynamically import ioredis (peer dependency - must be installed separately)
   try {
     const ioredisModule = await import('ioredis');
-    const Redis = ioredisModule.default;
+    // ioredis is CommonJS: under native ESM the namespace exposes the class as `Redis` (and as `default`).
+    const Redis = ioredisModule.Redis ?? (ioredisModule.default as unknown as typeof ioredisModule.Redis);
 
     if (config.url) {
       client = new Redis(config.url) as unknown as RedisClient;

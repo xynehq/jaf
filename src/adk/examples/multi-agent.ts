@@ -15,7 +15,9 @@ import {
   AgentConfig,
   Model,
   ToolParameterType
-} from '../index';
+} from '../index.js';
+import { evaluateMathExpression } from '../../utils/safe-math.js';
+import { isMainScript } from '../../utils/is-main-script.js';
 
 // ========== Specialized Agents ==========
 
@@ -145,8 +147,6 @@ export const createCalculatorSpecialistAgent = (): AgentConfig => {
               result = (parseFloat(percent) / 100) * parseFloat(of);
             } else {
               // Use safe math evaluator instead of eval
-              // eslint-disable-next-line @typescript-eslint/no-var-requires
-              const { evaluateMathExpression } = require('../../utils/safe-math');
               result = evaluateMathExpression(expression);
             }
             break;
@@ -160,8 +160,6 @@ export const createCalculatorSpecialistAgent = (): AgentConfig => {
               result = Math.PI * radius * radius;
             } else {
               // Use safe math evaluator instead of eval
-              // eslint-disable-next-line @typescript-eslint/no-var-requires
-              const { evaluateMathExpression } = require('../../utils/safe-math');
               result = evaluateMathExpression(expression);
             }
             break;
@@ -169,8 +167,6 @@ export const createCalculatorSpecialistAgent = (): AgentConfig => {
             
           default: {
             // Use safe math evaluator instead of eval
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const { evaluateMathExpression } = require('../../utils/safe-math');
             result = evaluateMathExpression(expression);
           }
         }
@@ -410,6 +406,6 @@ export async function runAllMultiAgentExamples() {
 }
 
 // Run examples if this file is executed directly
-if (require.main === module) {
+if (isMainScript('adk/examples/multi-agent')) {
   runAllMultiAgentExamples();
 }

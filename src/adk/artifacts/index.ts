@@ -7,6 +7,7 @@
 
 import { Session } from '../types.js';
 import { safeConsole } from '../../utils/logger.js';
+import { optionalRequire } from '../../utils/optional-require.js';
 
 // ========== Types ==========
 
@@ -166,8 +167,7 @@ export const createRedisArtifactStorage = (config: {
   const ttl = config.ttl; // Optional TTL in seconds
   
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const Redis = require('ioredis');
+    const Redis = optionalRequire('ioredis');
     redis = new Redis({
       host: config.host,
       port: config.port,
@@ -291,8 +291,7 @@ export const createPostgresArtifactStorage = (config: {
   const ttl = config.ttl;
   
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { Pool } = require('pg');
+    const { Pool } = optionalRequire('pg');
     pool = new Pool({
       connectionString: config.connectionString,
       connectionTimeoutMillis: 5000, // 5 second timeout

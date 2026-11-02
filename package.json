@@ -1,9 +1,12 @@
 {
   "name": "@juspay-jaf/jaf",
-  "version": "0.1.46",
+  "version": "0.2.0",
   "description": "Juspay Agent Framework - A purely functional agent framework with immutable state and composable tools",
   "type": "module",
   "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=22.12"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -105,6 +108,7 @@
     "test:with-db": "pnpm run test:db:start && pnpm test; pnpm run test:db:stop",
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
+    "check:dist": "node scripts/check-dist.mjs",
     "prepublishOnly": "pnpm run lint && pnpm run test && pnpm run build",
     "prepare": "pnpm run build",
     "version": "pnpm run build && git add -A",
@@ -140,20 +144,20 @@
     "url": "https://github.com/xynehq/jaf/issues"
   },
   "dependencies": {
-    "@fastify/cors": "^9.0.1",
+    "@fastify/cors": "^11.0.0",
     "@modelcontextprotocol/sdk": "^1.17.4",
     "@types/yauzl": "^2.10.3",
     "ai": "^5.0.35",
     "eventsource": "^2.0.2",
     "express": "^4.18.2",
-    "fastify": "^4.29.1",
+    "fastify": "^5.12.7",
     "mammoth": "^1.10.0",
-    "mathjs": "^14.6.0",
+    "mathjs": "^15.2.0",
     "openai": "^4.0.0",
     "papaparse": "^5.5.3",
     "pdf-parse": "^2.4.5",
     "tunnel": "^0.0.6",
-    "uuid": "^9.0.0",
+    "uuid": "^11.1.1",
     "cfb": "^1.2.2",
     "xlsx": "^0.18.5",
     "yauzl": "^3.2.0",

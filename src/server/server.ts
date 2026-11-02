@@ -2,6 +2,7 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import cors from '@fastify/cors';
 import {
   ServerConfig,
+  AgentRegistry,
   ChatRequest,
   ChatResponse,
   AgentListResponse,
@@ -76,7 +77,7 @@ const attachmentSchema = {
 const httpMessageSchema = {
   type: 'object',
   properties: {
-    role: { type: 'string', enum: ['user', 'assistant', 'system'] },
+    role: { type: 'string', enum: ['user', 'assistant', 'system', 'tool'] },
     content: {
       oneOf: [
         { type: 'string' },
@@ -89,7 +90,27 @@ const httpMessageSchema = {
     attachments: {
       type: 'array',
       items: attachmentSchema
-    }
+    },
+    tool_calls: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          type: { type: 'string', enum: ['function'] },
+          function: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              arguments: { type: 'string' }
+            },
+            required: ['name', 'arguments']
+          }
+        },
+        required: ['id', 'type', 'function']
+      }
+    },
+    tool_call_id: { type: 'string' }
   },
   required: ['role', 'content']
 };
@@ -138,6 +159,10 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
   if (!config.runConfig.agentRegistry) {
     throw new Error('agentRegistry must be provided either in config.agentRegistry (deprecated) or config.runConfig.agentRegistry');
   }
+
+  const registrySource = config.runConfig.agentRegistry;
+  const resolveRegistry = async (): Promise<AgentRegistry<Ctx>> =>
+    typeof registrySource === 'function' ? await registrySource() : registrySource;
 
   const startTime = Date.now();
   // SSE subscribers for approval-related events
@@ -228,7 +253,8 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
     // List available agents
     app.get('/agents', async (request: FastifyRequest, reply: FastifyReply): Promise<AgentListResponse> => {
       try {
-        const agents = Array.from(config.runConfig.agentRegistry.entries()).map(([name, agent]) => ({
+        const registry = await resolveRegistry();
+        const agents = Array.from(registry.entries()).map(([name, agent]) => ({
           name,
           description: typeof agent.instructions === 'function'
             ? 'Agent description' // Safe fallback since we don't have context
@@ -264,11 +290,14 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         // Validate request body
         const validatedRequest = chatRequestSchema.parse(request.body);
 
+        // Resolve the registry once: this request's run uses this snapshot throughout
+        const registry = await resolveRegistry();
+
         // Check if agent exists
-        if (!config.runConfig.agentRegistry.has(validatedRequest.agentName)) {
+        if (!registry.has(validatedRequest.agentName)) {
           const response: ChatResponse = {
             success: false,
-            error: `Agent '${validatedRequest.agentName}' not found. Available agents: ${Array.from(config.runConfig.agentRegistry.keys()).join(', ')}`
+            error: `Agent '${validatedRequest.agentName}' not found. Available agents: ${Array.from(registry.keys()).join(', ')}`
           };
           return reply.code(404).send(response);
         }
@@ -288,11 +317,18 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         }
 
         // Convert HTTP messages to JAF messages
-        const jafMessages: Message[] = validatedRequest.messages.map(msg => ({
-          role: msg.role === 'system' ? 'user' : msg.role as 'user' | 'assistant',
-          content: msg.content,
-          attachments: (msg as any).attachments
-        }));
+        // Tool traces (assistant tool_calls, tool messages) are preserved so a replayed transcript
+        // can resume approvals and continue from previous tool results.
+        const jafMessages: Message[] = validatedRequest.messages.map((msg): Message => {
+          if (msg.role === 'tool') return { role: 'tool', content: msg.content, tool_call_id: msg.tool_call_id };
+          if (msg.role === 'assistant') return {
+            role: 'assistant',
+            content: msg.content,
+            ...('tool_calls' in msg && msg.tool_calls && msg.tool_calls.length > 0 ? { tool_calls: msg.tool_calls } : {}),
+            ...(msg.attachments ? { attachments: msg.attachments } : {})
+          };
+          return { role: 'user', content: msg.content, ...(msg.attachments ? { attachments: msg.attachments } : {}) }; // system → user, as today
+        });
 
         // Create initial state
         const runId = createRunId(uuidv4());
@@ -472,6 +508,7 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
         // Create run config with memory configuration
         const runConfig = {
           ...config.runConfig,
+          agentRegistry: registry,
           maxTurns: validatedRequest.maxTurns || config.runConfig.maxTurns || 10,
           conversationId,
           memory: config.defaultMemoryProvider ? {
@@ -919,7 +956,12 @@ export function createJAFServer<Ctx>(config: ServerConfig<Ctx>): {
       safeConsole.log(`🔧 Fastify server started successfully`);
 
       safeConsole.log(`🚀 JAF Server running on http://${host}:${port}`);
-      safeConsole.log(`📋 Available agents: ${Array.from(config.runConfig.agentRegistry.keys()).join(', ')}`);
+      try {
+        const registry = await resolveRegistry();
+        safeConsole.log(`📋 Available agents: ${Array.from(registry.keys()).join(', ')}`);
+      } catch (e) {
+        safeConsole.warn(`📋 Available agents: registry unavailable at startup (${e instanceof Error ? e.message : String(e)})`);
+      }
       safeConsole.log(`🏥 Health check: http://${host}:${port}/health`);
       safeConsole.log(`🤖 Agents list: http://${host}:${port}/agents`);
       safeConsole.log(`💬 Chat endpoint: http://${host}:${port}/chat`);

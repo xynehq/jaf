@@ -12,7 +12,8 @@
 8. [Best Practices for Tool Design](#best-practices-for-tool-design)
 9. [Advanced Patterns](#advanced-patterns)
 10. [Tool Debugging and Observability](#tool-debugging-and-observability)
-11. [Complete Examples](#complete-examples)
+11. [Remote Tools](#remote-tools)
+12. [Complete Examples](#complete-examples)
 
 ## Overview
 
@@ -1002,6 +1003,80 @@ const healthCheckTool: Tool<{}, MyContext> = {
   }
 };
 ```
+
+## Remote Tools
+
+A tool can run in another service. That service publishes a catalog and executes calls over HTTP;
+`discoverRemoteTools` turns the catalog into ordinary `Tool` stubs. The stubs validate arguments
+locally (the JSON Schema in the catalog is converted with `jsonSchemaToZod`) and return the remote
+`ToolResult` unchanged, so the model sees remote tools exactly like local ones.
+
+### Wire contract
+
+```jsonc
+// GET {baseUrl}  →  200
+{ "version": "3f9c2e1a7b4d5e60",
+  "tools": [ { "id": "korioShoppingTools.add_to_cart_korio", "name": "add_to_cart_korio",
+               "description": "...", "parameters": { "type": "object", "properties": { } },
+               "needsApproval": false } ] }
+
+// POST {baseUrl}/{encodeURIComponent(id)}/call
+{ "args": { }, "call": { } }            // call = getCallMeta(context)
+// → 200 with a ToolResult: { "status": "success" | "error" | ..., "data": ..., "error": ..., "metadata": ... }
+```
+
+Ids must be unique; names may repeat (`byName` keeps the last entry, `byId` is authoritative).
+
+### Usage
+
+```typescript
+import { discoverRemoteTools, RemoteToolsError } from '@juspay-jaf/jaf';
+
+const remote = await discoverRemoteTools<MyContext>({
+  baseUrl: 'http://vic:3002/tools',
+  headers: { authorization: `Bearer ${process.env.VIC_SERVICE_TOKEN}` },   // sent on every request
+  getCallHeaders: () => ({ 'x-run-token': currentRunToken() }),           // per tool call
+  getCallMeta: (ctx) => ({ conversationId: ctx.conversationId }),         // becomes body.call
+  expectedVersion: catalogVersionFromRequest,                             // optional
+  timeoutMs: 120_000,                                                     // default
+});
+
+const agent: Agent<MyContext, string> = {
+  name: 'Shopper',
+  instructions: () => 'Help the user shop.',
+  tools: [remote.byId.get('korioShoppingTools.add_to_cart_korio')!],
+};
+```
+
+### Schema conversion
+
+The catalog carries JSON Schema; both directions are exported for building and consuming catalogs:
+
+```typescript
+import { zodSchemaToJsonSchema, jsonSchemaToZod } from '@juspay-jaf/jaf';
+
+const json = zodSchemaToJsonSchema(myTool.schema.parameters); // server side: publish in the catalog
+const zod = jsonSchemaToZod(json);                            // client side: validate arguments
+```
+
+Supported: objects (required/optional properties), strings (incl. `enum`), numbers, booleans and arrays.
+`zodSchemaToJsonSchema` keeps `.describe()` text on string fields only. Records convert zod → JSON only:
+an object schema with just `additionalProperties` (a top-level `z.record` or a record field) converts back to
+an empty `z.object({})`, which strips its entries, so give every tool parameter object explicit `properties`.
+
+### Errors
+
+- `discoverRemoteTools` / `fetchRemoteToolCatalog` throw `RemoteToolsError` with `code`:
+  `HTTP` (unreachable, timeout or non-2xx; `httpStatus` is set for non-2xx), `INVALID_CATALOG`
+  (wrong shape, duplicate ids, or an entry whose `parameters` cannot be converted) or
+  `VERSION_MISMATCH` (`expectedVersion` differs from the served version).
+- A stub's `execute` never throws. A 2xx body whose `status` is a `ToolResult` status (`success`,
+  `error`, `validation_error`, `permission_denied`, `not_found`) is returned as is; any other 2xx body
+  becomes `ToolResponse.success(body)`; a non-2xx response becomes an
+  `EXTERNAL_SERVICE_ERROR` with `{ httpStatus, body }` (body truncated to 2000 characters);
+  a timeout becomes `TIMEOUT`; a network failure becomes `EXTERNAL_SERVICE_ERROR`.
+- Error messages and details never contain request or response headers or the request body,
+  because per-call headers may carry credentials and these messages can reach API responses.
 
 ## Complete Examples
 

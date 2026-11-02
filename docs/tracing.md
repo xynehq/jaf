@@ -106,6 +106,37 @@ JAF supports OpenTelemetry for integration with observability platforms like Jae
    const collector = createCompositeTraceCollector(new ConsoleTraceCollector());
    ```
 
+### Initialization and Shutdown
+
+The OpenTelemetry packages are optional and load asynchronously when JAF is imported. A collector
+constructed before they finish loading (for example right after the import, at the top of a server
+module) buffers its trace events and replays them once the modules are ready, so no spans are lost.
+The buffer holds at most `JAF_OTEL_PENDING_MAX` events (default 1000); beyond that the oldest events
+are dropped with a single warning. `createCompositeTraceCollector` always adds the OpenTelemetry
+collector when a collector URL or Langfuse credentials are configured, whether or not the modules
+have loaded yet.
+
+To avoid buffering, wait for the modules first:
+
+```typescript
+import { createOpenTelemetryTraceCollector, ensureOtelReady, shutdownOpenTelemetry } from '@juspay-jaf/jaf';
+
+const collector = await createOpenTelemetryTraceCollector('my-service'); // awaits ensureOtelReady()
+
+// beforeExit does not fire on signals: flush buffered spans explicitly on SIGTERM.
+process.on('SIGTERM', async () => {
+  await shutdownOpenTelemetry();
+  process.exit(0);
+});
+```
+
+| API | Purpose |
+|---|---|
+| `ensureOtelReady(): Promise<boolean>` | Resolves once the optional modules finished loading; `true` when tracing is available. |
+| `createOpenTelemetryTraceCollector(serviceName?, langfuseCredentials?)` | Awaits `ensureOtelReady()`, then constructs the collector. |
+| `shutdownOpenTelemetry(): Promise<void>` | Flushes and stops the SDK; always resolves (flush errors are logged). Call it once, at process exit. |
+| `JAF_OTEL_PENDING_MAX` (env) | Maximum events buffered per collector before the modules are ready (default 1000). |
+
 ### Local Development with Jaeger
 
 Run Jaeger locally for trace visualization:

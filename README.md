@@ -36,6 +36,9 @@ yarn add @juspay-jaf/jaf
 pnpm add @juspay-jaf/jaf
 ```
 
+Requires Node.js 22.12 or later. The package is native ESM and also loads through `require()`
+(Node's built-in `require(esm)`), with no bundler or `tsx` needed.
+
 ### Development Setup
 
 ```bash
@@ -569,6 +572,14 @@ npm run typecheck # Type checking
 ```
 
 ## ✨ Recent Enhancements
+
+### 0.2.0
+- **Native ESM build**: `dist/` loads under plain Node (`import` and `require`), including every subpath export (`/core`, `/memory`, `/policies`, ...). Requires Node 22.12+.
+- **Full transcript on `/chat`**: `messages` accepts assistant `tool_calls` and `tool` messages, so a caller that owns the transcript can replay it and resume approvals without a server-side memory provider. See [Server API](docs/server-api.md#chat-with-agent).
+- **Dynamic agent registry**: `runConfig.agentRegistry` can be a function, resolved once per request; each run keeps its snapshot. See [Server API](docs/server-api.md#dynamic-agent-registry).
+- **Remote tools**: `discoverRemoteTools` turns a tool catalog served over HTTP into tool stubs that execute remotely. See [Tools](docs/tools.md#remote-tools).
+- **Schema conversion**: `jsonSchemaToZod` and `zodSchemaToJsonSchema` are exported.
+- **Tracing**: the OpenTelemetry collector no longer drops spans when constructed before the optional modules load; new `ensureOtelReady`, `createOpenTelemetryTraceCollector`, `shutdownOpenTelemetry` and `JAF_OTEL_PENDING_MAX`. See [Tracing](docs/tracing.md#initialization-and-shutdown).
 
 ### Multi-Agent Coordination
 - **Intelligent Agent Selection**: Automatic keyword-based routing for conditional delegation

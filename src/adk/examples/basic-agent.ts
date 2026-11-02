@@ -15,7 +15,8 @@ import {
   quickSetup,
   Model,
   ToolParameterType
-} from '../index';
+} from '../index.js';
+import { isMainScript } from '../../utils/is-main-script.js';
 
 // ========== Example 1: Simple Chat Agent ==========
 
@@ -259,6 +260,6 @@ export async function runAllExamples() {
 }
 
 // Run examples if this file is executed directly
-if (require.main === module) {
+if (isMainScript('adk/examples/basic-agent')) {
   runAllExamples();
 }

@@ -1,15 +1,21 @@
 import { z } from 'zod';
-import { Agent, RunConfig } from '../core/types';
-import { MemoryProvider } from '../memory/types';
+import { Agent, RunConfig } from '../core/types.js';
+import { MemoryProvider } from '../memory/types.js';
+
+export type AgentRegistry<Ctx> = ReadonlyMap<string, Agent<Ctx, any>>;
+
+// A registry, or a function returning the current registry. A function is called once per
+// request, so each run sees one snapshot while the registry can change between requests.
+export type AgentRegistrySource<Ctx> = AgentRegistry<Ctx> | (() => AgentRegistry<Ctx> | Promise<AgentRegistry<Ctx>>);
 
 export interface ServerConfig<Ctx> {
   port?: number;
   host?: string;
   cors?: boolean;
   maxBodySize?: number;
-  runConfig: RunConfig<Ctx>;
+  runConfig: Omit<RunConfig<Ctx>, 'agentRegistry'> & { agentRegistry: AgentRegistrySource<Ctx> };
   // BACKWARDS COMPATIBILITY: Support legacy agentRegistry at top level
-  agentRegistry?: Map<string, Agent<Ctx, any>>;
+  agentRegistry?: AgentRegistrySource<Ctx>;
   defaultMemoryProvider?: MemoryProvider;
 }
 
@@ -38,8 +44,37 @@ export const approvalMessageSchema = z.object({
   additionalContext: z.record(z.any()).optional()
 });
 
+export type ChatRequest = z.infer<typeof chatRequestSchema>;
+export type HttpMessage = z.infer<typeof httpMessageSchema>;
+export type ApprovalMessage = z.infer<typeof approvalMessageSchema>;
+
+// Extended message schema that includes tool calls and responses.
+// The tool-call-aware variants come first so z.union does not strip tool_calls / tool_call_id
+// by matching the narrower httpMessageSchema.
+export const fullMessageSchema = z.union([
+  z.object({
+    role: z.literal('assistant'),
+    content: z.string(),
+    tool_calls: z.array(z.object({
+      id: z.string(),
+      type: z.literal('function'),
+      function: z.object({
+        name: z.string(),
+        arguments: z.string()
+      })
+    })).optional(),
+    attachments: z.array(attachmentSchema).optional()
+  }),
+  z.object({
+    role: z.literal('tool'),
+    content: z.string(),
+    tool_call_id: z.string().optional()
+  }),
+  httpMessageSchema
+]);
+
 export const chatRequestSchema = z.object({
-  messages: z.array(httpMessageSchema),
+  messages: z.array(fullMessageSchema),
   agentName: z.string(),
   context: z.any().optional(),
   maxTurns: z.number().optional(),
@@ -53,32 +88,6 @@ export const chatRequestSchema = z.object({
   }).optional(),
   approvals: z.array(approvalMessageSchema).optional()
 });
-
-export type ChatRequest = z.infer<typeof chatRequestSchema>;
-export type HttpMessage = z.infer<typeof httpMessageSchema>;
-export type ApprovalMessage = z.infer<typeof approvalMessageSchema>;
-
-// Extended message schema that includes tool calls and responses
-export const fullMessageSchema = z.union([
-  httpMessageSchema,
-  z.object({
-    role: z.literal('assistant'),
-    content: z.string(),
-    tool_calls: z.array(z.object({
-      id: z.string(),
-      type: z.literal('function'),
-      function: z.object({
-        name: z.string(),
-        arguments: z.string()
-      })
-    })).optional()
-  }),
-  z.object({
-    role: z.literal('tool'),
-    content: z.string(),
-    tool_call_id: z.string().optional()
-  })
-]);
 
 export const chatResponseSchema = z.object({
   success: z.boolean(),

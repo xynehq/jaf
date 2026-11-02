@@ -31,7 +31,8 @@ import {
   SessionProvider,
   Model,
   ToolParameterType
-} from '../index';
+} from '../index.js';
+import { isMainScript } from '../../utils/is-main-script.js';
 
 // ========== Schema Validation Example ==========
 
@@ -479,6 +480,6 @@ export async function runAllAdvancedExamples() {
 }
 
 // Run examples if this file is executed directly
-if (require.main === module) {
+if (isMainScript('adk/examples/advanced-features')) {
   runAllAdvancedExamples();
 }

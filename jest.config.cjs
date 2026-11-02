@@ -17,6 +17,8 @@ module.exports = {
     'node_modules/(?!(@modelcontextprotocol)/)'
   ],
   moduleNameMapper: {
+    // These helpers use import.meta, which Jest's CommonJS transform cannot compile
+    '(^|/)utils/(optional-require|is-main-script)(\\.js)?$': '<rootDir>/jest.esm-shims.cjs',
     '^(\\.{1,2}/.*)\\.js$': '$1',
   },
   collectCoverageFrom: [
