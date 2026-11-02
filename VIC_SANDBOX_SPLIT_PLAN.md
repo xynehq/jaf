@@ -1,7 +1,7 @@
 # VIC / JAF Sandbox Split: Implementation Plan
 
 ```
-plan_version: 12
+plan_version: 13
 plan_updated: 2026-10-30
 copies (must be byte-identical at every commit):
   jaf:              VIC_SANDBOX_SPLIT_PLAN.md   branch feat/vic-sandbox-split   base main          (55edcf5)
@@ -314,6 +314,7 @@ Status values: `todo`, `in_progress`, `review`, `done`, `blocked`. Edit only the
 | I4 | agentic-commerce | 6 | Environment split and secret guard | V8, V9 | done | From V6: Redis holding vic:transcript:* is VIC-only; transcripts keep tool_call arguments for TRANSCRIPT_TTL_S (e.g. deliverooShoppingTools.login_user password), consider redaction. From V7 review: GATEWAY_INTERNAL_HOST must never be set to a publicly reachable host (that disables Ardra auth); see I2 Notes for the pre-existing Host-header bypass. From V8: VIC refuses to start without SANDBOX_URL, SANDBOX_SERVICE_TOKEN and VIC_SERVICE_TOKEN; the deployment env must provide them. From V9: runner env needs VIC_TOOL_TIMEOUT_MS matching VIC's (the stub waits that +10 s); with KMS_ENCRYPTED_LANGFUSE=true the sandbox role needs kms:Decrypt on the Langfuse key only; jaf's tracing exporter honours HTTP(S)_PROXY, so keep proxy vars out of the sandbox env. From V15 review: transcripts in Redis are keyed by an unauthenticated client-chosen id (see V15 Notes); decide on scoping before production. From V11: everything in the sandbox env is readable by Bash commands via /proc/1/environ once the tool is attached (D3). From V17: runner .env.example gains IDOSELL_MCP_ENDPOINT (optional; default https://megadron.pl/mcp.php as in VIC; envGuard pattern does not match it). A malformed value now fails at vic-shared import in VIC and the runner (fail fast). I4 done: commit I4: env split (.env.example for VIC and the runner) and the runner's secret guard (git log --grep '^I4:'); review: 2 rounds, APPROVE (round 1 APPROVE with three non-blocking findings, all applied and re-approved in round 2). Guard: jaf-runner/src/envGuard.ts, called first in startRunner (after dotenv, before loadConfig); prints names only; empty string counts as set. D4 (Bedrock direct): LITELLM_* forbidden. Deviations from the spec pattern: (a) names ending _BEDROCK_MODEL or _MAX_TOKENS are exempt, since ^AXS_/^OBENAN_ otherwise refuse the runner's own AXS_BEDROCK_MODEL, AXS_MAX_TOKENS, OBENAN_BEDROCK_MODEL; (b) also forbidden: ALL_PROXY and lowercase http(s)_proxy/all_proxy (jaf tracing exporter and curl honour them), _PRIVATE_KEY$, _AUTH_KEY$, _PASSWORD$, ^REDIS_URL$ (TAP_PRIVATE_KEY, SPOTLIGHT_AUTH_KEY/BASIC_AUTH_PASSWORD and the Redis URL were not caught by the plan's list). Verified: runner suite 33/33, tsc clean; env -i boot with OBENAN_BEARER_TOKEN + https_proxy exits 1 naming both, value never printed; clean boot /health 200; every name in jaf-runner/.env.example passes (0/69); 22 of 73 VIC names are refused. |
 | I3 | agentic-commerce | 6 | Build pipeline and deployment manifests | I1 | review | k8s apply is human From V9: with VIC_TOOLS_URL load-balanced across VIC pods, a rolling VIC deploy that changes the catalog gives intermittent 503 (runner VERSION_MISMATCH) until all pods agree; point it at a stable target or accept the window. From V11: readOnlyRootFilesystem is required (Bash commands could otherwise rewrite /app/jaf-runner/dist); the sandbox NetworkPolicy bounds Bash egress (/dev/tcp and node are available to commands). From V13: CI/build egress must allow codeload.github.com and cdn.sheetjs.com in addition to the npm registry. manifests ready. I3: commit I3: build and push both images, example sandbox manifests (git log --grep '^I3:'); review: 2 rounds, APPROVE (round 1 REQUEST_CHANGES: the VIC_TOOLS_URL comment claimed a stable target; fixed with the real preconditions). Status stays review until a human applies the manifests in the deploy repo and sets done. Makefile: build = --target vic; build-sandbox/push-sandbox via SANDBOX_IMAGE_NAME (default agentic-commerce-sandbox) instead of overriding IMAGE_NAME; release builds and pushes both. Jenkinsfile builds and pushes both in the existing stages. deploy/sandbox: Deployment (runtimeClassName <gvisor>, non-root 1001, readOnlyRootFilesystem, caps dropped, emptyDir /workspace and /tmp, /health probes, terminationGracePeriodSeconds 210, automountServiceAccountToken false since IRSA projects its own token, enableServiceLinks false), Service (jaf-sandbox:3001 and agentic-commerce-tools:3002), NetworkPolicy (ingress from VIC pods only; egress DNS, VIC tools, Bedrock/STS/KMS VPC-endpoint CIDRs and Langfuse on 443; STS and KMS added beyond the spec because IRSA and KMS_ENCRYPTED_LANGFUSE need them). Verified: make -n release; sandbox image runs --read-only with tmpfs /workspace and /tmp and all caps dropped (/health 200, /app EROFS); manifests parse (no cluster or validator available here: pulling kubeconform was not permitted). For the deployer: with more than one VIC replica, VIC needs REDIS_URL (in-memory run tokens otherwise give 401 on other pods); a catalog-changing rolling VIC deploy may give /chat 503 until pods agree; 3002 is reachable cluster-wide (follow-up: VIC-side ingress policy keeping 8080 open); building both images roughly doubles CI build time (a shared base stage would help). |
 | V18 | agentic-commerce | 4 | Runner: LiteLLM provider for local development (D4 amendment) and `GET /catalog` | V9, I4 | done | From the I5 block: the smoke machine has LiteLLM, not Bedrock. Production stays Bedrock (D4); the I3 manifests never set `RUNNER_LLM_PROVIDER`. V18 done: commit V18: LiteLLM provider for local development and GET /catalog (git log --grep '^V18:'); review: 1 round, APPROVE. Verify: typecheck clean, runner tests 38/38; (e) env -i boot with RUNNER_LLM_PROVIDER=litellm and a dead LITELLM_URL: /health 200, log 'LLM provider: litellm', key never logged. Deviation: the .env.example LITELLM_* lines are commented out (the review found that empty assignments count as set and the guard refused the example under its own default bedrock). Notes: under litellm with LITELLM_MODEL, jaf traces still show the agent's Bedrock model id (withModelName only changes what the provider sends); jaf's LiteLLM provider logs the first 120 chars of the last message on each call (local dev only). Pre-existing, not V18: an empty LOG_TRANSPORT_TARGET= (as in the example) makes turing's logger fail at startup, so copy the example without the empty LOG_* lines. |
+| V19 | agentic-commerce | 5 | Langfuse tracing from VIC: the gateway feeds the relayed trace events into VIC's collector (D13) | V8, V9, I4 | todo | From the deployment review (2026-11-02): the sandbox must hold no decryptable secret and have no internet egress. Until done, the sandbox is deployed without `LANGFUSE_*`/`KMS_*` (no tracing; manifests and guide already trimmed). |
 | I5 | agentic-commerce | 6 | End-to-end smoke | V12, V13, I1, I2, I4, V18 | done | DONE 2026-10-31 in local mode (D12): commit I5: local-mode smoke passes (git log --grep '^I5:'); review: 2 rounds, APPROVE (round 1 REQUEST_CHANGES: step 4 counted rejected tool calls and step 6 ignored failing suites; both fixed, plus step-5 version checks, unknown-step FAIL, session id via argv, streamed run_end outcome). Run (VIC + runner from source, env -i with their own JAF/.env and jaf-runner/.env, ports 3001/3002/3101, SMOKE_HOST=vic.internal.test, RUNNER_LLM_PROVIDER=litellm): step 1 PASS; step 2 PASS (outcome completed; keys success, data.{conversationId,executionTimeMs,messages,outcome,runId,traceId,turnCount} as before the split); step 3 PASS (stream_start ... run_end ... stream_end, streamed run completed, second turn replays 2 user messages); step 4 PASS with IdoSellAgent (tool server TOOL_CALL id=idosellShoppingTools.search_idosell_catalog status=success; run 1 answered with megadron.pl products, run 2's search returned an empty list: query variance, the call path is what the step checks); step 5 PASS (temporary dummy tool in VIC's TOOL_MODULES, VIC restarted alone: VIC /tools d2b54a6745297fdf -> 32fb21bd4d0f0dcc listing smoke_dummy, /chat 200, runner /catalog reported the new version without a restart; dummy removed afterwards; without a change the step FAILs); step 6 PASS (envGuard 6, gateway chat.test 32, runner app.test 15, by exit status; tool server without a token 401); step 7 NOT RUN locally: staging-only human follow-up (needs Ardra's merchant list, D12). Model: jaf-runner/.env's LITELLM_MODEL=glm-private is refused for this key's LiteLLM team (403); claude-haiku-4-5-20251001 gave 400 (invalid name), claude-sonnet-4-5 402 (user budget 0); glm-latest works and was used as a process-env override (the user's .env was not edited). LITELLM_MODEL must be a tool-calling model the key's team allows: set glm-latest in jaf-runner/.env. Earlier blocked attempt (Bedrock credentials invalid) is recorded below. UNBLOCKED by plan v12 (2026-10-31, D12): (1) LLM through the runner's LiteLLM path (V18, `RUNNER_LLM_PROVIDER=litellm`); (2) local mode with the `GATEWAY_INTERNAL_HOST` bypass, no Ardra; (3) step 4 uses `IdoSellAgent` (public MCP endpoint, no credential, no browser); step 7 needs Ardra's merchant list and is staging-only: record it as not run locally and leave it to a human with a staging session; (4) step 5 checks the catalog version (VIC `/tools` before and after, runner `/catalog` after the `/chat`), not `/agents`; (5) the runner has its own `jaf-runner/.env`, never `JAF/.env`. Minimum env in the spec. Previously: BLOCKED on credentials (human). Commit I5: smoke script and VIC_TOOLS_URL example fix (git log --grep '^I5:'); not yet reviewed (review when unblocked). Added scripts/smoke-split.sh (steps 1-7; default 1 2 3 4 6; steps 5 and 7 need the manual setup described in its header). Local run 2026-10-31 (VIC and runner from source, env -i, random tokens, GATEWAY_INTERNAL_HOST bypass instead of a staging Ardra session, ports 39601-39603): step 1 PASS (both /health 200); step 2 status 200 and keys success, data.{conversationId,executionTimeMs,messages,outcome,runId,traceId,turnCount} as before the split, but outcome error ModelBehaviorError; step 3 PASS for events (stream_start, run_start, agent_processing, turn_start, llm_call_start, run_end, stream_end) and transcript replay (second turn has 2 user messages), outcome error; step 4 status 200, outcome error, no TOOL_CALL (the model never ran); step 6 PASS (envGuard 5/5, gateway chat.test 32/32, runner app.test 13/13, tool server without a token 401); steps 5 and 7 not run. Found and fixed: VIC_TOOLS_URL must end in /tools (jaf's remote-tools client GETs the URL as given and POSTs <url>/<id>/call; the runner's app.test uses http://vic:3002/tools); the I4 runner .env.example and the I3 deployment.yaml had it without /tools (catalog GET 404, every /chat 503). Both corrected in the I5 commit. Needed to unblock: (1) valid Bedrock credentials on the machine running the smoke (aws sts get-caller-identity fails with InvalidClientTokenId here; the developer JAF/.env has no AWS keys); (2) either a staging Ardra host plus an x-session-id cookie (SMOKE_HOST/SMOKE_SESSION_ID), or confirm that the local GATEWAY_INTERNAL_HOST bypass is acceptable for the smoke; (3) Korio and Shopify merchant settings for steps 4 and 7 (none in JAF/.env); (4) plan owner: step 5 says /agents lists the new tool, but /agents lists only tools an agent picks, so a dummy tool must also be added to an agent's pick list in jaf-runner (a runner change, not VIC-only); confirm or relax to checking the catalog version change. Note: JAF/.env holds ANTHROPIC/OPENAI/GOOGLE/BROWSERBASE API keys and LITELLM_*, which the I4 guard refuses, so the runner cannot share that file; give it its own env (jaf-runner/.env.example). |
 
 ---
@@ -890,7 +891,8 @@ both paths; 401/429/400 responses are byte-identical to today's.
 **Files.** `vic:JAF/src/server.ts` rewritten; `vic:JAF/src/gateway/index.ts`, `vic:JAF/src/tools-server/index.ts`.
 
 **Changes.** `server.ts` no longer imports `createJAFServer`, agents, the Bedrock provider, trace collectors, sanitization or
-the memory provider. It: resolves nothing Langfuse-related (tracing moves to the runner); creates `runStore`, `transcriptStore`;
+the memory provider. It: resolves nothing Langfuse-related (tracing moves to the runner; V19 brings it back to VIC, D13); creates
+`runStore`, `transcriptStore`;
 starts the gateway on `JAF_PORT` (default 3001, name kept so nginx and the Dockerfile stay valid) and the tool server on
 `VIC_TOOLS_PORT` (default 3002); wraps requests in turing `withContext` exactly as today; keeps the MCP pre-warm block and
 the graceful shutdown of `McpClientManager`, `BrowserSessionManager`, `MobileBrowserSessionManager`.
@@ -1132,6 +1134,7 @@ specifier, same rules as J7, so the compiled runner starts with plain `node dist
   `await ensureCatalog(request.headers['x-tool-catalog-version'])` → on `RemoteToolsError` respond 503 `{ error: 'tool catalog unavailable' }`.
 - Copy from the current `vic:JAF/src/server.ts` verbatim: Langfuse OTLP header setup incl. optional KMS, `configureSanitization`
   whitelist, trace collector choice, the `withContext` request wrapper, graceful shutdown (without browsers/MCP).
+  (Tracing part reverted by V19, D13: the Langfuse exporter returns to VIC; the runner keeps no collector.)
   Construct the OTEL collector with `await createOpenTelemetryTraceCollector('jaf-sandbox', creds)` (J6) and call
   `await shutdownOpenTelemetry()` in the SIGTERM/SIGINT handler so buffered spans flush on pod termination.
 - `src/providers/bedrock-provider.ts` moved from `vic:JAF/src/providers/`.
@@ -1273,15 +1276,16 @@ timeouts. `start.sh` (generated in the Dockerfile) no longer starts JAF.
 
 **Changes.**
 - `vic:JAF/.env.example`: every variable VIC needs (merchant, MCP, AXS, Shopify, Obenan, QAPI, LiteLLM, KMS, proxy, `REDIS_URL`,
-  `SANDBOX_URL`, `SANDBOX_SERVICE_TOKEN`, `VIC_SERVICE_TOKEN`, `VIC_TOOLS_PORT`, `RUN_TOKEN_TTL_MS`, `VIC_TOOL_TIMEOUT_MS`, `TRANSCRIPT_*`).
+  `SANDBOX_URL`, `SANDBOX_SERVICE_TOKEN`, `VIC_SERVICE_TOKEN`, `VIC_TOOLS_PORT`, `RUN_TOKEN_TTL_MS`, `VIC_TOOL_TIMEOUT_MS`, `TRANSCRIPT_*`;
+  V19 adds back `LANGFUSE_*`, `KMS_ENCRYPTED_LANGFUSE`, `ADDITIONAL_ALLOWED_FIELDS_JAF`).
 - `vic:jaf-runner/.env.example`: `RUNNER_PORT`, `RUNNER_SERVICE_TOKEN`, `VIC_TOOLS_URL`, `VIC_SERVICE_TOKEN`, `BEDROCK_*`, every
-  `*_BEDROCK_MODEL` and `*_MAX_TOKENS`, `AWS_REGION`, `LANGFUSE_*`, `KMS_ENCRYPTED_LANGFUSE`, `ADDITIONAL_ALLOWED_FIELDS_JAF`,
-  `BASH_*`, `IDOSELL_MCP_ENDPOINT` (V17; optional, not a secret), `RUNNER_LLM_PROVIDER` + `LITELLM_URL`/`LITELLM_API_KEY`/`LITELLM_MODEL`
-  (V18; local development only). No `HTTP_PROXY`/`HTTPS_PROXY`.
+  `*_BEDROCK_MODEL` and `*_MAX_TOKENS`, `AWS_REGION`, `LANGFUSE_*`, `KMS_ENCRYPTED_LANGFUSE`, `ADDITIONAL_ALLOWED_FIELDS_JAF` (the three
+  removed again by V19, D13), `BASH_*`, `IDOSELL_MCP_ENDPOINT` (V17; optional, not a secret), `RUNNER_LLM_PROVIDER` +
+  `LITELLM_URL`/`LITELLM_API_KEY`/`LITELLM_MODEL` (V18; local development only). No `HTTP_PROXY`/`HTTPS_PROXY`.
 - Runner startup guard (`vic:jaf-runner/src/envGuard.ts`): refuse to start if any variable matching
   `/_CLIENT_SECRET$|_BEARER_TOKEN$|_API_KEY$|^SHOPIFY_UCP_|^AXS_|^OBENAN_|^QAPI_|^LITELLM_|^HTTPS?_PROXY$/` is set, except `LITELLM_*` is
   allowed only if decision D4 routes the LLM through LiteLLM (V18: exactly `LITELLM_URL`, `LITELLM_API_KEY`, `LITELLM_MODEL`, and only
-  when `RUNNER_LLM_PROVIDER=litellm`). Print the offending names, never the values.
+  when `RUNNER_LLM_PROVIDER=litellm`). V19 adds `^LANGFUSE_|^KMS_` to the pattern. Print the offending names, never the values.
 
 **Acceptance.** Test: guard throws for `OBENAN_BEARER_TOKEN=x`; passes for a clean environment.
 
@@ -1290,7 +1294,8 @@ timeouts. `start.sh` (generated in the Dockerfile) no longer starts JAF.
 **Changes.** `vic:Makefile`: `build` builds `--target vic`; add `build-sandbox`/`push-sandbox` with `IMAGE_NAME=agentic-commerce-sandbox`
 and `--target sandbox`; `release` builds and pushes both. `vic:Jenkinsfile`: build and push both images in the existing stages.
 Add `vic:deploy/sandbox/` with example `Deployment`, `Service` and `NetworkPolicy` manifests: ingress only from pods labelled
-as VIC; egress only to the Bedrock endpoints, the VIC tool-server Service, the Langfuse host and DNS; `readOnlyRootFilesystem: true`;
+as VIC; egress only to the Bedrock endpoints, the VIC tool-server Service, the Langfuse host and DNS (Langfuse and KMS egress dropped
+2026-11-02 by D13: the sandbox exports no traces); `readOnlyRootFilesystem: true`;
 `emptyDir` at `/workspace`; `runtimeClassName` placeholder for gVisor. The real deploy repo is outside this plan: applying
 manifests is a **human** step; set `review` with the note "manifests ready" when done.
 
@@ -1335,6 +1340,72 @@ carrying `x-tool-catalog-version: v2` while the fake VIC serves `v2`, `{ version
 
 **Verify.** as V9: `pnpm --filter @agentic-commerce/jaf-runner typecheck && pnpm --filter @agentic-commerce/jaf-runner test`.
 
+### V19. Langfuse tracing from VIC: the gateway feeds the relayed trace events into VIC's collector (D13)
+
+**Files.** `vic:JAF/src/gateway/chat.ts` (+ test), new `vic:JAF/src/tracing.ts`, `vic:JAF/src/server.ts`, `vic:JAF/.env.example`,
+`vic:jaf-runner/src/server.ts`, `vic:jaf-runner/src/envGuard.ts` (+ test), `vic:jaf-runner/.env.example`, `vic:deploy/DEPLOYMENT.md`
+(move the tracing rows from Part B to Part A; the manifests were already trimmed on 2026-11-02).
+
+**Why.** V9 put the Langfuse exporter in the runner because the model calls happen there. That requires the Langfuse keys
+(KMS-encrypted, so `kms:Decrypt` in the sandbox role) and internet egress from the sandbox, against the intent of D3. jaf's
+server already writes every trace event of a run to the SSE stream (`send(event.type, event)` in `src/server/server.ts`, the
+data being the full `TraceEvent`), so VIC, which has the KMS access and the proxy, can run the exporter it ran before the split.
+
+**Changes.**
+1. `chat.ts`: the sandbox is always asked for a stream (`stream: true` in `SandboxChatBody`, `accept: text/event-stream`), whatever
+   the app asked for. `GatewayOptions` gains `traceCollector?: TraceCollector` (jaf's interface; `server.ts` passes VIC's; tests inject
+   a fake). While consuming the upstream stream, every SSE block whose JSON data has a `type` equal to the block's event name (that is,
+   every engine trace event; never `stream_start`, `stream_end`, `error` or `: ping`) is passed to `traceCollector.collect(event)`.
+   A throwing collector is logged once per run (`TRACE_COLLECT_FAILED`) and never changes the reply.
+2. App `stream: true`: as today (blocks forwarded unchanged, `run_end` intercepted for the transcript and the SYSTEM message, `finalState`
+   stripped), plus step 1. The app-visible stream is byte-identical to before.
+3. App `stream: false`: the stream is consumed without writing to the app. On `run_end` the gateway builds jaf's non-stream `ChatResponse`
+   from the event, exactly as `createJAFServer` builds it: `{ success: true, data: { runId, traceId, conversationId: ids.response,
+   messages, outcome, turnCount: finalState.turnCount, executionTimeMs } }` where `messages` maps `finalState.messages` as jaf's
+   `httpMessages` does (tool → `{ role, content, tool_call_id }`; assistant with `tool_calls` → `{ role, content: content || '',
+   tool_calls: [{ id, type, function: { name, arguments } }] }`; otherwise `{ role, content, attachments? }`), `outcome` is
+   `{ status, output: String(output) if completed, error if error, interruptions mapped as jaf does (tool_approval → { type, toolCall,
+   sessionId: sessionId || runId }; clarification_required → { type, clarificationId, question, options, context }) }`, and
+   `executionTimeMs` is measured by the gateway from just before the sandbox call. It then goes through `respond(200, payload)` as today
+   (transcript from `data.messages`, one SYSTEM message, no-cache headers, `Model error` replacement), so the `run_end` interception
+   sends the SYSTEM message in stream mode only. An `error` event before `run_end` → `respond(500, { success: false, error: message })`
+   (jaf's non-stream catch shape). Stream ended without `run_end` or `error` → 503 `SANDBOX_UNAVAILABLE`. A non-2xx upstream status is
+   passed through as today (JSON body, no stream).
+4. New `JAF/src/tracing.ts`, moved from `jaf-runner/src/server.ts`: the `TRACE_COLLECTOR_URL` derivation, `resolveLangfuseKey` (optional
+   KMS), the `configureSanitization` whitelist with `ADDITIONAL_ALLOWED_FIELDS_JAF`, and `createTraceCollector(): Promise<TraceCollector>`:
+   `await createOpenTelemetryTraceCollector('agentic-commerce', creds)` when `LANGFUSE_HOST` is set (the pre-split service name, so the
+   Langfuse dashboards keep working), otherwise `new ConsoleTraceCollector()` as before the split. `server.ts` awaits it before starting
+   the gateway, passes it to `createGateway`, and calls `await shutdownOpenTelemetry()` in the SIGTERM/SIGINT handler (as the runner does
+   today). Update the file comment "tracing run in the sandbox".
+5. Runner: delete the Langfuse/KMS/OTel/sanitization block, the `onEvent` wiring and the `shutdownOpenTelemetry` call from
+   `jaf-runner/src/server.ts` (`createRunner`'s `onEvent` option stays, for tests). `envGuard.ts`: add `^LANGFUSE_|^KMS_` to
+   `FORBIDDEN_ENV_PATTERN` (update the comment and the forbidden-family test). `.env.example`: drop the Tracing block, `KMS_AWS_REGION`
+   and `ADDITIONAL_ALLOWED_FIELDS_JAF`. `JAF/.env.example`: add back `LANGFUSE_HOST`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`,
+   `KMS_ENCRYPTED_LANGFUSE`, `ADDITIONAL_ALLOWED_FIELDS_JAF`.
+6. `deploy/DEPLOYMENT.md`: the tracing variables move to Part A (VIC), the sandbox's "Must not be set" list names `LANGFUSE_*` and
+   `KMS_*`, and Part A's "Remove" list no longer lists them.
+
+**Acceptance.**
+(a) App `stream: false` against a fake sandbox that streams `stream_start`, `run_start`, `llm_call_start`, `llm_call_end`, `run_end`,
+`stream_end`: the fake receives `stream: true`; the app gets 200 JSON whose key set is exactly `success, data.{runId, traceId,
+conversationId, messages, outcome, turnCount, executionTimeMs}` with `messages` mapped as in step 3 (include a tool message and an
+assistant `tool_calls` message in the fixture); the transcript holds `finalState.messages`; exactly one SYSTEM message; the run token is
+deleted. An `error` event → 500 `{ success: false, error }`. A stream that ends without `run_end` → 503.
+(b) An injected fake collector receives every trace event of the upstream stream exactly once and in order, for both `stream: true` and
+`stream: false`, and never `stream_start`, `stream_end`, `error` or a ping; a collector that throws leaves the reply unchanged and logs
+`TRACE_COLLECT_FAILED` once.
+(c) Every existing gateway test (V7, V14, V15, V16, V17) passes unchanged.
+(d) Runner: the guard refuses `LANGFUSE_PUBLIC_KEY=x` and `KMS_ENCRYPTED_LANGFUSE=true`; a runner started with neither logs no `[JAF:OTEL]`
+line; runner tests pass.
+(e) Local run (I5 local mode) with `LANGFUSE_HOST` and keys in `JAF/.env` and none in `jaf-runner/.env`: VIC's log shows jaf's
+`[JAF:OTEL] Using Langfuse configuration`, the runner's log shows no OTEL line, and smoke steps 1–4 and 6 pass (step 2's key check is
+the regression test for step 3).
+(f) Notes record whether jaf's `OpenTelemetryTraceCollector` bounds its in-memory event buffer (`InMemoryTraceCollector` in
+`src/core/tracing.ts`); VIC ran the same collector before the split, so an unbounded buffer is pre-existing, but say so.
+
+**Verify.** as V7, plus `pnpm --filter @agentic-commerce/jaf-runner typecheck && pnpm --filter @agentic-commerce/jaf-runner test`, plus
+`scripts/smoke-split.sh 1 2 3 4 6` in local mode.
+
 ### I5. End-to-end smoke
 
 **Changes.** `vic:scripts/smoke-split.sh` running against a local VIC (`pnpm --filter @agentic-commerce/vic dev`) and runner
@@ -1346,7 +1417,7 @@ keys). Minimum env, nothing else needed (the loop's 2026-10-31 run started both 
   `VIC_SERVICE_TOKEN=<random>`, `GATEWAY_INTERNAL_HOST=vic.internal.test`.
 - runner: `RUNNER_PORT=3101`, `RUNNER_SERVICE_TOKEN=<VIC's SANDBOX_SERVICE_TOKEN>`, `VIC_TOOLS_URL=http://127.0.0.1:3002/tools`,
   `VIC_SERVICE_TOKEN=<VIC's>`, `RUNNER_LLM_PROVIDER=litellm`, `LITELLM_URL`, `LITELLM_API_KEY`, `LITELLM_MODEL` (tool-calling model).
-  `LANGFUSE_*` optional (the runner only warns).
+  No `LANGFUSE_*` (D13: tracing is VIC's; before V19 the runner only warns when they are unset, after V19 it refuses them).
 - script: `VIC_URL`, `RUNNER_URL`, `VIC_TOOLS_URL`, `RUNNER_SERVICE_TOKEN`, `VIC_SERVICE_TOKEN` (step 5 reads VIC's `/tools`),
   `SMOKE_HOST`, `VIC_LOG`, `RUNNER_LOG`.
 Steps:
@@ -1387,6 +1458,7 @@ Record the outputs in the ledger Notes, step 7 as not run locally. Acceptance: s
 | D10 | Transcript key not bound to the session (V15 review) | Deferred to section 8.2: Redis is not in use yet, so the store is per pod as before the split. Revisit when Redis is adopted. | user (decided 2026-10-31) |
 | D11 | Prompts that read VIC-process state (Tortli cart, IdoSell URL) | Tortli: VIC computes the cart summary; the gateway seeds it per request in `context.toolState` and Tortli tools refresh it through V16's `contextPatch`, so every model call's prompt shows the live cart as today. IdoSell: the endpoint constants move to vic-shared and `IDOSELL_MCP_ENDPOINT` joins the runner env (same default), rather than reading the merchant list, whose `websiteUrl` need not equal the MCP origin. Task V17; V10 depends on it. | user (decided 2026-10-31) |
 | D12 | Smoke (I5) scope on the developer machine | Local mode: the `GATEWAY_INTERNAL_HOST` bypass instead of a staging Ardra session; step 4 through `IdoSellAgent` (public MCP endpoint, no credential or browser) instead of Korio; step 5 proves the no-restart tool discovery by catalog version (VIC `/tools` before and after, runner `/catalog` after the `/chat`) rather than by `/agents`, which lists only tools an agent picks; step 7 (Shopify merchant switch) needs Ardra's merchant list and stays a staging-only human step; the runner keeps its own env file. | user (decided 2026-10-31) |
+| D13 | Where the Langfuse export runs | VIC, not the sandbox. The sandbox must hold no decryptable secret and have no internet egress; the engine already streams every trace event to the gateway, so VIC runs the OpenTelemetry collector it ran before the split, with its KMS access and proxy. The gateway always streams from the sandbox and assembles the non-stream reply itself. Until V19 lands the sandbox is deployed without `LANGFUSE_*`/`KMS_*` (no tracing; console collector), and its network policy and IAM role drop KMS and Langfuse. Rejected: an in-cluster OpenTelemetry collector (a new component and a second egress target). Task V19. | user (decided 2026-11-02) |
 
 ---
 
@@ -1406,6 +1478,7 @@ Record the outputs in the ledger Notes, step 7 as not run locally. Acceptance: s
 | 10 | 2026-10-31 | D8 amended from the V16 report: the Shopify agent reads the run's saved merchant first (V10 step 6 rewritten, test added). |
 | 11 | 2026-10-31 | D11: added V17 (Tortli cart summary seeded per request and refreshed via contextPatch; IdoSell constants in vic-shared, `IDOSELL_MCP_ENDPOINT` in the runner env); V10 back to `todo` depending on V17, steps 8–9 added; 2.5 `toolState`, 2.6 `tortliCartSummary`; I4 env list. |
 | 12 | 2026-10-31 | I5 unblocked: D4 amended (LiteLLM in the runner for local development), D12 (local smoke mode; IdoSell for step 4; catalog version for step 5; step 7 staging-only); added V18 (`RUNNER_LLM_PROVIDER`, `GET /catalog`); I5 spec gains the minimum env and depends on V18; I4 env list and guard note. |
+| 13 | 2026-11-02 | D13: Langfuse export moves to VIC; added V19 (gateway always streams from the sandbox, feeds the trace events into VIC's collector, builds the non-stream reply; runner loses Langfuse/KMS and the guard refuses them); I3 egress, I4 env lists, I5 env line, V8/V9 history notes. |
 
 ---
 
